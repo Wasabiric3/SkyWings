@@ -18,7 +18,7 @@
 - No `Color.Transparent` backgrounds over custom-painted surfaces.
 - No changes to database, booking logic, security or email code. No layout reorganisation.
 - All 198 existing tests keep passing (one unidentified flaky failure was seen once: rerun before blaming the restyle).
-- The project is not in git: "checkpoint" steps copy the work to `C:\Users\Patrick\source\repos\WinFormsApp3\_backup\<name>` (user may `git init` instead).
+- Git is initialised (branch `main`, baseline commit exists). Work on a branch `restyle`; each task ends with a commit ending in the line `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
 1. High-DPI (150%/200%): icons and logo stay crisp, not blurry or oversized. Test: bucket selection by DPI (Task 4).
@@ -30,8 +30,8 @@
 ---
 
 ### Task 0: Baseline and backup
-**Files:** Create `_backup/baseline/` (copy of `WinFormsApp3/` excluding `bin`, `obj`).
-- [ ] **Step 1:** Copy the project: `robocopy WinFormsApp3 _backup\baseline /E /XD bin obj` (from the repo root).
+**Files:** none (git baseline commit already exists; screenshots go in `_backup/baseline-screens/`, which is git-ignored).
+- [ ] **Step 1:** `git checkout -b restyle`; confirm `git status` is clean.
 - [ ] **Step 2:** Run `dotnet build` then `dotnet test`. Expected: 0 errors, 198 passed. Record the result.
 - [ ] **Step 3:** Run the app, take screenshots of login, home, booking wizard (seat step), manage booking, check-in, admin, help into `_backup/baseline-screens/` for later comparison.
 
@@ -42,7 +42,7 @@
 - [ ] **Step 2:** Run `dotnet test --filter ThemeTests`. Expected: FAIL.
 - [ ] **Step 3:** In `Theme.cs` update the colour constants and add `AccentDark`, `SoftFill`. In `Apply`, replace the `Color.Transparent` assignment with `control.BackColor = control.Parent?.BackColor ?? BgMain` for Panel/Label/CheckBox/RadioButton, applied top-down so a label inside a white card gets white. `Apply` must run again when a control is re-parented into a card (call sites already call it after building the tree; verify with the tests).
 - [ ] **Step 4:** Run `dotnet test --filter ThemeTests`. Expected: PASS. Run the full suite.
-- [ ] **Step 5:** Checkpoint to `_backup/task1`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task1").
 
 ### Task 2: Flat `GlassForm` and `GlassCard`
 **Files:** Modify `UI/GlassForm.cs`, `UI/GlassControls.cs` (GlassCard only), `UI/DestinationCard.cs`, `UI/StatTile.cs`, `UI/PriceSummaryPanel.cs` (only if they reference removed members); Test `WinFormsApp3.Tests/GlassCardTests.cs` (create).
@@ -51,7 +51,7 @@
 - [ ] **Step 2:** Run `--filter GlassCardTests`. Expected: FAIL on opacity test.
 - [ ] **Step 3:** `GlassForm`: delete the background bitmap, `BuildBackground`, rebuild timer, and `ResizeRedraw`; set `BackColor = Theme.BgMain`; keep `DoubleBuffered`, `WindowBackdrop.Apply`, `SizeForScreen`. `GlassCard`: remove the bitmap cache, shadow loop and `SupportsTransparentBackColor`; `BackColor = Theme.BgCard`; paint one rounded rect fill (radius 16) plus a 1px `Theme.BorderLight` border directly in `OnPaint`; keep `CardBounds`/`DisplayRectangle` math identical. Keep `ResizeRedraw`.
 - [ ] **Step 4:** Tests pass; run the app and confirm home/login render with flat cards and no transparency artefacts.
-- [ ] **Step 5:** Checkpoint to `_backup/task2`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task2").
 
 ### Task 3: Buttons, fields, choice cards, step bar
 **Files:** Modify `UI/GlassControls.cs` (`GlassButton`, `StepBar`, `FieldRow`, `ChoiceCard`); Create `UI/Colors.cs` with `static class Contrast { public static double Ratio(Color a, Color b) }`; Test `WinFormsApp3.Tests/GlassButtonTests.cs`.
@@ -60,7 +60,7 @@
 - [ ] **Step 2:** Run `--filter GlassButtonTests`. Expected: FAIL (no `Contrast`).
 - [ ] **Step 3:** Implement `Contrast.Ratio` (WCAG relative luminance). Restyle `GlassButton` (radius = 0.27 × height, solid fills, no gradient/transparency, bold `Theme.Body` font taken from a shared static font instead of `new Font` per instance; keep the focus ring and `IButtonControl` behaviour). `FieldRow`: white fill, 1px `Theme.Border`, `Theme.Primary` border on focus. `ChoiceCard`: white fill + border, selected = `Theme.SoftFill` fill with `Theme.Primary` border. `StepBar`: flat circles (active Primary, done Accent, pending `Theme.StepPending`); cache the two fonts used in `OnPaint`. Fix any contrast test failure by adjusting `DisabledText` in `Theme.cs`.
 - [ ] **Step 4:** Tests pass. Run the app; check hover, pressed, disabled and keyboard focus on login and the wizard.
-- [ ] **Step 5:** Checkpoint to `_backup/task3`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task3").
 
 ### Task 4: Asset pipeline and `Assets` helper
 **Files:** Create `tools/svg2png/package.json`, `tools/svg2png/convert.mjs`, `WinFormsApp3/Assets/*.png` (generated), `WinFormsApp3/UI/Assets.cs`; Modify `WinFormsApp3/SkyWings.csproj`; Test `WinFormsApp3.Tests/AssetsTests.cs`.
@@ -75,7 +75,7 @@ Each returns a cached shared bitmap (callers must not dispose) or `null` if the 
 - [ ] **Step 2:** Run `--filter AssetsTests`. Expected: FAIL.
 - [ ] **Step 3:** Write `convert.mjs`: reads the kit folder (path as argument), uses `@resvg/resvg-js` to render icons (24 px base, green `#527866` and white variants, skipping the Black set), logo solid Green/White/Black (160 px base), hero (use a width of 1440 base scaled down to 720 px logical), watermark; writes the file names above for scales 1, 1.5, 2. Run it with `npm install` inside `tools/svg2png`, output into `WinFormsApp3/Assets/`. Add to `SkyWings.csproj`: `<EmbeddedResource Include="Assets\*.png" LogicalName="Assets/%(Filename)%(Extension)" />`. Implement `Assets` with a `ConcurrentDictionary<string, Bitmap?>` cache loading via `Assembly.GetManifestResourceStream`; wrap loading in try/catch returning `null`.
 - [ ] **Step 4:** Tests pass; confirm output PNGs visually (open two icons and the hero).
-- [ ] **Step 5:** Checkpoint to `_backup/task4`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task4").
 
 ### Task 5: Seat map, legend and status pills
 **Files:** Create `UI/SeatPalette.cs`; Modify `UI/SeatMap.cs`, `UI/GridStyle.cs`; Test `WinFormsApp3.Tests/SeatPaletteTests.cs`.
@@ -84,7 +84,7 @@ Each returns a cached shared bitmap (callers must not dispose) or `null` if the 
 - [ ] **Step 2:** Run `--filter SeatPaletteTests`. Expected: FAIL.
 - [ ] **Step 3:** Implement `SeatPalette`; make `SeatMap.DrawSeat` and `SeatLegend` use it, show the seat code label on Free seats (as in the kit), drop the headrest drawing, cache the bold label font as a field disposed in `Dispose`. Selection numbers and hover/keyboard behaviour unchanged. In `GridStyle`, make `OnCellPainting` pills use `Theme.SoftFill` background with `Theme.Accent` text for Paid/Confirmed/Active, and tinted fills for Cancelled, Delayed, Pending (use the kit's `Status_*.svg` colours); keep the single `StatusColor` function.
 - [ ] **Step 4:** Tests pass; open the booking wizard seat step and the admin Bookings grid.
-- [ ] **Step 5:** Checkpoint to `_backup/task5`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task5").
 
 ### Task 6: Panels, brand imagery and receipt
 **Files:** Modify `UI/LoginBrandPanel.cs`, `HomeForm.cs` (hero painting around line 665+), `UI/DestinationCard.cs`, `UI/StatTile.cs`, `UI/PriceSummaryPanel.cs`, `UI/ReceiptPanel.cs`, `BoardingPassForm.cs`; Test `WinFormsApp3.Tests/PanelPaintTests.cs`.
@@ -93,7 +93,7 @@ Each returns a cached shared bitmap (callers must not dispose) or `null` if the 
 - [ ] **Step 2:** Run it. Expected: FAIL only if a panel still dereferences a removed member; otherwise it passes: then record that and continue.
 - [ ] **Step 3:** `LoginBrandPanel` and the home hero: draw `Assets.Hero` stretched once into a cached bitmap per size, the white logo mark and "SkyWings" text (Segoe UI bold) over it; remove the painted plane illustration. `DestinationCard`: flat white card, `Theme.SoftFill` accent strip, map-pin icon. `StatTile`, `PriceSummaryPanel`: flat, borders per card. `ReceiptPanel` and `BoardingPassForm`: use the kit's receipt card / boarding pass colours, dashed divider, logo; leave the printed output alone unless the print code already uses `ReceiptPanel` drawing (then align it).
 - [ ] **Step 4:** Tests pass; compare login, home, receipt and boarding pass screens with `_backup/baseline-screens`.
-- [ ] **Step 5:** Checkpoint to `_backup/task6`.
+- [ ] **Step 5:** Commit (`git add -A` then a message naming the task, e.g. "restyle: task6").
 
 ### Task 7: Sweep, cleanup and verification
 **Files:** Modify any leftovers found; Delete unused `Gfx.Glow` if nothing references it.
@@ -101,4 +101,4 @@ Each returns a cached shared bitmap (callers must not dispose) or `null` if the 
 - [ ] **Step 2:** Run `dotnet build` (0 errors) and `dotnet test` (198 + new tests pass).
 - [ ] **Step 3:** Click through login, first-run admin, change password, home, flight details/results, booking wizard (all steps incl. seat map), manage booking, check-in, seat change, waitlist, boarding pass, admin (every tab), help and policy dialogs at 100% and 150% Windows scaling. Look for clipped text, transparent holes, wrong colours, blurry icons.
 - [ ] **Step 4:** Compare resizing the window, hovering seats, scrolling the departures grid and switching destinations against the baseline build; report whether it feels smoother.
-- [ ] **Step 5:** Final checkpoint to `_backup/final`; list the author's calls made during the build for the user.
+- [ ] **Step 5:** Commit the sweep; list the author's calls made during the build for the user.

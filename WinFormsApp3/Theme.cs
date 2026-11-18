@@ -6,18 +6,20 @@ namespace SkyWings;
 public static class Theme
 {
     // ===== COLOR SCHEME =====
-    public static readonly Color Primary = Color.FromArgb(0x56, 0x7E, 0x6C);
+    public static readonly Color Primary = Color.FromArgb(0x52, 0x78, 0x66);
     public static readonly Color PrimaryLight = Color.FromArgb(0x69, 0x92, 0x80);
-    public static readonly Color Accent = Color.FromArgb(0x3F, 0x65, 0x56);
+    public static readonly Color Accent = Color.FromArgb(0x31, 0x5B, 0x49);
+    public static readonly Color AccentDark = Color.FromArgb(0x23, 0x47, 0x39);
+    public static readonly Color SoftFill = Color.FromArgb(0xDA, 0xEC, 0xE1);
     public static readonly Color AccentLight = Color.FromArgb(0xF3, 0xF7, 0xF4);
     public static readonly Color BgMain = AccentLight;
     public static readonly Color BgCard = Color.White;
-    public static readonly Color TextPrimary = Color.FromArgb(0x1E, 0x27, 0x26);
-    public static readonly Color TextSecondary = Color.FromArgb(0x68, 0x7E, 0x74);
+    public static readonly Color TextPrimary = Color.FromArgb(0x17, 0x1C, 0x1A);
+    public static readonly Color TextSecondary = Color.FromArgb(0x77, 0x85, 0x7E);
     public static readonly Color SuccessGreen = Color.FromArgb(48, 209, 88);
     public static readonly Color DangerRed = Color.FromArgb(255, 69, 58);
-    public static readonly Color Border = Color.FromArgb(0xC8, 0xD8, 0xD0);
-    public static readonly Color BorderLight = Color.FromArgb(0xE1, 0xEA, 0xE4);
+    public static readonly Color Border = Color.FromArgb(0xE1, 0xE8, 0xE4);
+    public static readonly Color BorderLight = Color.FromArgb(0xDF, 0xE7, 0xE1);
     public static readonly Color StepActive = Primary;
     public static readonly Color StepDone = Accent;
     public static readonly Color StepPending = Color.FromArgb(0xE8, 0xF0, 0xEB);
@@ -42,15 +44,17 @@ public static class Theme
     public const int Sp6 = 6, Sp10 = 10, Sp12 = 12, Sp16 = 16, Sp20 = 20, Sp24 = 24, Sp30 = 30;
 
     /// <summary>
-    /// Applies the default look to a control tree. Controls that style themselves (glass buttons, cards,
-    /// seat map, fields...) are skipped, and panels become transparent so glass cards show through.
+    /// Applies the default look to a control tree. Controls that style themselves (buttons, cards, seat map,
+    /// fields...) are skipped. Panels and labels inherit the colour of the surface they sit on; transparency is
+    /// removed because it makes every repaint cascade through the parent chain.
     /// </summary>
     public static void Apply(Control control)
     {
         if (control is SkyWings.UI.ISelfStyled) return;
 
         if (control is Form or TabPage) control.BackColor = BgMain;
-        else if (control is Panel or Label or CheckBox or RadioButton) control.BackColor = Color.Transparent;
+        else if (control is Panel or Label or CheckBox or RadioButton && control.BackColor == Color.Transparent)
+            control.ResetBackColor();   // fall back to the parent's colour (ambient BackColor)
         control.ForeColor = TextPrimary;
 
         // Only labels still on the default 9pt font get the body font; explicit fonts are kept.
