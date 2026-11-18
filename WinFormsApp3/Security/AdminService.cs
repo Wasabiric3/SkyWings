@@ -109,7 +109,7 @@ public sealed class AdminService
         if (aircraftId is not null && target is null) return new AircraftChangeResult(false, "Unknown aircraft.");
         if (target is not null)
         {
-            List<string> stranded = _store.LoadBookedSeatCodes(flightNo).Where(code => !target.HasSeat(code)).OrderBy(c => c).ToList();
+            List<string> stranded = _store.LoadBookedSeatCodes(flightNo, realOnly: true).Where(code => !target.HasSeat(code)).OrderBy(c => c).ToList();
             if (stranded.Count > 0)
                 return new AircraftChangeResult(false,
                     $"{stranded.Count} booked seat(s) would not exist on the {target.Model} ({string.Join(", ", stranded.Take(5))}" +
@@ -130,6 +130,7 @@ public sealed class AdminService
 
         string before = _store.LoadAircraft(flightNo).Model;
         _store.SetFlightAircraft(flightNo, target?.Id);
+        _store.DeleteSimulatedBookings(flightNo);   // demo seats were laid out for the old aircraft; they are generated again for the new one
         Audit("FLIGHT_AIRCRAFT_CHANGED", flightNo, $"{before} to {target?.Model ?? "standard layout"}");
         return new AircraftChangeResult(true, $"{flightNo} now uses {target?.Model ?? "the standard layout"}.");
     }

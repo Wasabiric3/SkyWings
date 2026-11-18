@@ -162,7 +162,8 @@ public sealed partial class BookingStore
             "  detail_message  VARCHAR(255)  NULL," +
             "  created_at      DATETIME      NOT NULL" +
             ")",
-            "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME NOT NULL)"
+            "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME NOT NULL)",
+            "CREATE TABLE IF NOT EXISTS app_settings (setting_key VARCHAR(60) PRIMARY KEY, setting_value VARCHAR(200) NOT NULL)"
         };
 
         try
@@ -193,6 +194,7 @@ public sealed partial class BookingStore
         EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN payment_txn_ref VARCHAR(40) NULL");
         EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN payment_confirmed_at DATETIME NULL");
         EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0");
+        EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN is_simulated INTEGER NOT NULL DEFAULT 0");   // 1 = generated demo booking
         // NOTE: on a brand-new database the flights table does not exist yet (SeedFlightsIfEmpty creates it
         // with this column already), so error 1146 is ignored here. The Java version would show a
         // "Database Error" popup on the very first run in that case.
@@ -299,7 +301,7 @@ public sealed partial class BookingStore
             {
                 using var con = OpenConnection();
                 var headers = new List<BookingHeader>();
-                using (var cmd = Cmd(con, "SELECT * FROM bookings ORDER BY booked_at DESC"))
+                using (var cmd = Cmd(con, "SELECT * FROM bookings" + ReportWhere() + " ORDER BY booked_at DESC"))
                 using (var rs = cmd.ExecuteReader())
                     while (rs.Read()) headers.Add(ReadHeader(rs));
                 foreach (var h in headers) list.Add(BuildBookingRecord(con, h));
@@ -706,7 +708,7 @@ public sealed partial class BookingStore
             {
                 using var con = OpenConnection();
                 using var cmd = Cmd(con,
-                    "SELECT COUNT(*) FROM bookings WHERE flight_no = @no AND status = 'CONFIRMED'", null, ("@no", flightNo));
+                    "SELECT COUNT(*) FROM bookings WHERE flight_no = @no AND status = 'CONFIRMED' AND is_simulated = 0", null, ("@no", flightNo));
                 return Convert.ToInt32(cmd.ExecuteScalar());
             }
             catch (Exception e) { LogError(e); throw; }
@@ -742,13 +744,13 @@ public sealed partial class BookingStore
             {
                 using var con = OpenConnection();
 
-                const string sumSql =
+                string sumSql =
                     "SELECT COUNT(*) AS total," +
                     " SUM(CASE WHEN status='CONFIRMED' THEN 1 ELSE 0 END) AS confirmed," +
                     " SUM(CASE WHEN status='CANCELED'  THEN 1 ELSE 0 END) AS cancelled," +
                     " SUM(CASE WHEN status='CONFIRMED' THEN total_amount ELSE 0 END) AS revenue," +
                     " SUM(CASE WHEN status='CANCELED'  THEN refund_amount ELSE 0 END) AS refunded" +
-                    " FROM bookings";
+                    " FROM bookings" + ReportWhere();
                 using (var cmd = Cmd(con, sumSql))
                 using (var rs = cmd.ExecuteReader())
                 {
@@ -762,9 +764,9 @@ public sealed partial class BookingStore
                     }
                 }
 
-                const string routeSql =
+                string routeSql =
                     "SELECT flight_no, origin, destination, COUNT(*) AS cnt" +
-                    " FROM bookings WHERE status='CONFIRMED'" +
+                    " FROM bookings WHERE status='CONFIRMED'" + ReportAnd() +
                     " GROUP BY flight_no, origin, destination ORDER BY cnt DESC LIMIT 10";
                 using (var cmd = Cmd(con, routeSql))
                 using (var rs = cmd.ExecuteReader())
@@ -772,9 +774,9 @@ public sealed partial class BookingStore
                         result.TopRoutes.Add(new RouteStat(Str(rs, "flight_no"), Str(rs, "origin"),
                             Str(rs, "destination"), Long(rs, "cnt")));
 
-                const string classSql =
+                string classSql =
                     "SELECT class_name, COUNT(*) AS cnt, SUM(total_amount) AS rev" +
-                    " FROM bookings WHERE status='CONFIRMED'" +
+                    " FROM bookings WHERE status='CONFIRMED'" + ReportAnd() +
                     " GROUP BY class_name ORDER BY cnt DESC";
                 using (var cmd = Cmd(con, classSql))
                 using (var rs = cmd.ExecuteReader())
@@ -795,13 +797,13 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             var rows = new List<CompletedBookingRow>();
-            const string sql =
+            string sql =
                 "SELECT b.reference, b.flight_no, b.origin, b.destination," +
                 " b.flight_date, b.class_name, b.total_amount, b.payment_status," +
                 " COUNT(p.id) AS pax_count" +
                 " FROM bookings b" +
                 " LEFT JOIN passengers p ON p.booking_ref = b.reference" +
-                " WHERE b.status = 'CONFIRMED' AND b.flight_date < date('now')" +
+                " WHERE b.status = 'CONFIRMED' AND b.flight_date < date('now')" + ReportAnd("b.") +
                 " GROUP BY b.reference, b.flight_no, b.origin, b.destination," +
                 " b.flight_date, b.class_name, b.total_amount, b.payment_status" +
                 " ORDER BY b.flight_date DESC";
@@ -828,13 +830,13 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             var rows = new List<CancelledBookingRow>();
-            const string sql =
+            string sql =
                 "SELECT b.reference, b.flight_no, b.origin, b.destination," +
                 " b.flight_date, b.class_name, b.total_amount, b.payment_status," +
                 " b.refund_amount, COUNT(p.id) AS pax_count" +
                 " FROM bookings b" +
                 " LEFT JOIN passengers p ON p.booking_ref = b.reference" +
-                " WHERE b.status = 'CANCELED'" +
+                " WHERE b.status = 'CANCELED'" + ReportAnd("b.") +
                 " GROUP BY b.reference, b.flight_no, b.origin, b.destination," +
                 " b.flight_date, b.class_name, b.total_amount, b.payment_status, b.refund_amount" +
                 " ORDER BY b.flight_date DESC";

@@ -89,6 +89,22 @@ public sealed class FlightAircraftAdminTests
         Assert.AreEqual("A320", _store.LoadAircraft("PR-101").Id);
     }
 
+
+    [TestMethod]
+    public void DemoBookings_NeverBlockAnAircraftChange_AndAreClearedForTheFlight()
+    {
+        var passenger = new PassengerRecord("Demo Pax", "x", "x", 30, "1996-01-01", "x", false, false,
+            new SeatAssignment("Demo Pax", "FST1A"), Array.Empty<string>(), 1000m);
+        var demo = new BookingRecord("SIM-0000000000AA", DateTime.Now, "PR-301", "Manila (MNL)", "London (LHR)", DateTime.Today.AddDays(30),
+            false, "First Class", "Demo card", "**** 0000", 1000m, "Scheduled", new[] { passenger },
+            AppData.StatusConfirmed, "PAID", "", null, 0m);
+        _store.SaveSimulatedBooking(demo);
+
+        AircraftChangeResult result = _service.ChangeAircraft("PR-301", "A330");   // an A330 has no First cabin
+
+        Assert.IsTrue(result.Ok, "a demo seat must not stop staff changing the aircraft: " + result.Message);
+        Assert.IsNull(_store.FindByReference("SIM-0000000000AA"), "demo seats are regenerated for the new layout");
+    }
     [TestMethod]
     public void AgentsCannotChangeAircraft()
     {

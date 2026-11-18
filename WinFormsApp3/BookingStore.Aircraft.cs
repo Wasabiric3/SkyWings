@@ -52,9 +52,9 @@ public sealed partial class BookingStore
 
     /// <summary>
     /// Every seat code assigned on confirmed bookings of a flight, on any date (outbound seats and return-leg seats), normalized.
-    /// Used to check that a change of aircraft would not strand a booked seat.
+    /// Used to check that a change of aircraft would not strand a booked seat. <paramref name="realOnly"/> leaves out demo bookings.
     /// </summary>
-    public HashSet<string> LoadBookedSeatCodes(string flightNo)
+    public HashSet<string> LoadBookedSeatCodes(string flightNo, bool realOnly = false)
     {
         lock (_lock)
         {
@@ -64,13 +64,13 @@ public sealed partial class BookingStore
                 using var con = OpenConnection();
                 using (var outbound = Cmd(con,
                     "SELECT p.seat_code FROM passengers p JOIN bookings b ON b.reference = p.booking_ref " +
-                    "WHERE b.status = 'CONFIRMED' AND b.flight_no = @no AND p.seat_code <> ''", null, ("@no", flightNo)))
+                    "WHERE b.status = 'CONFIRMED' AND b.flight_no = @no AND p.seat_code <> ''" + (realOnly ? " AND b.is_simulated = 0" : ""), null, ("@no", flightNo)))
                 using (var rs = outbound.ExecuteReader())
                     while (rs.Read()) codes.Add(SeatLayout.Normalize(rs.GetString(0)));
                 using (var inbound = Cmd(con,
                     "SELECT p.return_seat_code FROM passengers p JOIN bookings b ON b.reference = p.booking_ref " +
                     "JOIN booking_legs l ON l.booking_ref = b.reference " +
-                    "WHERE b.status = 'CONFIRMED' AND l.flight_no = @no AND p.return_seat_code <> ''", null, ("@no", flightNo)))
+                    "WHERE b.status = 'CONFIRMED' AND l.flight_no = @no AND p.return_seat_code <> ''" + (realOnly ? " AND b.is_simulated = 0" : ""), null, ("@no", flightNo)))
                 using (var rs = inbound.ExecuteReader())
                     while (rs.Read()) codes.Add(SeatLayout.Normalize(rs.GetString(0)));
                 codes.Remove("");
