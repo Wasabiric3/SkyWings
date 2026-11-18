@@ -127,7 +127,6 @@ public static class AppData
     }
 
     // ========================= SEAT LAYOUT =========================
-    public static readonly char[] SeatLetters = { 'A', 'B', 'C', 'D' };
     public static readonly char[][] ClassSeatLetters =
     {
         new[] { 'A', 'B', 'C', 'D', 'E', 'F' }, // Economy        3+3
