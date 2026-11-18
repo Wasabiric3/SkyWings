@@ -18,13 +18,32 @@ internal static class BrandArt
             g.FillRectangle(flat, dest);
             return;
         }
-        int crop = (int)(hero.Width * 0.03);
-        var source = new Rectangle(crop, crop, hero.Width - 2 * crop, hero.Height - 2 * crop);
+        Rectangle source = CoverSource(hero.Size, dest.Size);
         var state = g.Save();
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.PixelOffsetMode = PixelOffsetMode.Half;
         g.DrawImage(hero, dest, source.X, source.Y, source.Width, source.Height, GraphicsUnit.Pixel);
         g.Restore(state);
+    }
+
+    /// <summary>
+    /// The part of the image to draw so it covers a destination of the given size without distortion: the kit's baked-in
+    /// rounded corners are trimmed, then the longer side is cropped (centred) to the destination's aspect ratio.
+    /// </summary>
+    internal static Rectangle CoverSource(Size image, Size dest)
+    {
+        int crop = (int)(image.Width * 0.03);
+        var inner = new Rectangle(crop, crop, Math.Max(1, image.Width - 2 * crop), Math.Max(1, image.Height - 2 * crop));
+        if (dest.Width < 1 || dest.Height < 1) return inner;
+
+        double want = dest.Width / (double)dest.Height, have = inner.Width / (double)inner.Height;
+        if (have > want)   // image is wider than the destination: trim the sides
+        {
+            int w = Math.Max(1, (int)Math.Round(inner.Height * want));
+            return new Rectangle(inner.X + (inner.Width - w) / 2, inner.Y, w, inner.Height);
+        }
+        int h = Math.Max(1, (int)Math.Round(inner.Width / want));   // image is taller: trim top and bottom
+        return new Rectangle(inner.X, inner.Y + (inner.Height - h) / 2, inner.Width, h);
     }
 
     /// <summary>Draws a brand bitmap scaled to a logical (96-dpi) size, high quality. No-op when the image is missing.</summary>

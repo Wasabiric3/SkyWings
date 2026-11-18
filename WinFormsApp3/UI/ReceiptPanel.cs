@@ -21,6 +21,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
     private string _reference = "";
     private List<(string Label, string Value)> _rows = new();
     private RectangleF _copyRect, _referenceRect;
+    private readonly BackdropCache _logoCache = new();
     private bool _copyHover;
     private string _copyLabel = CopyIdle;
     private readonly System.Windows.Forms.Timer _copyTimer = new() { Interval = 2000 };
@@ -89,7 +90,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _copyTimer.Dispose();
+        if (disposing) { _copyTimer.Dispose(); _logoCache.Dispose(); }
         base.Dispose(disposing);
     }
 
@@ -126,7 +127,9 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         if (logo is not null)
         {
             int mark = (int)(bandH * 0.72f);
-            BrandArt.DrawScaled(g, logo, new Rectangle((int)(bounds.Right - pad - mark), (int)(bounds.Y + (bandH - mark) / 2), mark, mark));
+            // Scaled once and cached (rescaling a 160px logo on every repaint, e.g. each Copy-button hover, is wasted work).
+            Bitmap scaled = _logoCache.Get(new Size(mark, mark), DeviceDpi, lg => BrandArt.DrawScaled(lg, logo, new Rectangle(0, 0, mark, mark)));
+            g.DrawImageUnscaled(scaled, (int)(bounds.Right - pad - mark), (int)(bounds.Y + (bandH - mark) / 2));
         }
         else
             g.DrawString("✈", PlaneFont, white, new RectangleF(bounds.Right - pad - 80, bounds.Y, 80, bandH), right);

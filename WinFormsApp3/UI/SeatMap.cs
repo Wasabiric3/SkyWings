@@ -264,6 +264,9 @@ public sealed class SeatMap : Control, ISelfStyled
         }
     }
 
+    /// <summary>Short on-seat label: row and letter only. The full code carries a class prefix (ECO12A) that cannot fit a seat.</summary>
+    internal static string SeatLabel(int rowIndex, char letter) => $"{rowIndex + 1}{letter}";
+
     private void DrawSeat(Graphics g, int row, int col, float radius, Font font, StringFormat center)
     {
         string code = CodeAt(row, col);
@@ -278,7 +281,7 @@ public sealed class SeatMap : Control, ISelfStyled
             SeatState.Taken => "✕",
             SeatState.Held => "•••",
             SeatState.Selected => (_selected.IndexOf(code) + 1).ToString(),
-            _ => code   // free seats show their code (e.g. 12A), as in the brand kit
+            _ => SeatLabel(row, _letters[col])   // free seats show row + letter (12A), as in the brand kit
         };
 
         using var path = Gfx.RoundedRect(bounds, radius);

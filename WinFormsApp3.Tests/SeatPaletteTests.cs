@@ -78,3 +78,22 @@ public class SeatPaletteTests
         }
     }
 }
+
+[TestClass]
+public class SeatLabelTests
+{
+    [TestMethod]
+    public void FreeSeatLabel_IsRowAndLetter_NotTheClassPrefixedCode()
+    {
+        Assert.AreEqual("12A", SeatMap.SeatLabel(11, 'A'));
+        Assert.AreEqual("1F", SeatMap.SeatLabel(0, 'F'));
+    }
+
+    [TestMethod]
+    public void FreeSeatLabel_FitsInsideASeat_ForTheLargestRowNumbers()
+    {
+        using var font = new Font(Theme.Small, FontStyle.Bold);
+        int width = TextRenderer.MeasureText(SeatMap.SeatLabel(98, 'K'), font, Size.Empty, TextFormatFlags.NoPadding).Width;
+        Assert.IsTrue(width <= 38 - 4, $"'99K' is {width}px in a 38px seat");
+    }
+}

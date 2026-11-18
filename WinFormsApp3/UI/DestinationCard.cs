@@ -62,7 +62,7 @@ public sealed class DestinationCard : GlassCard
         Bitmap? pin = Assets.Icon("Map_Pin", white: true, DeviceDpi);
         if (pin is not null)
         {
-            int iconSize = Gfx.S(this, 32);
+            int iconSize = Gfx.S(this, 24);   // the icon's native logical size: drawn 1:1, never resampled
             BrandArt.DrawScaled(g, pin, new Rectangle((int)(art.X + (art.Width - iconSize) / 2), (int)(art.Y + (art.Height - iconSize) / 2), iconSize, iconSize));
         }
 
