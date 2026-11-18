@@ -83,7 +83,8 @@ public sealed class SimulationService
                     realSeats.GetValueOrDefault(BookingStore.SimulatedKey(flight.FlightNo, date)) ?? new HashSet<string>()));
                 generated++;
             }
-            _store.SaveSimulatedBookings(batch);
+            // Small transactions: the store has one lock, and the board must not wait long for it while this runs in the background.
+            foreach (BookingRecord[] chunk in batch.Chunk(400)) _store.SaveSimulatedBookings(chunk);
         }
         return generated;
     }

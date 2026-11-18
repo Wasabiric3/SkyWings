@@ -6,6 +6,9 @@ public sealed record FlightRow(string FlightNo, string Route, string Departs, st
 {
     public bool SoldOut => Seats == 0;
 
+    /// <summary>How full the searched cabin is on that date, e.g. "78% full". Shown as a column on the departures board.</summary>
+    public string LoadText { get; init; } = "";
+
     // Text for the departures board columns.
     public string ScheduledText => Status.Scheduled.ToString("h:mm tt");
     public string EstimatedText => Status.Estimated.ToString("h:mm tt");
@@ -39,14 +42,17 @@ public static class FlightSearch
         foreach (var (f, status) in flights)
         {
             // A flight whose aircraft has no such cabin (First Class on an A320) is not "sold out": it simply does not offer it.
-            if (store.LoadAircraft(f.FlightNo).Cabin(className) is null) continue;
+            if (store.LoadAircraft(f.FlightNo).Cabin(className) is not { } cabin) continue;
             DateTime departure = AppData.DepartureOf(f.FlightNo, date);
             int minutes = AppData.FlightEstDurationMin.GetValueOrDefault(f.FlightNo, 120);
             DateTime arrival = departure.AddMinutes(minutes);
             int seats = store.CabinSeatsLeft(f.FlightNo, date, className);
+            int cabinSeats = cabin.Seats;
+            int percent = (int)Math.Round(100.0 * Math.Max(0, cabinSeats - seats) / cabinSeats);
             rows.Add(new FlightRow(f.FlightNo, $"{f.Origin} → {f.Destination}", departure.ToString("h:mm tt"),
                 arrival.ToString("h:mm tt") + (arrival.Date > departure.Date ? " +1" : ""), $"{minutes / 60}h {minutes % 60:00}m",
-                $"PHP {AppData.Round2(f.BasePrice * multiplier):N0}", seats == 0 ? "Sold out" : seats.ToString("N0"), f, seats, status));
+                $"PHP {AppData.Round2(f.BasePrice * multiplier):N0}", seats == 0 ? "Sold out" : seats.ToString("N0"), f, seats, status)
+            { LoadText = $"{percent}% full" });
         }
         return rows;
     }

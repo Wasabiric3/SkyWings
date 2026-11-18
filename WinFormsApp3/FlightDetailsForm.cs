@@ -1,3 +1,4 @@
+using SkyWings.Controllers;
 using SkyWings.UI;
 
 namespace SkyWings;
@@ -50,7 +51,7 @@ public sealed class FlightDetailsForm : GlassForm
 
         _details.Font = Theme.Mono;
         _details.ForeColor = Theme.TextPrimary;
-        var detailCard = new GlassCard { Dock = DockStyle.Bottom, Height = D(200), ContentPadding = 14 };
+        var detailCard = new GlassCard { Dock = DockStyle.Bottom, Height = D(220), ContentPadding = 14 };
         detailCard.Controls.Add(_details);
 
         var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
@@ -120,17 +121,8 @@ public sealed class FlightDetailsForm : GlassForm
         if (_grid.CurrentRow?.DataBoundItem is not FlightRow row) return;
         DateTime departure = ScheduledDateTime(row.Flight);
         DateTime arrival = departure.AddMinutes(AppData.FlightEstDurationMin.GetValueOrDefault(row.FlightNo, 120));
-        var lines = new List<string>
-        {
-            $"{row.FlightNo}   {row.Flight.Origin} → {row.Flight.Destination}   ({_routeType})",
-            $"Departs {departure:h:mm tt}  ·  arrives {arrival:h:mm tt}{(arrival.Date > departure.Date ? " (+1 day)" : "")}",
-            ""
-        };
-        for (int i = 0; i < AppData.ClassNames.Length; i++)
-            lines.Add($"{AppData.ClassNames[i],-18} PHP {AppData.Round2(row.BaseFare * AppData.ClassMultipliers[i]),10:N2}");
-        lines.Add("");
-        lines.Add("Aircraft: " + _store.LoadAircraft(row.FlightNo).Summary);
-        _details.Text = string.Join(Environment.NewLine, lines);
+        _details.Text = string.Join(Environment.NewLine,
+            FlightLoad.Details(_store, row.Flight, _routeType, row.BaseFare, departure, arrival, DateTime.Today.AddDays(1)));
         _bookButton.Enabled = row.Status == "OPEN";
     }
 

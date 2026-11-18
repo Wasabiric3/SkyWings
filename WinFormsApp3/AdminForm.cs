@@ -78,6 +78,7 @@ public sealed class AdminForm : GlassForm
         AddSection("Reports", Permission.ViewReports, BuildReportsPage, LoadReport);
         AddSection("Staff", Permission.ManageStaff, BuildStaffPage, LoadStaff);
         AddSection("Audit", Permission.ViewAudit, BuildAuditPage, LoadAudit);
+        AddSection("Demo", Permission.ManageFlights, BuildDemoPage, LoadDemo);
 
         Controls.Add(_host);
         Controls.Add(BuildHeader(nav));
@@ -626,6 +627,68 @@ public sealed class AdminForm : GlassForm
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         Try("Unable to remove the waitlist entry", () => _service.RemoveWaitlistEntry(row.Code));
         LoadWaitlist();
+    }
+
+    // ------------------------------------------------------------------ demo activity
+
+    private readonly CheckBox _demoOn = new() { Text = "Demo activity (simulated bookings, seat holds and cancellations)", AutoSize = true, Margin = new Padding(0, 8, 24, 0) };
+    private readonly CheckBox _demoInReports = new() { Text = "Include demo bookings in reports", AutoSize = true, Margin = new Padding(0, 8, 24, 0) };
+    private readonly Label _demoInfo = new() { Dock = DockStyle.Fill, AutoSize = false };
+    private bool _loadingDemo;
+
+    private Panel BuildDemoPage()
+    {
+        var toolbar = Toolbar();
+        toolbar.Controls.Add(_demoOn);
+        toolbar.Controls.Add(_demoInReports);
+        toolbar.Controls.Add(ToolButton("Reset demo data", async (_, _) => await ResetDemo(), GlassButtonStyle.Danger));
+        toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadDemo(), GlassButtonStyle.Ghost));
+        _demoOn.CheckedChanged += async (_, _) => await DemoSwitchChanged();
+        _demoInReports.CheckedChanged += (_, _) =>
+        {
+            if (_loadingDemo) return;
+            Try("Unable to save the setting", () => _service.SetIncludeDemoInReports(_demoInReports.Checked));
+            LoadDemo();
+        };
+        _demoInfo.Font = Theme.Body;
+        _demoInfo.ForeColor = Theme.TextPrimary;
+        return Section(toolbar, _demoInfo);
+    }
+
+    private void LoadDemo()
+    {
+        DemoStatus? status = null;
+        if (!Try("Unable to load the demo settings", () => status = _service.LoadDemoStatus()) || status is null) return;
+        _loadingDemo = true;
+        _demoOn.Checked = status.Enabled;
+        _demoInReports.Checked = status.IncludeInReports;
+        _loadingDemo = false;
+        _demoInfo.Text =
+            "SkyWings is a demonstration system. With demo activity on, flights are pre-filled with simulated bookings (some seats taken, " +
+            "some cancelled and freed, some cabins sold out) and, while the home screen is open, seat holds appear and expire and bookings " +
+            "are made and cancelled once a minute. A cancelled demo seat is offered to real waitlisted travellers, like any cancellation." +
+            Environment.NewLine + Environment.NewLine +
+            "Demo bookings are tagged (references start with SIM-) and are left out of reports, revenue and the Bookings tab unless you tick " +
+            "\"Include demo bookings in reports\". Real bookings are never changed. \"Reset demo data\" deletes only demo bookings and creates them again." +
+            Environment.NewLine + Environment.NewLine +
+            $"Demo activity is {(status.Enabled ? "ON" : "OFF")}.  Demo bookings stored: {status.DemoBookings:N0}.";
+    }
+
+    private async Task DemoSwitchChanged()
+    {
+        if (_loadingDemo) return;
+        bool on = _demoOn.Checked;
+        if (!Try("Unable to save the setting", () => _service.SetDemoActivity(on))) { LoadDemo(); return; }
+        if (on) await TryAsync("Unable to start the demo activity", () => _service.RunDemoNow());   // fill the flights right away
+        LoadDemo();
+    }
+
+    private async Task ResetDemo()
+    {
+        if (MessageBox.Show(this, "Delete all demo bookings and create them again? Real bookings are not touched.", "Reset demo data",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        await TryAsync("Unable to reset the demo data", () => _service.ResetDemoData());
+        LoadDemo();
     }
 
     // ------------------------------------------------------------------ audit

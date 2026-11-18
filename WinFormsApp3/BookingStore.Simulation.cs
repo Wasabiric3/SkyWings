@@ -213,6 +213,17 @@ public sealed partial class BookingStore
             catch (SqliteException e) { LogError(e); throw new IOException("Unable to read booked seats: " + e.Message, e); }
         }
     }
+
+    /// <summary>How many demo bookings exist (confirmed and cancelled).</summary>
+    public int CountSimulatedBookings()
+    {
+        lock (_lock)
+        {
+            using var con = OpenConnection();
+            using var cmd = Cmd(con, "SELECT COUNT(*) FROM bookings WHERE is_simulated = 1");
+            return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+    }
     /// <summary>The flight/date pairs that already have generated bookings, as "PR-101|20261120".</summary>
     public HashSet<string> LoadSimulatedFlightDates()
     {

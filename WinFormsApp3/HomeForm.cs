@@ -48,6 +48,7 @@ public partial class HomeForm : GlassForm
         _store = store;
         _session = session;
         _controller = new HomeController(store, session);
+        _simulation = new SimulationService(store);
         Text = "SkyWings Airline";
         StartPosition = FormStartPosition.CenterScreen;
         SizeForScreen(1180, 680, 1060, 560);
@@ -59,6 +60,9 @@ public partial class HomeForm : GlassForm
         _timer.Tick += (_, _) => Tick();
         Tick();
         _timer.Start();
+
+        // If the demo activity is on, fill the flights as soon as the window is up instead of waiting for the first minute.
+        Shown += (_, _) => { if (_store.DemoActivityEnabled) _lastReload = DateTime.MinValue; };
 
         // One idle timer for the whole signed-in session: after a quiet spell the screen locks back to the sign-in page.
         _idle.TimedOut += (_, _) => SignOut("Signed out after being idle");
@@ -308,6 +312,7 @@ public partial class HomeForm : GlassForm
         AddFlightColumn("Countdown", nameof(FlightRow.CountdownText), 1.4f);
         AddFlightColumn("Fare", nameof(FlightRow.Price), 0.9f, right: true);
         AddFlightColumn("Seats left", nameof(FlightRow.SeatsLeft), 0.8f, right: true);
+        AddFlightColumn("Load", nameof(FlightRow.LoadText), 0.9f, right: true);
         _flights.SelectionChanged += (_, _) => UpdateBookButton();
         _flights.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) BookSelectedFlight(null, EventArgs.Empty); };
         _flights.CellFormatting += FormatBoardCell;
@@ -346,6 +351,8 @@ public partial class HomeForm : GlassForm
             e.CellStyle!.ForeColor = Color.FromArgb(176, 128, 20);
             e.CellStyle.Font = StatusFont;
         }
+        else if (column == nameof(FlightRow.LoadText) && e.Value is string load && int.TryParse(load.Split('%')[0], out int percent) && percent >= 90)
+            e.CellStyle!.ForeColor = percent >= 100 ? Theme.DangerRed : Color.FromArgb(176, 128, 20);   // nearly full: amber, full: red
         else if (column == nameof(FlightRow.SeatsLeft) && e.Value is "Sold out")
             e.CellStyle!.ForeColor = Theme.DangerRed;
         else if (past)
@@ -395,6 +402,7 @@ public partial class HomeForm : GlassForm
         UpdateBookButton();
     }
 
+    private readonly SimulationService _simulation;
     private bool _reloading;
 
     /// <summary>
@@ -412,6 +420,9 @@ public partial class HomeForm : GlassForm
             List<FlightRow> rows = await Task.Run(() =>
             {
                 // Lapsed waitlist offers pass to the next traveller in line (this also emails them).
+                // Demo activity (off unless staff switched it on): fills flights and takes one live step, in the background.
+                try { _simulation.RunIfEnabled(DateTime.Now); }
+                catch (Exception ex) { AppLogger.Error("Demo", ex); }
                 try { _store.ExpireWaitlistOffers(DateTime.Now); }
                 catch (Exception ex) { AppLogger.Error("Waitlist", ex); }
                 return _controller.SearchFlights(destination, date, cabin);

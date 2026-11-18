@@ -73,3 +73,6 @@ public sealed record AuthResult(StaffSession? Session, string Message)
 
 /// <summary>Outcome of changing a flight's aircraft; <see cref="Message"/> explains a refusal or confirms the change.</summary>
 public sealed record AircraftChangeResult(bool Ok, string Message);
+
+/// <summary>The demo controls as shown to staff: the two switches and how many demo bookings exist.</summary>
+public sealed record DemoStatus(bool Enabled, bool IncludeInReports, int DemoBookings);

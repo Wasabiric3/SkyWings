@@ -135,6 +135,49 @@ public sealed class AdminService
         return new AircraftChangeResult(true, $"{flightNo} now uses {target?.Model ?? "the standard layout"}.");
     }
 
+    // ------------------------------------------------------------------ demo activity (admin only)
+
+    public DemoStatus LoadDemoStatus()
+    {
+        Session.Require(Permission.ManageFlights);
+        return new DemoStatus(_store.DemoActivityEnabled, _store.IncludeSimulatedInReports, _store.CountSimulatedBookings());
+    }
+
+    /// <summary>Switches the simulated live activity on or off. Existing demo bookings stay; they just stop changing.</summary>
+    public void SetDemoActivity(bool on)
+    {
+        Session.Require(Permission.ManageFlights);
+        _store.SetSetting(BookingStore.SettingDemoActivity, on ? "1" : "0");
+        Audit(on ? "DEMO_ACTIVITY_ON" : "DEMO_ACTIVITY_OFF");
+    }
+
+    /// <summary>Whether reports, revenue and the Bookings tab also count demo bookings (off by default).</summary>
+    public void SetIncludeDemoInReports(bool on)
+    {
+        Session.Require(Permission.ManageFlights);
+        _store.SetSetting(BookingStore.SettingDemoInReports, on ? "1" : "0");
+        Audit(on ? "DEMO_REPORTS_ON" : "DEMO_REPORTS_OFF");
+    }
+
+    /// <summary>Fills the flights and takes one live step right away (used when the switch is turned on). Null while the demo is off.</summary>
+    public SimulationTick? RunDemoNow()
+    {
+        Session.Require(Permission.ManageFlights);
+        return new SimulationService(_store).RunIfEnabled(DateTime.Now);
+    }
+
+    /// <summary>Deletes every demo booking and hold and, if the demo is on, generates them again. Real bookings are never touched.</summary>
+    public int ResetDemoData()
+    {
+        Session.Require(Permission.ManageFlights);
+        // With the demo switched off, a reset only clears: it must not quietly fill the flights again.
+        int generated;
+        if (_store.DemoActivityEnabled) generated = new SimulationService(_store).Reset(DateTime.Now);
+        else { _store.DeleteSimulatedBookings(); generated = 0; }
+        Audit("DEMO_RESET", detail: $"{generated} flight dates regenerated");
+        return generated;
+    }
+
     public void SetFlightActive(string flightNo, bool active)
     {
         Session.Require(Permission.ManageFlights);
