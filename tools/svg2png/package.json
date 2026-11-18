@@ -1,0 +1,9 @@
+{
+  "name": "svg2png",
+  "private": true,
+  "type": "module",
+  "description": "One-time converter: SkyWings asset kit SVGs -> PNGs embedded in the app. Not part of the build.",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}
