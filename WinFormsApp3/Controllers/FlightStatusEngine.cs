@@ -94,7 +94,7 @@ public static class FlightStatusEngine
     }
 
     /// <summary>FNV-1a hash. string.GetHashCode changes from one run to the next, which would reshuffle delays on every launch.</summary>
-    private static long StableSeed(string text)
+    internal static long StableSeed(string text)
     {
         unchecked
         {

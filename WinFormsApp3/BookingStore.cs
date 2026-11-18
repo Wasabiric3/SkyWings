@@ -177,6 +177,8 @@ public sealed partial class BookingStore
             Exec(con, "CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status, booked_at)");
             Exec(con, "CREATE INDEX IF NOT EXISTS idx_passengers_booking_ref ON passengers(booking_ref)");
             Exec(con, "CREATE INDEX IF NOT EXISTS idx_seat_holds_lookup ON seat_holds(flight_no, flight_date, seat_code, status, expires_at)");
+            Exec(con, "CREATE INDEX IF NOT EXISTS idx_booking_legs_flight ON booking_legs(flight_no, flight_date)");
+            Exec(con, "CREATE INDEX IF NOT EXISTS idx_bookings_simulated ON bookings(flight_no, flight_date) WHERE is_simulated = 1");
             Exec(con, "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (1, @at)", ("@at", DateTime.UtcNow));
         }
         catch (SqliteException e)

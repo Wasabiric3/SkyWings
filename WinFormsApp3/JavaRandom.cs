@@ -18,6 +18,9 @@ public sealed class JavaRandom
         return unchecked((int)(_seed >>> (48 - bits)));
     }
 
+
+    /// <summary>A double in [0, 1), exactly as java.util.Random.nextDouble().</summary>
+    public double NextDouble() => (((long)Next(26) << 27) + Next(27)) * (1.0 / (1L << 53));
     public int NextInt(int bound)
     {
         if (bound <= 0) throw new ArgumentOutOfRangeException(nameof(bound));
