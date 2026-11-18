@@ -70,3 +70,6 @@ public sealed record AuthResult(StaffSession? Session, string Message)
 {
     public bool Success => Session is not null;
 }
+
+/// <summary>Outcome of changing a flight's aircraft; <see cref="Message"/> explains a refusal or confirms the change.</summary>
+public sealed record AircraftChangeResult(bool Ok, string Message);

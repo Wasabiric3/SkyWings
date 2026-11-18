@@ -26,6 +26,40 @@ public sealed partial class BookingStore
     }
 
     /// <summary>
+    /// Every seat code assigned on confirmed bookings of a flight, on any date (outbound seats and return-leg seats), normalized.
+    /// Used to check that a change of aircraft would not strand a booked seat.
+    /// </summary>
+    public HashSet<string> LoadBookedSeatCodes(string flightNo)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                var codes = new HashSet<string>(StringComparer.Ordinal);
+                using var con = OpenConnection();
+                using (var outbound = Cmd(con,
+                    "SELECT p.seat_code FROM passengers p JOIN bookings b ON b.reference = p.booking_ref " +
+                    "WHERE b.status = 'CONFIRMED' AND b.flight_no = @no AND p.seat_code <> ''", null, ("@no", flightNo)))
+                using (var rs = outbound.ExecuteReader())
+                    while (rs.Read()) codes.Add(SeatLayout.Normalize(rs.GetString(0)));
+                using (var inbound = Cmd(con,
+                    "SELECT p.return_seat_code FROM passengers p JOIN bookings b ON b.reference = p.booking_ref " +
+                    "JOIN booking_legs l ON l.booking_ref = b.reference " +
+                    "WHERE b.status = 'CONFIRMED' AND l.flight_no = @no AND p.return_seat_code <> ''", null, ("@no", flightNo)))
+                using (var rs = inbound.ExecuteReader())
+                    while (rs.Read()) codes.Add(SeatLayout.Normalize(rs.GetString(0)));
+                codes.Remove("");
+                return codes;
+            }
+            catch (SqliteException e)
+            {
+                LogError(e);
+                throw new IOException("Unable to load booked seats: " + e.Message, e);
+            }
+        }
+    }
+
+    /// <summary>
     /// Sets or clears a flight's aircraft. Setting one also sets the flight's capacity to the aircraft's seat count; clearing it
     /// leaves the capacity as it is. Callers check that existing seat assignments still exist on the new aircraft.
     /// </summary>

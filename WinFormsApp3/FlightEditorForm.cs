@@ -12,7 +12,11 @@ public sealed class FlightEditorForm : GlassForm
     private readonly ComboBox _type = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly DateTimePicker _departure = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "h:mm tt", ShowUpDown = true };
     private readonly CheckBox _active = new() { Text = "Available for new bookings", Checked = true, AutoSize = true };
-    private readonly FieldRow _flightNoRow, _originRow, _destinationRow, _priceRow, _capacityRow;
+    private readonly ComboBox _aircraft = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly FieldRow _flightNoRow, _originRow, _destinationRow, _priceRow, _capacityRow, _aircraftRow;
+    private readonly string? _originalAircraftId;
+
+    private sealed record AircraftChoice(string? Id, string Text, int Seats) { public override string ToString() => Text; }
     private readonly AdminService _service;
     private readonly bool _isNew;
     private readonly int _confirmedBookings;
@@ -30,7 +34,7 @@ public sealed class FlightEditorForm : GlassForm
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(560), D(470));
+        ClientSize = new Size(D(560), D(550));
 
         _flightNo.Text = flight?.FlightNo ?? "";
         _flightNo.ReadOnly = flight is not null;
@@ -44,11 +48,20 @@ public sealed class FlightEditorForm : GlassForm
         if (flight is not null && DateTime.TryParse(flight.DepartureDisplay, out var departure)) _departure.Value = departure;
         _active.Checked = flight?.Status != "Inactive";
 
+        // The aircraft decides the cabins and seat maps; with one chosen, the capacity is its seat count and cannot be typed.
+        _aircraft.Items.Add(new AircraftChoice(null, "Standard layout (uses the capacity)", 0));
+        foreach (Aircraft a in Aircraft.All) _aircraft.Items.Add(new AircraftChoice(a.Id, $"{a.Model} · {a.TotalSeats} seats", a.TotalSeats));
+        _originalAircraftId = flight?.AircraftId;
+        _aircraft.SelectedIndex = Math.Max(0, _aircraft.Items.Cast<AircraftChoice>().ToList().FindIndex(c => c.Id == _originalAircraftId));
+        _aircraft.SelectedIndexChanged += (_, _) => { _aircraftRow.ClearMessage(); ApplyAircraftChoice(); };
+        ApplyAircraftChoice();
+
         _flightNoRow = new FieldRow("FLIGHT NUMBER", _flightNo);
         _originRow = new FieldRow("ORIGIN", _origin);
         _destinationRow = new FieldRow("DESTINATION", _destination);
         _priceRow = new FieldRow("BASE FARE (PHP)", _price);
         _capacityRow = new FieldRow("CAPACITY (SEATS)", _capacity);
+        _aircraftRow = new FieldRow("AIRCRAFT (SETS THE SEAT MAPS)", _aircraft);
         var typeRow = new FieldRow("TYPE", _type);
         var departureRow = new FieldRow("DEPARTURE TIME", _departure);
         foreach (var row in new[] { _flightNoRow, _originRow, _destinationRow })
@@ -67,13 +80,22 @@ public sealed class FlightEditorForm : GlassForm
 
         var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
         Layouts.Stack(card, Layouts.Row(D(14), _flightNoRow, typeRow), Layouts.Row(D(14), _originRow, _destinationRow),
-            Layouts.Row(D(14), _priceRow, _capacityRow), departureRow, activeHost, buttons);
+            Layouts.Row(D(14), _priceRow, _capacityRow), _aircraftRow, departureRow, activeHost, buttons);
         Controls.Add(card);
         Padding = new Padding(D(10));
 
         Theme.Apply(this);
         AcceptButton = save;
         CancelButton = cancel;
+    }
+
+    private AircraftChoice SelectedAircraft => (AircraftChoice)_aircraft.SelectedItem!;
+
+    private void ApplyAircraftChoice()
+    {
+        AircraftChoice choice = SelectedAircraft;
+        _capacity.Enabled = choice.Id is null;
+        if (choice.Id is not null) _capacity.Value = Math.Min(_capacity.Maximum, Math.Max(_capacity.Minimum, choice.Seats));
     }
 
     public static bool ShowEditor(IWin32Window owner, AdminService service, FlightAdminRow? flight)
@@ -86,6 +108,16 @@ public sealed class FlightEditorForm : GlassForm
             service.SaveFlight(editor._flightNo.Text.Trim(), editor._origin.Text.Trim(), editor._destination.Text.Trim(),
                 editor._price.Value, editor._type.SelectedItem?.ToString() == "Domestic",
                 (int)editor._capacity.Value, editor._active.Checked, TimeOnly.FromDateTime(editor._departure.Value));
+            string? chosen = editor.SelectedAircraft.Id;
+            if (chosen != editor._originalAircraftId)
+            {
+                AircraftChangeResult change = service.ChangeAircraft(editor._flightNo.Text.Trim(), chosen);
+                if (!change.Ok)
+                {
+                    MessageBox.Show(owner, change.Message, "Change aircraft", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+            }
             return true;
         }
         catch (Exception ex)
@@ -108,6 +140,16 @@ public sealed class FlightEditorForm : GlassForm
         {
             _capacityRow.SetMessage($"Needs at least {_confirmedBookings} for confirmed bookings.");
             ok = false;
+        }
+        if (!_isNew && SelectedAircraft.Id != _originalAircraftId)
+        {
+            AircraftChangeResult check = _service.CheckAircraftChange(number, SelectedAircraft.Id);
+            if (!check.Ok)
+            {
+                _aircraftRow.SetMessage("Some booked seats would not exist on this aircraft.");
+                MessageBox.Show(this, check.Message, "Change aircraft", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ok = false;
+            }
         }
         return ok;
     }

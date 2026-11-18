@@ -50,6 +50,21 @@ public sealed record Aircraft(string Id, string Model, IReadOnlyList<CabinLayout
     /// <summary>The cabin for a class, or null when this aircraft has none (for example First Class on a narrow-body).</summary>
     public CabinLayout? Cabin(string className) => Cabins.FirstOrDefault(c => c.ClassName == className);
 
+    /// <summary>True when a seat code such as ECO3B (or ECO-03B) exists on this aircraft: the cabin, the row and the letter.</summary>
+    public bool HasSeat(string? seatCode)
+    {
+        string code = SeatLayout.Normalize(seatCode);
+        int i = 0;
+        while (i < code.Length && char.IsLetter(code[i])) i++;
+        int j = i;
+        while (j < code.Length && char.IsDigit(code[j])) j++;
+        if (i == 0 || j == i || j != code.Length - 1) return false;   // expected: prefix letters, row digits, one seat letter
+        string prefix = code[..i];
+        CabinLayout? cabin = Cabins.FirstOrDefault(c => AppData.SeatPrefixForClass(c.ClassName) == prefix);
+        if (cabin is null || !int.TryParse(code[i..j], out int row)) return false;
+        return row >= 1 && row <= cabin.Rows && cabin.Letters.Contains(code[^1]);
+    }
+
     /// <summary>Id of the layout used by flights that have no aircraft set (the original ratio-based layout).</summary>
     public const string LegacyId = "LEGACY";
 

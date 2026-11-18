@@ -101,6 +101,40 @@ public sealed class AdminService
             $"{origin} to {destination}, fare PHP {basePrice:N2}, capacity {capacity}, {(active ? "active" : "inactive")}");
     }
 
+    /// <summary>The refusal (if any) a change of aircraft would meet, without changing anything.</summary>
+    public AircraftChangeResult CheckAircraftChange(string flightNo, string? aircraftId)
+    {
+        Session.Require(Permission.ManageFlights);
+        if (!_store.FlightExists(flightNo)) return new AircraftChangeResult(false, $"{flightNo} does not exist.");
+        Aircraft? target = Aircraft.Find(aircraftId);
+        if (aircraftId is not null && target is null) return new AircraftChangeResult(false, "Unknown aircraft.");
+        if (target is not null)
+        {
+            List<string> stranded = _store.LoadBookedSeatCodes(flightNo).Where(code => !target.HasSeat(code)).OrderBy(c => c).ToList();
+            if (stranded.Count > 0)
+                return new AircraftChangeResult(false,
+                    $"{stranded.Count} booked seat(s) would not exist on the {target.Model} ({string.Join(", ", stranded.Take(5))}" +
+                    $"{(stranded.Count > 5 ? ", …" : "")}). Move those passengers to other seats first.");
+        }
+        return new AircraftChangeResult(true, "");
+    }
+
+    /// <summary>
+    /// Changes (or clears, with null) a flight's aircraft and sets its capacity to the aircraft's seats. Refused when a booked seat
+    /// would not exist on the new aircraft, because that passenger would be left without a seat.
+    /// </summary>
+    public AircraftChangeResult ChangeAircraft(string flightNo, string? aircraftId)
+    {
+        AircraftChangeResult check = CheckAircraftChange(flightNo, aircraftId);
+        if (!check.Ok) return check;
+        Aircraft? target = Aircraft.Find(aircraftId);
+
+        string before = _store.LoadAircraft(flightNo).Model;
+        _store.SetFlightAircraft(flightNo, target?.Id);
+        Audit("FLIGHT_AIRCRAFT_CHANGED", flightNo, $"{before} to {target?.Model ?? "standard layout"}");
+        return new AircraftChangeResult(true, $"{flightNo} now uses {target?.Model ?? "the standard layout"}.");
+    }
+
     public void SetFlightActive(string flightNo, bool active)
     {
         Session.Require(Permission.ManageFlights);

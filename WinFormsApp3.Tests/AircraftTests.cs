@@ -109,3 +109,42 @@ public class AircraftTests
         Assert.IsNull(Aircraft.Find(null));
     }
 }
+
+[TestClass]
+public class AircraftSeatExistenceTests
+{
+    [TestMethod]
+    [DataRow("ECO1A", true)]
+    [DataRow("ECO28F", true)]
+    [DataRow("ECO-01A", true)]
+    [DataRow("eco3b", true)]
+    [DataRow("ECO29A", false)]     // the A320 has 28 economy rows
+    [DataRow("ECO3G", false)]      // only letters A-F
+    [DataRow("BIZ3D", true)]
+    [DataRow("BIZ4A", false)]
+    [DataRow("FST1A", false)]      // no First cabin on an A320
+    [DataRow("PRE1A", false)]
+    [DataRow("ECO0A", false)]
+    [DataRow("", false)]
+    [DataRow("XYZ", false)]
+    public void Airbus320_HasSeat(string code, bool expected) => Assert.AreEqual(expected, Aircraft.A320.HasSeat(code));
+
+    [TestMethod]
+    public void Boeing777_HasItsFirstAndWideEconomySeats()
+    {
+        Assert.IsTrue(Aircraft.B777.HasSeat("FST2D"));
+        Assert.IsFalse(Aircraft.B777.HasSeat("FST3A"));
+        Assert.IsTrue(Aircraft.B777.HasSeat("ECO23J"));
+        Assert.IsFalse(Aircraft.B777.HasSeat("ECO23K"));
+    }
+
+    [TestMethod]
+    public void EveryGeneratedSeatCode_ExistsOnItsOwnAircraft()
+    {
+        foreach (Aircraft a in Aircraft.All)
+            foreach (CabinLayout cabin in a.Cabins)
+                for (int row = 1; row <= cabin.Rows; row++)
+                    foreach (char letter in cabin.Letters)
+                        Assert.IsTrue(a.HasSeat(cabin.Code(row, letter)), $"{a.Id} {cabin.Code(row, letter)}");
+    }
+}
