@@ -18,16 +18,16 @@ public sealed class SeatMap : Control, ISelfStyled
     private readonly HashSet<string> _held = new();
     private readonly List<string> _selected = new();
     private readonly ToolTip _tip = new();
+    private static readonly Font LabelFont = new(Theme.Small, FontStyle.Bold);   // shared; was recreated on every paint
     private (int Row, int Col) _hover = (-1, -1);
     private (int Row, int Col) _cursor = (0, 0);
 
     public SeatMap()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
         TabStop = true;
-        BackColor = Color.Transparent;
         Font = Theme.Small;
         AccessibleName = "Seat map";
     }
@@ -239,11 +239,12 @@ public sealed class SeatMap : Control, ISelfStyled
         base.OnPaint(e);
         if (_letters.Length == 0) return;
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, e.ClipRectangle);
         Gfx.HighQuality(g);
 
         using var headerFormat = Gfx.Format(StringAlignment.Center);
         using var mutedBrush = new SolidBrush(Theme.TextSecondary);
-        using var numberFont = new Font(Theme.Small, FontStyle.Bold);
+        var numberFont = LabelFont;
         for (int c = 0; c < _letters.Length; c++)
             g.DrawString(_letters[c].ToString(), numberFont, mutedBrush,
                 new RectangleF(ColX(c), Pad, SeatW, HeaderH - Pad), headerFormat);
@@ -271,43 +272,21 @@ public sealed class SeatMap : Control, ISelfStyled
         Rectangle rect = SeatRect(row, col);
         var bounds = new RectangleF(rect.X + 0.5f, rect.Y + 0.5f, rect.Width - 1, rect.Height - 1);
 
-        Color fill, border, text = Theme.TextSecondary;
-        string label = "";
-        switch (state)
+        var (fill, border, text) = SeatPalette.For(state, hover);
+        string label = state switch
         {
-            case SeatState.Taken:
-                fill = Color.FromArgb(228, 233, 231); border = Color.FromArgb(212, 219, 216); label = "✕"; text = Color.FromArgb(150, 162, 156);
-                break;
-            case SeatState.Held:
-                fill = Color.FromArgb(255, 244, 214); border = Color.FromArgb(232, 190, 90); label = "•••"; text = Color.FromArgb(176, 128, 20);
-                break;
-            case SeatState.Selected:
-                fill = Theme.Primary; border = Theme.Accent; text = Color.White;
-                label = (_selected.IndexOf(code) + 1).ToString();
-                break;
-            default:
-                fill = hover ? Color.FromArgb(235, 244, 239) : Color.White;
-                border = hover ? Theme.Primary : Theme.Border;
-                break;
-        }
+            SeatState.Taken => "✕",
+            SeatState.Held => "•••",
+            SeatState.Selected => (_selected.IndexOf(code) + 1).ToString(),
+            _ => code   // free seats show their code (e.g. 12A), as in the brand kit
+        };
 
         using var path = Gfx.RoundedRect(bounds, radius);
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
         using (var pen = new Pen(border, 1.2f)) g.DrawPath(pen, path);
 
-        if (state == SeatState.Free)
-        {
-            // Subtle headrest so free seats read as seats rather than boxes.
-            var rest = new RectangleF(bounds.X + bounds.Width * 0.22f, bounds.Y + 3, bounds.Width * 0.56f, Gfx.S(this, 4f));
-            using var restPath = Gfx.RoundedRect(rest, 2);
-            using var restBrush = new SolidBrush(Color.FromArgb(hover ? 120 : 70, Theme.Primary));
-            g.FillPath(restBrush, restPath);
-        }
-        else
-        {
-            using var textBrush = new SolidBrush(text);
+        using (var textBrush = new SolidBrush(text))
             g.DrawString(label, font, textBrush, bounds, center);
-        }
 
         if (Focused && _cursor == (row, col) && ShowFocusCues)
         {
@@ -329,9 +308,8 @@ public sealed class SeatLegend : Control, ISelfStyled
 {
     public SeatLegend()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        BackColor = Color.Transparent;
         Height = Gfx.S(this, 30);
         Font = Theme.Small;
     }
@@ -340,13 +318,14 @@ public sealed class SeatLegend : Control, ISelfStyled
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var items = new (string Label, Color Fill, Color Border)[]
         {
-            ("Available", Color.White, Theme.Border),
-            ("Selected", Theme.Primary, Theme.Accent),
-            ("Held by someone", Color.FromArgb(255, 244, 214), Color.FromArgb(232, 190, 90)),
-            ("Taken", Color.FromArgb(228, 233, 231), Color.FromArgb(212, 219, 216))
+            ("Available", SeatPalette.For(SeatState.Free, false).Fill, SeatPalette.For(SeatState.Free, false).Border),
+            ("Selected", SeatPalette.For(SeatState.Selected, false).Fill, SeatPalette.For(SeatState.Selected, false).Border),
+            ("Held by someone", SeatPalette.For(SeatState.Held, false).Fill, SeatPalette.For(SeatState.Held, false).Border),
+            ("Taken", SeatPalette.For(SeatState.Taken, false).Fill, SeatPalette.For(SeatState.Taken, false).Border)
         };
         float x = 0, size = Gfx.S(this, 16f);
         using var brush = new SolidBrush(Theme.TextSecondary);

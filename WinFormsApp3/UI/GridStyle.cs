@@ -68,11 +68,18 @@ internal static class GridStyle
         grid.CellPainting += OnCellPainting;
     }
 
-    private static Color? StatusColor(string text) => text.ToUpperInvariant() switch
+    private static readonly (Color Back, Color Fore) PillGood = (Color.FromArgb(0xDA, 0xEC, 0xE1), Color.FromArgb(0x31, 0x5B, 0x49));
+    private static readonly (Color Back, Color Fore) PillBad = (Color.FromArgb(0xF5, 0xDD, 0xDA), Color.FromArgb(0x9A, 0x4E, 0x42));
+    private static readonly (Color Back, Color Fore) PillDelayed = (Color.FromArgb(0xFC, 0xE4, 0xD8), Color.FromArgb(0xA8, 0x5A, 0x37));
+    private static readonly (Color Back, Color Fore) PillPending = (Color.FromArgb(0xFA, 0xEB, 0xD0), Color.FromArgb(0x8E, 0x63, 0x38));
+
+    /// <summary>Pill colours from the brand kit (Status_*.svg) for a status value, or null when the value is not a pill status.</summary>
+    internal static (Color Back, Color Fore)? StatusStyle(string text) => text.ToUpperInvariant() switch
     {
-        "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" => Theme.Accent,
-        "CANCELED" or "INACTIVE" or "CLOSED" => Theme.DangerRed,
-        "REFUNDED" => Theme.Warning,
+        "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" or "SUCCESS" => PillGood,
+        "CANCELED" or "CANCELLED" or "INACTIVE" or "CLOSED" => PillBad,
+        "DELAYED" => PillDelayed,
+        "REFUNDED" or "PENDING" => PillPending,
         _ => null
     };
 
@@ -82,7 +89,7 @@ internal static class GridStyle
         if (sender is not DataGridView grid || e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null) return;
         if (e.Value is not string text || text.Length == 0) return;
         string name = grid.Columns[e.ColumnIndex].DataPropertyName;
-        if (name is not ("Status" or "PaymentStatus") || StatusColor(text) is not { } color) return;
+        if (name is not ("Status" or "PaymentStatus") || StatusStyle(text) is not { } style) return;
 
         e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
         Size size = TextRenderer.MeasureText(e.Graphics, text, StatusFont, Size.Empty, TextFormatFlags.NoPadding);
@@ -90,9 +97,9 @@ internal static class GridStyle
         var pill = new Rectangle(e.CellBounds.Left + Gfx.S(grid, 10), e.CellBounds.Top + (e.CellBounds.Height - h) / 2, size.Width + padX * 2, h);
         Gfx.HighQuality(e.Graphics);
         using var path = Gfx.RoundedRect(pill, pill.Height / 2);
-        using var back = new SolidBrush(Color.FromArgb(32, color));
+        using var back = new SolidBrush(style.Back);
         e.Graphics.FillPath(back, path);
-        TextRenderer.DrawText(e.Graphics, text, StatusFont, pill, color,
+        TextRenderer.DrawText(e.Graphics, text, StatusFont, pill, style.Fore,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         e.Handled = true;
     }
@@ -128,9 +135,9 @@ internal static class GridStyle
         if (sender is not DataGridView grid || e.RowIndex < 0 || e.Value is not string text) return;
         string name = grid.Columns[e.ColumnIndex].DataPropertyName;
         if (name is not ("Status" or "PaymentStatus")) return;
-        if (StatusColor(text) is { } c)
+        if (StatusStyle(text) is { } style)
         {
-            e.CellStyle!.ForeColor = c;
+            e.CellStyle!.ForeColor = style.Fore;
             e.CellStyle.Font = StatusFont;
         }
     }
