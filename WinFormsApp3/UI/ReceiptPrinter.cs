@@ -57,14 +57,23 @@ internal static class ReceiptPrinter
     /// </summary>
     public static void RenderPage(System.Drawing.Printing.PrintPageEventArgs e, ReceiptData data)
     {
+        BeginA4Page(e);
+        Draw(e.Graphics!, data);
+        e.HasMorePages = false;
+    }
+
+    /// <summary>
+    /// Switches a printer page to the 794 x 1123 (1/96 inch, A4) design space used by every printout: starts at the paper's corner
+    /// (not the printable area's) and shrinks to fit when the paper is smaller than A4.
+    /// </summary>
+    internal static void BeginA4Page(System.Drawing.Printing.PrintPageEventArgs e)
+    {
         Graphics g = e.Graphics!;
         g.PageUnit = GraphicsUnit.Inch;
         g.PageScale = 1f / 96f;
         g.TranslateTransform(-e.PageSettings.HardMarginX * 0.96f, -e.PageSettings.HardMarginY * 0.96f);   // margins are 1/100 inch
         float fit = Math.Min(1f, Math.Min(e.PageBounds.Width * 0.96f / PageWidth, e.PageBounds.Height * 0.96f / PageHeight));
         g.ScaleTransform(fit, fit);
-        Draw(g, data);
-        e.HasMorePages = false;
     }
 
     /// <summary>Draws the receipt. <paramref name="g"/> must use 1/96-inch units with the page's top-left as the origin.</summary>

@@ -1,4 +1,3 @@
-using System.Drawing.Printing;
 using SkyWings.UI;
 
 namespace SkyWings;
@@ -7,6 +6,7 @@ namespace SkyWings;
 public sealed class BoardingPassForm : GlassForm
 {
     private readonly List<(string Reference, List<(string Label, string Value)> Rows)> _passes = new();
+    private readonly List<BoardingPassData> _printData = new();   // what the printed tickets show, one per traveller
 
     public BoardingPassForm(BookingRecord booking, bool returnLeg, IReadOnlyList<CheckInRecord> records)
     {
@@ -36,6 +36,7 @@ public sealed class BoardingPassForm : GlassForm
                 ("Checked in", record.CheckedInAt.ToString("MMM d, h:mm tt"))
             };
             _passes.Add((booking.Reference, rows));
+            _printData.Add(BoardingPassData.From(booking, returnLeg, record));
 
             var pass = new ReceiptPanel { Title = "Boarding pass", Height = D(100) + ((rows.Count + 1) / 2) * D(58) };
             pass.SetReceipt(booking.Reference, rows);
@@ -71,31 +72,5 @@ public sealed class BoardingPassForm : GlassForm
         return open >= 0 && close > open ? place[(open + 1)..close] : place;
     }
 
-    private void PrintPasses(string reference)
-    {
-        int index = 0;
-        using var document = new PrintDocument { DocumentName = $"SkyWings boarding passes {reference}" };
-        document.PrintPage += (_, e) =>
-        {
-            Graphics g = e.Graphics!;
-            using var title = new Font("Segoe UI", 20, FontStyle.Bold);
-            using var heading = new Font("Segoe UI", 12, FontStyle.Bold);
-            using var body = new Font("Segoe UI", 12);
-            float x = e.MarginBounds.Left, y = e.MarginBounds.Top;
-            g.DrawString("SkyWings · Boarding pass", title, Brushes.Black, x, y);
-            y += 56;
-            g.DrawString($"Reference: {_passes[index].Reference}", heading, Brushes.Black, x, y);
-            y += 40;
-            foreach (var (label, value) in _passes[index].Rows)
-            {
-                g.DrawString($"{label}:", heading, Brushes.Black, x, y);
-                g.DrawString(value, body, Brushes.Black, x + 160, y);
-                y += 32;
-            }
-            index++;
-            e.HasMorePages = index < _passes.Count;
-        };
-        using var preview = new PrintPreviewDialog { Document = document, Width = 900, Height = 720 };
-        preview.ShowDialog(this);
-    }
+    private void PrintPasses(string reference) => BoardingPassPrinter.ShowPreview(this, _printData);
 }
