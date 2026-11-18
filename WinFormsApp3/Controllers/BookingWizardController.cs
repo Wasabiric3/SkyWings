@@ -163,6 +163,21 @@ public sealed class BookingWizardController
     /// <summary>The cabin to draw for a flight in the session's class (rows, seat letters, aisles), or null if its aircraft has none.</summary>
     public CabinLayout? SeatCabin(Flight flight) => _store.LoadAircraft(flight.FlightNo).Cabin(Session.ClassName);
 
+
+    /// <summary>"Airbus A320 · Business cabin 2-2 · 3 rows" for the seat step (both aircraft when a round trip uses two types).</summary>
+    public string AircraftSummary(Flight outbound, Flight? returnFlight)
+    {
+        string One(Flight flight)
+        {
+            Aircraft aircraft = _store.LoadAircraft(flight.FlightNo);
+            CabinLayout? cabin = aircraft.Cabin(Session.ClassName);
+            return cabin is null ? aircraft.Model : $"{aircraft.Model} · {cabin.ClassName} cabin {cabin.LayoutText} · {cabin.Rows} rows";
+        }
+        string text = One(outbound);
+        if (returnFlight is not null && _store.LoadAircraft(returnFlight.FlightNo).Id != _store.LoadAircraft(outbound.FlightNo).Id)
+            text += "   |   Return: " + One(returnFlight);
+        return text;
+    }
     /// <summary>The classes a trip offers, in the usual order: the cabins that the outbound aircraft (and the return aircraft, if any) have.</summary>
     public IReadOnlyList<string> AvailableClasses(Flight outbound, Flight? returnFlight)
     {

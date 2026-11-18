@@ -101,3 +101,49 @@ public sealed class AircraftSeatCountTests
         Assert.IsNull(controller.SeatCabin(domestic));
     }
 }
+
+[TestClass]
+public sealed class SeatStepAircraftTextTests
+{
+    private string _dbPath = "";
+    private BookingStore _store = null!;
+
+    [TestInitialize]
+    public void Setup()
+    {
+        _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-sat-{Guid.NewGuid():N}.db");
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store.SeedDefaultFlights();
+    }
+
+    [TestCleanup]
+    public void Cleanup()
+    {
+        SqliteConnection.ClearAllPools();
+        if (File.Exists(_dbPath)) File.Delete(_dbPath);
+    }
+
+    [TestMethod]
+    public void AircraftSummary_NamesTheAircraftAndTheChosenCabin()
+    {
+        var controller = new BookingWizardController(_store);
+        controller.Session.ClassName = "Business";
+        Flight domestic = _store.LoadActiveFlights(true).First(f => f.FlightNo == "PR-101");
+
+        Assert.AreEqual("Airbus A320 · Business cabin 2-2 · 3 rows", controller.AircraftSummary(domestic, null));
+    }
+
+    [TestMethod]
+    public void AircraftSummary_WithADifferentReturnAircraft_MentionsBoth()
+    {
+        var controller = new BookingWizardController(_store);
+        controller.Session.ClassName = "Economy";
+        Flight outbound = _store.LoadActiveFlights(false).First(f => f.FlightNo == "PR-301");
+        Flight back = _store.LoadActiveFlights(true).First(f => f.FlightNo == "PR-101");
+
+        string text = controller.AircraftSummary(outbound, back);
+
+        StringAssert.Contains(text, "Boeing 777-300ER");
+        StringAssert.Contains(text, "Airbus A320");
+    }
+}

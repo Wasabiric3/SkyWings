@@ -148,3 +148,22 @@ public class AircraftSeatExistenceTests
                         Assert.IsTrue(a.HasSeat(cabin.Code(row, letter)), $"{a.Id} {cabin.Code(row, letter)}");
     }
 }
+
+[TestClass]
+public class AircraftSummaryTests
+{
+    [TestMethod]
+    public void Summary_ListsModelCabinsAndSeats()
+    {
+        Assert.AreEqual("Airbus A320 · Business 2-2 · Economy 3-3 · 180 seats", Aircraft.A320.Summary);
+        Assert.AreEqual("Boeing 777-300ER · First Class 1-2-1 · Business 2-2-2 · Premium Economy 2-4-2 · Economy 3-4-3 · 314 seats", Aircraft.B777.Summary);
+    }
+
+    [TestMethod]
+    public void Summary_OfTheLegacyLayout_IsJustItsName()
+        => Assert.AreEqual("Standard layout", Aircraft.Legacy(180).Summary);
+
+    [TestMethod]
+    public void CabinDescription_IsClassAndGrouping()
+        => Assert.AreEqual("Economy 3-4-3", new CabinLayout("Economy", 4, new[] { 3, 4, 3 }).Description);
+}

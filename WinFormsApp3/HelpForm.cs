@@ -43,6 +43,14 @@ internal static class HelpContent
             "If the offer is not used in time, the seats go to the next traveller.\n\n" +
             "Staff can see and remove waitlist entries on the Waitlist tab of the staff window."),
 
+        new("About this demo: aircraft and seat maps",
+            "SkyWings is a demonstration system, not a real airline. Each flight has an aircraft that decides its cabins and seat map: " +
+            "a narrow-body (Airbus A320, 3-3 seats) on domestic routes, a mid-size wide-body (Airbus A330-300, 2-4-2 seats) to Southeast Asia, " +
+            "and a large wide-body (Boeing 777-300ER, 3-4-3 seats) to Europe and North America. The seat layouts are typical and generic, " +
+            "not any airline's own seat map, and flight numbers are for demonstration only.\n\n" +
+            "A cabin an aircraft does not have (for example First Class on an A320) is not offered for that flight. " +
+            "Staff can change a flight's aircraft in the flight editor; the change is refused if a booked seat would no longer exist."),
+
         new("Check in and boarding pass",
             $"Online check-in opens {AppData.CheckInWindowHours} hours before departure and closes at departure.\n\n" +
             "Choose \"Check-in\", enter the reference and a traveller's last name, then print or save the boarding pass."),

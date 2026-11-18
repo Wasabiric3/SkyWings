@@ -26,6 +26,9 @@ public sealed record CabinLayout(string ClassName, int Rows, IReadOnlyList<int> 
         }
     }
 
+    /// <summary>"Economy 3-4-3".</summary>
+    public string Description => $"{ClassName} {LayoutText}";
+
     /// <summary>"3-4-3".</summary>
     public string LayoutText => string.Join("-", Groups);
 
@@ -46,6 +49,9 @@ public sealed record CabinLayout(string ClassName, int Rows, IReadOnlyList<int> 
 public sealed record Aircraft(string Id, string Model, IReadOnlyList<CabinLayout> Cabins)
 {
     public int TotalSeats => Cabins.Sum(c => c.Seats);
+
+    /// <summary>One line for screens: "Airbus A320 · Business 2-2 · Economy 3-3 · 180 seats". The legacy layout is just its name.</summary>
+    public string Summary => Id == LegacyId ? Model : $"{Model} · {string.Join(" · ", Cabins.Select(c => c.Description))} · {TotalSeats} seats";
 
     /// <summary>The cabin for a class, or null when this aircraft has none (for example First Class on a narrow-body).</summary>
     public CabinLayout? Cabin(string className) => Cabins.FirstOrDefault(c => c.ClassName == className);

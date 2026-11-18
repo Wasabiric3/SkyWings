@@ -128,6 +128,8 @@ public sealed class FlightDetailsForm : GlassForm
         };
         for (int i = 0; i < AppData.ClassNames.Length; i++)
             lines.Add($"{AppData.ClassNames[i],-18} PHP {AppData.Round2(row.BaseFare * AppData.ClassMultipliers[i]),10:N2}");
+        lines.Add("");
+        lines.Add("Aircraft: " + _store.LoadAircraft(row.FlightNo).Summary);
         _details.Text = string.Join(Environment.NewLine, lines);
         _bookButton.Enabled = row.Status == "OPEN";
     }

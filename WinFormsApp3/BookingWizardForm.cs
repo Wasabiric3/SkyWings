@@ -85,6 +85,7 @@ public sealed class BookingWizardForm : GlassForm
     private readonly GlassButton _seatTabOut = new() { Text = "Outbound", Style = GlassButtonStyle.Primary };
     private readonly GlassButton _seatTabBack = new() { Text = "Return", Style = GlassButtonStyle.Secondary };
     private readonly Label _seatInfo = new() { AutoSize = false, Dock = DockStyle.Top };
+    private readonly Label _seatAircraft = new() { AutoSize = false, Dock = DockStyle.Top };   // "Airbus A320 · Economy cabin 3-3 · 28 rows"
     private string _seatSignature = "";
 
     // step 5: payment
@@ -151,6 +152,7 @@ public sealed class BookingWizardForm : GlassForm
         _roundTrip.Height = D(34);
         _flightInfo.Height = D(26);
         _seatInfo.Height = D(26);
+        _seatAircraft.Height = D(24);
         _review.Height = D(150);
         _receipt.Height = D(330);
         _flight.DropDownWidth = D(560);
@@ -224,6 +226,8 @@ public sealed class BookingWizardForm : GlassForm
         _flightInfo.ForeColor = Theme.Accent;
         _seatInfo.Font = Theme.Small;
         _seatInfo.ForeColor = Theme.TextSecondary;
+        _seatAircraft.Font = Theme.Small;
+        _seatAircraft.ForeColor = Theme.Accent;
         _review.Font = Theme.Body;
         _review.ForeColor = Theme.TextPrimary;
     }
@@ -621,6 +625,7 @@ public sealed class BookingWizardForm : GlassForm
         page.Controls.Add(_mapHost);
         page.Controls.Add(_seatInfo);
         page.Controls.Add(legend);
+        page.Controls.Add(_seatAircraft);
         page.Controls.Add(_seatTabs);
         return page;
     }
@@ -665,6 +670,7 @@ public sealed class BookingWizardForm : GlassForm
             return false;
         }
         _seatSignature = signature;
+        _seatAircraft.Text = _controller.AircraftSummary(s.SelectedFlight!, s.ReturnFlight);
         UpdateSeatInfo();
         return true;
     }
