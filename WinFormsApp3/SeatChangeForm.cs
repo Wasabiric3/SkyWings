@@ -109,8 +109,8 @@ public sealed class SeatChangeForm : GlassForm
         string own = SeatLayout.Normalize(current);
         try
         {
-            int capacity = _store.LoadFlightInventory(flightNo).Capacity;
-            _map.Configure(_booking.ClassName, SeatLayout.RowCount(_booking.ClassName, capacity));
+            Aircraft aircraft = _store.LoadAircraft(flightNo);
+            _map.Configure(aircraft.Cabin(_booking.ClassName) ?? Aircraft.Legacy(AppData.DefaultDomesticCapacity).Cabin(_booking.ClassName)!);
             _map.MaxSelection = 1;
             if (own.Length > 0) _map.SetSelected(new[] { own });
 

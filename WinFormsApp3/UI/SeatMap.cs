@@ -11,7 +11,8 @@ public enum SeatState { Free, Taken, Held, Selected }
 public sealed class SeatMap : Control, ISelfStyled
 {
     private char[] _letters = Array.Empty<char>();
-    private int _aisleAfter;
+    private int[] _aisles = Array.Empty<int>();   // seat columns (0-based) with an aisle right after them
+    private CabinLayout? _cabin;
     private int _rows;
     private string _className = AppData.ClassNames[0];
     private readonly HashSet<string> _taken = new();
@@ -40,13 +41,14 @@ public sealed class SeatMap : Control, ISelfStyled
 
     public IReadOnlyList<string> Selected => _selected;
 
-    public void Configure(string className, int rows)
+    /// <summary>Shows one cabin of an aircraft: its rows, seat letters and every aisle (wide-bodies have two).</summary>
+    public void Configure(CabinLayout cabin)
     {
-        _className = className;
-        int index = SeatLayout.ClassIndex(className);
-        _letters = AppData.ClassSeatLetters[index];
-        _aisleAfter = AppData.ClassAisleAfter[index];
-        _rows = Math.Max(1, rows);
+        _cabin = cabin;
+        _className = cabin.ClassName;
+        _letters = cabin.Letters;
+        _aisles = cabin.AislesAfter;
+        _rows = Math.Max(1, cabin.Rows);
         _selected.Clear();
         _cursor = (0, 0);
         UpdateSize();
@@ -88,15 +90,15 @@ public sealed class SeatMap : Control, ISelfStyled
     private int LabelW => Gfx.S(this, 34);
     private int HeaderH => Gfx.S(this, 32);
     private int Pad => Gfx.S(this, 8);
-    private bool HasAisle => _aisleAfter < _letters.Length - 1;
+    private int AislesBefore(int col) => _aisles.Count(after => after < col);
 
-    private int ColX(int col) => Pad + LabelW + col * (SeatW + Gap) + (HasAisle && col > _aisleAfter ? Aisle : 0);
+    private int ColX(int col) => Pad + LabelW + col * (SeatW + Gap) + AislesBefore(col) * Aisle;
     private int RowY(int row) => HeaderH + Pad + row * (SeatH + Gap);
 
     private void UpdateSize()
     {
         if (_letters.Length == 0) return;
-        int width = Pad * 2 + LabelW * 2 + _letters.Length * SeatW + (_letters.Length - 1) * Gap + (HasAisle ? Aisle : 0);
+        int width = Pad * 2 + LabelW * 2 + _letters.Length * SeatW + (_letters.Length - 1) * Gap + _aisles.Length * Aisle;
         int height = HeaderH + Pad * 2 + _rows * (SeatH + Gap);
         Size = new Size(width, height);
     }
@@ -108,6 +110,10 @@ public sealed class SeatMap : Control, ISelfStyled
     }
 
     private Rectangle SeatRect(int row, int col) => new(ColX(col), RowY(row), SeatW, SeatH);
+
+    // Exposed to the tests so the geometry (aisle gaps, hit-testing) can be checked without a window.
+    internal Rectangle SeatBounds(int row, int col) => SeatRect(row, col);
+    internal (int Row, int Col) SeatAt(Point p) => HitTest(p);
 
     private (int Row, int Col) HitTest(Point p)
     {
@@ -174,7 +180,7 @@ public sealed class SeatMap : Control, ISelfStyled
                     SeatState.Selected => "Your seat",
                     _ => "Available"
                 };
-                _tip.SetToolTip(this, $"{code} · {SeatLayout.Position(_className, hit.Col)} · {state}");
+                _tip.SetToolTip(this, $"{code} · {(_cabin?.Position(hit.Col) ?? "Seat")} · {state}");
             }
             else _tip.SetToolTip(this, "");
             Cursor = hit.Row >= 0 && StateOf(CodeAt(hit.Row, hit.Col)) is SeatState.Free or SeatState.Selected ? Cursors.Hand : Cursors.Default;

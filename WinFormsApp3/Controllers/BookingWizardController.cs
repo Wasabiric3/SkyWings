@@ -161,9 +161,18 @@ public sealed class BookingWizardController
 
     public void PurgeExpiredHolds() => _store.PurgeExpiredSeatHolds();
 
-    /// <summary>Number of seat rows to draw for a flight in the session's class.</summary>
-    public int SeatRowCount(Flight flight)
-        => SeatLayout.RowCount(Session.ClassName, _store.LoadFlightInventory(flight.FlightNo).Capacity);
+    /// <summary>The cabin to draw for a flight in the session's class (rows, seat letters, aisles), or null if its aircraft has none.</summary>
+    public CabinLayout? SeatCabin(Flight flight) => _store.LoadAircraft(flight.FlightNo).Cabin(Session.ClassName);
+
+    /// <summary>The classes a trip offers, in the usual order: the cabins that the outbound aircraft (and the return aircraft, if any) have.</summary>
+    public IReadOnlyList<string> AvailableClasses(Flight outbound, Flight? returnFlight)
+    {
+        Aircraft outAircraft = _store.LoadAircraft(outbound.FlightNo);
+        Aircraft? backAircraft = returnFlight is null ? null : _store.LoadAircraft(returnFlight.FlightNo);
+        return AppData.ClassNames
+            .Where(name => outAircraft.Cabin(name) is not null && (backAircraft is null || backAircraft.Cabin(name) is not null))
+            .ToList();
+    }
 
     public IReadOnlyCollection<string> TakenSeats(Flight flight, DateTime date) => _store.LoadTakenSeats(flight.FlightNo, date);
 

@@ -59,8 +59,8 @@ public sealed partial class BookingStore
     /// <summary>Seats not booked or held, ignoring waitlist offers.</summary>
     private int CabinSeatsRaw(string flightNo, DateTime flightDate, string className)
     {
-        int capacity = LoadFlightInventory(flightNo).Capacity;
-        int total = SeatLayout.RowCount(className, capacity) * AppData.ClassSeatLetters[SeatLayout.ClassIndex(className)].Length;
+        // The cabin's seats come from the flight's aircraft; an aircraft without that cabin has no seats in it.
+        int total = LoadAircraft(flightNo).Cabin(className)?.Seats ?? 0;
         string prefix = AppData.SeatPrefixForClass(className);
         int taken = LoadTakenSeats(flightNo, flightDate).Count(s => s.StartsWith(prefix, StringComparison.Ordinal));
         int held = GetActiveHoldsForFlightDate(flightNo, flightDate).Keys

@@ -38,6 +38,8 @@ public static class FlightSearch
         var rows = new List<FlightRow>();
         foreach (var (f, status) in flights)
         {
+            // A flight whose aircraft has no such cabin (First Class on an A320) is not "sold out": it simply does not offer it.
+            if (store.LoadAircraft(f.FlightNo).Cabin(className) is null) continue;
             DateTime departure = AppData.DepartureOf(f.FlightNo, date);
             int minutes = AppData.FlightEstDurationMin.GetValueOrDefault(f.FlightNo, 120);
             DateTime arrival = departure.AddMinutes(minutes);

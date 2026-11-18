@@ -659,7 +659,7 @@ public sealed class BookingWizardForm : GlassForm
         string[] keep = rebuild ? Array.Empty<string>() : map.Selected.ToArray();
         if (rebuild)
         {
-            map.Configure(_session.ClassName, _controller.SeatRowCount(flight));
+            map.Configure(_controller.SeatCabin(flight) ?? Aircraft.Legacy(AppData.DefaultDomesticCapacity).Cabin(_session.ClassName)!);
         }
         map.MaxSelection = Math.Max(1, _session.Passengers.Count);
         map.SetSelected(keep);
