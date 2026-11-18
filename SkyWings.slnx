@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="WinFormsApp3.Tests/SkyWings.Tests.csproj" />
+  <Project Path="WinFormsApp3/SkyWings.csproj" />
+</Solution>

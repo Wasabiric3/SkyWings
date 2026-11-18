@@ -1,0 +1,8 @@
+<Project>
+  <!-- Warn at build time when any package (including indirect ones) has a known vulnerability. -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+</Project>

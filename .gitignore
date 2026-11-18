@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+TestResults/
+*.user
+_backup/
+node_modules/
+*.db
+*.db-wal
+*.db-shm
