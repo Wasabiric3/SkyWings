@@ -27,6 +27,7 @@ public sealed class ManageBookingForm : GlassForm
     private readonly Label _emailStatus = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, Font = Theme.Small };
     private readonly GlassButton _toggleEmail = new() { Text = "Stop emails", Style = GlassButtonStyle.Secondary };
     private readonly GlassButton _sendEmail = new() { Text = "Email me this receipt", Style = GlassButtonStyle.Secondary };
+    private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Secondary };
     private readonly FlowLayoutPanel _emailBar = new() { WrapContents = false };
 
     public ManageBookingForm(BookingStore store)
@@ -116,10 +117,12 @@ public sealed class ManageBookingForm : GlassForm
         _emailBar.Dock = DockStyle.Bottom;
         _emailBar.Height = D(50);
         _emailBar.Padding = new Padding(0, D(6), 0, 0);
-        _emailStatus.Width = D(300);
+        _emailStatus.Width = D(220);
         _emailStatus.Height = D(40);
         _toggleEmail.Click += (_, _) => ToggleEmail();
         _sendEmail.Click += async (_, _) => await SendReceipt();
+        _print.Click += (_, _) => PrintReceipt();
+        _emailBar.Controls.Add(_print);
         _emailBar.Controls.Add(_emailStatus);
         _emailBar.Controls.Add(_toggleEmail);
         _emailBar.Controls.Add(_sendEmail);
@@ -214,6 +217,21 @@ public sealed class ManageBookingForm : GlassForm
             MessageBox.Show(this, "The email setting could not be saved. Please try again.", "Manage booking",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         RefreshEmailBar();
+    }
+
+    /// <summary>Opens the A4 print preview of this booking's receipt (works for any booking you can see here, not just a new one).</summary>
+    private void PrintReceipt()
+    {
+        try
+        {
+            if (_controller.BuildReceipt() is { } receipt) ReceiptPrinter.ShowPreview(this, receipt);
+        }
+        catch (Exception ex) when (ex is IOException or System.Drawing.Printing.InvalidPrinterException)
+        {
+            AppLogger.Error("PrintReceipt", ex);
+            MessageBox.Show(this, "The receipt could not be prepared for printing. Please try again.", "Print receipt",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private async Task SendReceipt()

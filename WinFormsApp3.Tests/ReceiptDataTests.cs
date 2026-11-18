@@ -19,7 +19,7 @@ public class ReceiptDataTests
 
     private static BookingRecord Record(BookingSession s, string seat = "BUS1B", string returnSeat = "")
     {
-        var passengers = s.Passengers.Select((p, i) => p.ToRecord(seat.Length > 0 ? $"{seat}{i}" : "", Array.Empty<string>(), 0m, returnSeat)).ToList();
+        var passengers = s.Passengers.Select((p, i) => p.ToRecord(seat.Length > 0 ? $"{seat}{i}" : "", s.Addons.ToList(), 0m, returnSeat)).ToList();
         decimal total = FarePricing.Calculate(s, Booked).Total;
         return new BookingRecord("SW-TEST-001", Booked, Out.FlightNo, Out.Origin, Out.Destination, s.FlightDate, true,
             s.ClassName, "Debit Card", "···· 3523", total, "09:15", passengers, "Confirmed", "Paid", "TX-1", Booked, 0m)
@@ -115,6 +115,64 @@ public class ReceiptDataTests
         Assert.AreEqual(AppData.AddonPrices[AppData.GetAddonIndex("Insurance")] * 2, insurance.Amount);
     }
 
+
+    [TestMethod]
+    public void FromStored_RebuildsTheSameFareLinesAsTheLiveWizardSession()
+    {
+        BookingSession s = Session(travellers: 2, roundTrip: true, className: "Premium Economy");
+        s.BaggageOption = AppData.BaggageOptionsForClass(s.ClassName).Last();
+        s.MealOption = AppData.MealOptionsForClass(s.ClassName).Last();
+        s.Addons.Add("Insurance");
+        BookingRecord record = Record(s, returnSeat: "PRE2A");
+
+        ReceiptData live = ReceiptData.From(record, s);
+        ReceiptData stored = ReceiptData.FromStored(record, new[] { Out, Back });
+
+        CollectionAssert.AreEqual(live.FareLines.ToList(), stored.FareLines.ToList());
+        Assert.AreEqual(live.TotalPaid, stored.TotalPaid);
+        Assert.AreEqual(live.Passengers, stored.Passengers);
+    }
+
+    [TestMethod]
+    public void FromStored_SeniorsAndPromo_StillAddUpToTheTotal()
+    {
+        BookingSession s = Session(travellers: 2);
+        s.Passengers[0].Senior = true;
+        s.PromoCode = "EARLY500";
+        BookingRecord record = Record(s);
+
+        ReceiptData stored = ReceiptData.FromStored(record, new[] { Out, Back });
+
+        decimal sum = stored.FareLines.Sum(l => l.Discount ? -l.Amount : l.Amount);
+        Assert.AreEqual(record.TotalAmount, sum, 0.02m);
+    }
+
+    [TestMethod]
+    public void FromStored_FlightNoLongerExists_FallsBackToOneHonestTotalLine()
+    {
+        BookingSession s = Session();
+        BookingRecord record = Record(s);
+
+        ReceiptData stored = ReceiptData.FromStored(record, Array.Empty<Flight>());
+
+        ReceiptLine only = stored.FareLines.Single();
+        Assert.AreEqual("Fare, add-ons and taxes", only.Label);
+        Assert.AreEqual(record.TotalAmount, only.Amount);
+        Assert.IsFalse(only.Discount);
+    }
+
+    [TestMethod]
+    public void FromStored_PricesChangedSinceBooking_FallsBackInsteadOfShowingAWrongBreakdown()
+    {
+        BookingSession s = Session();
+        BookingRecord record = Record(s);
+        var dearerNow = new Flight(Out.FlightNo, Out.Origin, Out.Destination, Out.BasePrice + 1000m);
+
+        ReceiptData stored = ReceiptData.FromStored(record, new[] { dearerNow, Back });
+
+        Assert.AreEqual(1, stored.FareLines.Count);
+        Assert.AreEqual(record.TotalAmount, stored.FareLines[0].Amount);
+    }
     [TestMethod]
     public void FormattedMoney_UsesPhpWithTwoDecimals()
         => Assert.AreEqual("PHP 49,000.00", ReceiptLine.Money(49000m));

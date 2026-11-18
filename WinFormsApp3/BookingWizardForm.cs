@@ -809,13 +809,7 @@ public sealed class BookingWizardForm : GlassForm
     private void PrintReceipt()
     {
         if (_receiptBooking is null) return;
-        ReceiptData receipt = ReceiptData.From(_receiptBooking, _session);
-
-        using var document = new PrintDocument { DocumentName = $"SkyWings receipt {receipt.Reference}" };
-        document.DefaultPageSettings.PaperSize = new PaperSize("A4", 827, 1169);   // hundredths of an inch
-        document.PrintPage += (_, e) => ReceiptPrinter.RenderPage(e, receipt);
-        using var preview = new PrintPreviewDialog { Document = document, Width = 900, Height = 1000 };
-        preview.ShowDialog(this);
+        ReceiptPrinter.ShowPreview(this, ReceiptData.From(_receiptBooking, _session));
     }
 
     // ------------------------------------------------------------------ navigation

@@ -40,6 +40,16 @@ internal static class ReceiptPrinter
     }
 
 
+    /// <summary>Shows the print preview (A4) for a receipt; the person prints or saves it from there. Used by every Print receipt button.</summary>
+    public static void ShowPreview(IWin32Window owner, ReceiptData data)
+    {
+        using var document = new System.Drawing.Printing.PrintDocument { DocumentName = $"SkyWings receipt {data.Reference}" };
+        document.DefaultPageSettings.PaperSize = new System.Drawing.Printing.PaperSize("A4", 827, 1169);   // hundredths of an inch
+        document.PrintPage += (_, e) => RenderPage(e, data);
+        using var preview = new PrintPreviewDialog { Document = document, Width = 900, Height = 1000 };
+        preview.ShowDialog(owner);
+    }
+
     /// <summary>
     /// Prints the receipt on the current page of a <see cref="System.Drawing.Printing.PrintDocument"/>. The receipt is laid out
     /// on a 794 x 1123 page in 1/96 inch (A4): this switches the printer graphics to those units, starts at the paper's corner

@@ -69,6 +69,17 @@ public sealed class ManageBookingController
         return fresh;
     }
 
+    // ------------------------------------------------------------------ printing
+
+    /// <summary>The printable receipt for the booking being viewed, or null while the lookup page is showing.</summary>
+    public ReceiptData? BuildReceipt()
+    {
+        if (Current is null) return null;
+        // The breakdown is rebuilt from the current flight list (see ReceiptData.FromStored).
+        IEnumerable<Flight> flights = _store.LoadActiveFlights(domestic: true).Concat(_store.LoadActiveFlights(domestic: false));
+        return ReceiptData.FromStored(Current, flights);
+    }
+
     // ------------------------------------------------------------------ banner and refund
 
     public static BookingBanner DescribeBooking(BookingRecord booking)

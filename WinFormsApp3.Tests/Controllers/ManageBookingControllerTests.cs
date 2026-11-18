@@ -42,6 +42,26 @@ public sealed class ManageBookingControllerTests
         return booking;
     }
 
+
+    [TestMethod]
+    public void BuildReceipt_WithNoBookingOpen_ReturnsNull() => Assert.IsNull(_controller.BuildReceipt());
+
+    [TestMethod]
+    public void BuildReceipt_ForTheOpenBooking_CarriesItsDetailsAndAFareThatAddsUp()
+    {
+        BookingRecord saved = Save("SKY-MNG000099", DateTime.Today.AddDays(30), total: 4_000m);
+        Assert.IsTrue(_controller.Find("SKY-MNG000099", "Santos").Found);
+
+        ReceiptData? receipt = _controller.BuildReceipt();
+
+        Assert.IsNotNull(receipt);
+        Assert.AreEqual("SKY-MNG000099", receipt.Reference);
+        Assert.AreEqual("PR-101", receipt.FlightNo);
+        Assert.AreEqual("MNL", receipt.OriginCode);
+        Assert.AreEqual("PHP 4,000.00", receipt.TotalPaid);
+        decimal sum = receipt.FareLines.Sum(l => l.Discount ? -l.Amount : l.Amount);
+        Assert.AreEqual(saved.TotalAmount, sum, 0.05m, "whatever breakdown is shown must equal what was paid");
+    }
     [TestMethod]
     public void Find_CorrectDetails_ReturnsBookingAndSetsCurrent()
     {

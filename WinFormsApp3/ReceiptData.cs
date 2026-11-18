@@ -31,6 +31,46 @@ public sealed record ReceiptData(
 
     /// <summary>Builds the receipt for a stored booking. <paramref name="session"/> supplies the fare breakdown (add-ons, discounts).</summary>
     public static ReceiptData From(BookingRecord booking, BookingSession session)
+        => Build(booking, BuildFareLines(session, booking.BookedAtValue));
+
+    /// <summary>
+    /// Builds the receipt for a booking that is only stored (no live wizard session), e.g. when printing from Manage booking.
+    /// The fare breakdown is worked out again from the stored booking and the current flight list. It is shown only if it adds up
+    /// to what was actually paid; if a flight is gone or prices have changed, one honest total line is printed instead.
+    /// </summary>
+    public static ReceiptData FromStored(BookingRecord booking, IEnumerable<Flight> flights)
+    {
+        IReadOnlyList<ReceiptLine> lines = TotalOnly(booking);
+        if (RebuildSession(booking, flights.ToList()) is { } session)
+        {
+            List<ReceiptLine> rebuilt = BuildFareLines(session, booking.BookedAtValue);
+            decimal sum = rebuilt.Sum(l => l.Discount ? -l.Amount : l.Amount);
+            if (Math.Abs(sum - booking.TotalAmount) <= 0.05m) lines = rebuilt;
+        }
+        return Build(booking, lines);
+    }
+
+    private static List<ReceiptLine> TotalOnly(BookingRecord booking) => new() { new("Fare, add-ons and taxes", booking.TotalAmount) };
+
+    private static BookingSession? RebuildSession(BookingRecord booking, List<Flight> flights)
+    {
+        Flight? outbound = flights.FirstOrDefault(f => f.FlightNo == booking.FlightNo);
+        Flight? back = booking.ReturnFlightNo is null ? null : flights.FirstOrDefault(f => f.FlightNo == booking.ReturnFlightNo);
+        if (outbound is null || (booking.ReturnFlightNo is not null && back is null) || booking.Passengers.Count == 0) return null;
+
+        var session = new BookingSession
+        {
+            SelectedFlight = outbound, FlightDate = booking.FlightDateValue, ClassName = booking.ClassName,
+            ReturnFlight = back, ReturnDate = booking.ReturnFlightDateValue,
+            BaggageOption = booking.BaggageOption, MealOption = booking.MealOption, PromoCode = booking.PromoCode
+        };
+        foreach (PassengerRecord p in booking.Passengers)
+            session.Passengers.Add(new PassengerDraft { Name = p.Name, Senior = p.Senior, Pwd = p.Pwd });
+        foreach (string addon in booking.Passengers[0].Addons) session.Addons.Add(addon);
+        return session;
+    }
+
+    private static ReceiptData Build(BookingRecord booking, IReadOnlyList<ReceiptLine> fareLines)
     {
         var (originCode, originCity) = SplitPlace(booking.Origin);
         var (destinationCode, destinationCity) = SplitPlace(booking.Destination);
@@ -59,7 +99,7 @@ public sealed record ReceiptData(
             string.Join(", ", booking.Passengers.Select(p => p.Name)),
             booking.FlightNo, classAndSeat, departure, arrival,
             back is null ? "One-way" : "Round trip", back,
-            BuildFareLines(session, booking.BookedAtValue),
+            fareLines,
             ReceiptLine.Money(booking.TotalAmount),
             $"{booking.PaymentMethod} {booking.MaskedAccount}".Trim());
     }
