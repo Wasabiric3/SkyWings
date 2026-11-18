@@ -13,7 +13,11 @@ public sealed record Flight(string FlightNo, string Origin, string Destination, 
 /// <summary>Row shown in the admin "Flight Management" table.</summary>
 public sealed record FlightAdminRow(
     string FlightNo, string Origin, string Destination, decimal BasePrice,
-    string Type, int Capacity, string Status, string DepartureDisplay);
+    string Type, int Capacity, string Status, string DepartureDisplay)
+{
+    /// <summary>Id of the flight's aircraft (see <see cref="Aircraft"/>), or null for the original capacity-based layout.</summary>
+    public string? AircraftId { get; init; }
+}
 
 public sealed record FlightInventory(int Capacity, int ConfirmedBookings, int HeldSeats)
 {

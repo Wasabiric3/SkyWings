@@ -197,6 +197,7 @@ public sealed partial class BookingStore
         // with this column already), so error 1146 is ignored here. The Java version would show a
         // "Database Error" popup on the very first run in that case.
         EnsureColumn(con, "ALTER TABLE flights ADD COLUMN departure_time TIME NOT NULL DEFAULT '08:00:00'");
+        EnsureColumn(con, "ALTER TABLE flights ADD COLUMN aircraft VARCHAR(10) NULL");   // NULL = the original ratio-based layout
     }
 
     private static void EnsureColumn(SqliteConnection con, string alterSql)
@@ -482,7 +483,7 @@ public sealed partial class BookingStore
     // FLIGHTS
     // ================================================================
     public void SeedFlightsIfEmpty(IEnumerable<Flight> domestic, IEnumerable<Flight> international,
-        int domCap, int intlCap)
+        int domCap, int intlCap, bool assignAircraft = false)
     {
         const string ddl =
             "CREATE TABLE IF NOT EXISTS flights (" +
@@ -493,12 +494,13 @@ public sealed partial class BookingStore
             "  domestic       INTEGER       NOT NULL," +
             "  capacity       INT           NOT NULL," +
             "  active         INTEGER       NOT NULL DEFAULT 1," +
-            "  departure_time TIME          NOT NULL DEFAULT '08:00:00'" +
+            "  departure_time TIME          NOT NULL DEFAULT '08:00:00'," +
+            "  aircraft       VARCHAR(10)   NULL" +
             ")";
         // INSERT OR IGNORE skips rows whose flight_no already exists, so this is safe on every startup.
         const string ins =
-            "INSERT OR IGNORE INTO flights (flight_no,origin,destination,base_price,domestic,capacity,active,departure_time) " +
-            "VALUES (@no,@origin,@dest,@price,@dom,@cap,1,@dep)";
+            "INSERT OR IGNORE INTO flights (flight_no,origin,destination,base_price,domestic,capacity,active,departure_time,aircraft) " +
+            "VALUES (@no,@origin,@dest,@price,@dom,@cap,1,@dep,@ac)";
 
         lock (_lock)
         {
@@ -509,9 +511,12 @@ public sealed partial class BookingStore
                 void Insert(Flight f, int dom, int cap)
                 {
                     var dep = AppData.FlightScheduledTimes.TryGetValue(f.FlightNo, out var t) ? t : new TimeOnly(8, 0);
+                    // With an aircraft, the seat count is the aircraft's; without one the flight keeps the capacity-based layout.
+                    Aircraft? aircraft = assignAircraft ? Aircraft.DefaultFor(f.FlightNo, dom == 1) : null;
                     Exec(con, ins, ("@no", f.FlightNo), ("@origin", f.Origin), ("@dest", f.Destination),
-                        ("@price", f.BasePrice), ("@dom", dom), ("@cap", cap),
-                        ("@dep", dep.ToString("HH:mm:ss", CultureInfo.InvariantCulture)));
+                        ("@price", f.BasePrice), ("@dom", dom), ("@cap", aircraft?.TotalSeats ?? cap),
+                        ("@dep", dep.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
+                        ("@ac", aircraft is null ? DBNull.Value : aircraft.Id));
                 }
                 foreach (var f in domestic)
                 {
@@ -586,7 +591,7 @@ public sealed partial class BookingStore
             {
                 using var con = OpenConnection();
                 using var cmd = Cmd(con,
-                    "SELECT flight_no, origin, destination, base_price, domestic, capacity, active, departure_time " +
+                    "SELECT flight_no, origin, destination, base_price, domestic, capacity, active, departure_time, aircraft " +
                     "FROM flights ORDER BY domestic DESC, flight_no");
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
@@ -600,7 +605,10 @@ public sealed partial class BookingStore
                         Int(rs, "domestic") == 1 ? "Domestic" : "International",
                         Int(rs, "capacity"),
                         Int(rs, "active") == 1 ? "Active" : "Inactive",
-                        depDisplay));
+                        depDisplay)
+                    {
+                        AircraftId = rs.IsDBNull(rs.GetOrdinal("aircraft")) ? null : rs.GetString(rs.GetOrdinal("aircraft"))
+                    });
                 }
             }
             catch (Exception e) { LogError(e); throw; }
