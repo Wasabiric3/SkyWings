@@ -859,14 +859,15 @@ public sealed partial class BookingStore
     // ================================================================
     // SEAT HOLDS
     // ================================================================
-    public void PurgeExpiredSeatHolds()
+    /// <summary>Marks holds past their expiry as EXPIRED. <paramref name="now"/> defaults to the local clock the holds are stored with.</summary>
+    public void PurgeExpiredSeatHolds(DateTime? now = null)
     {
         lock (_lock)
         {
             try
             {
                 using var con = OpenConnection();
-                Exec(con, "UPDATE seat_holds SET status='EXPIRED' WHERE expires_at < datetime('now') AND status='ACTIVE'");
+                Exec(con, "UPDATE seat_holds SET status='EXPIRED' WHERE expires_at < @now AND status='ACTIVE'", ("@now", now ?? DateTime.Now));
             }
             catch (SqliteException e)
             {
@@ -875,7 +876,7 @@ public sealed partial class BookingStore
         }
     }
 
-    public Dictionary<string, SeatHoldInfo> GetActiveHoldsForFlightDate(string flightNo, DateTime flightDate)
+    public Dictionary<string, SeatHoldInfo> GetActiveHoldsForFlightDate(string flightNo, DateTime flightDate, DateTime? now = null)
     {
         lock (_lock)
         {
@@ -885,8 +886,8 @@ public sealed partial class BookingStore
                 using var con = OpenConnection();
                 using var cmd = Cmd(con,
                     "SELECT seat_code, owner, expires_at FROM seat_holds " +
-                    "WHERE flight_no = @no AND flight_date = @date AND expires_at >= datetime('now') AND status='ACTIVE'", null,
-                    ("@no", flightNo), ("@date", flightDate.Date));
+                    "WHERE flight_no = @no AND flight_date = @date AND expires_at >= @now AND status='ACTIVE'", null,
+                    ("@no", flightNo), ("@date", flightDate.Date), ("@now", now ?? DateTime.Now));
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                     map[Str(rs, "seat_code")] = new SeatHoldInfo(Str(rs, "owner"), Dt(rs, "expires_at"));
@@ -897,8 +898,9 @@ public sealed partial class BookingStore
     }
 
     /// <summary>Returns false if the seat is already actively held by someone.</summary>
-    public bool AddSeatHold(string flightNo, DateTime flightDate, string seatCode, string owner)
+    public bool AddSeatHold(string flightNo, DateTime flightDate, string seatCode, string owner, DateTime? now = null)
     {
+        DateTime clock = now ?? DateTime.Now;   // one clock for the whole operation, the same local clock the holds are stored with
         lock (_lock)
         {
             try
@@ -906,16 +908,16 @@ public sealed partial class BookingStore
                 using var con = OpenConnection();
                 using (var chk = Cmd(con,
                     "SELECT COUNT(*) FROM seat_holds " +
-                    "WHERE flight_no=@no AND flight_date=@date AND seat_code=@seat AND expires_at >= datetime('now') AND status='ACTIVE'",
-                    null, ("@no", flightNo), ("@date", flightDate.Date), ("@seat", seatCode)))
+                    "WHERE flight_no=@no AND flight_date=@date AND seat_code=@seat AND expires_at >= @now AND status='ACTIVE'",
+                    null, ("@no", flightNo), ("@date", flightDate.Date), ("@seat", seatCode), ("@now", clock)))
                 {
                     if (Convert.ToInt32(chk.ExecuteScalar()) > 0) return false;
                 }
 
                 // One session may hold only so many seats at once, so nobody can reserve a whole cabin.
                 using (var held = Cmd(con,
-                    "SELECT COUNT(*) FROM seat_holds WHERE owner = @owner AND status = 'ACTIVE' AND expires_at >= datetime('now')",
-                    null, ("@owner", owner)))
+                    "SELECT COUNT(*) FROM seat_holds WHERE owner = @owner AND status = 'ACTIVE' AND expires_at >= @now",
+                    null, ("@owner", owner), ("@now", clock)))
                     if (Convert.ToInt32(held.ExecuteScalar()) >= BookingRules.MaxActiveSeatHoldsPerOwner)
                         throw new InvalidOperationException(
                             $"You can hold at most {BookingRules.MaxActiveSeatHoldsPerOwner} seats at a time. Finish or cancel your current booking first.");
@@ -933,7 +935,7 @@ public sealed partial class BookingStore
                     "VALUES (@id,@no,@date,@seat,@owner,@exp,'ACTIVE')",
                     ("@id", Guid.NewGuid().ToString()), ("@no", flightNo), ("@date", flightDate.Date),
                     ("@seat", seatCode), ("@owner", owner),
-                    ("@exp", DateTime.Now.AddMinutes(AppData.SeatHoldMinutes)));
+                    ("@exp", clock.AddMinutes(AppData.SeatHoldMinutes)));
             }
             catch (SqliteException e)
             {

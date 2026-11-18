@@ -131,8 +131,8 @@ public sealed partial class BookingStore
 
                 using (var hold = Cmd(con,
                     "SELECT COUNT(*) FROM seat_holds WHERE flight_no = @no AND flight_date = @date AND seat_code = @seat " +
-                    "AND expires_at >= datetime('now') AND status = 'ACTIVE'", null,
-                    ("@no", flightNo), ("@date", flightDate.Date), ("@seat", newSeat)))
+                    "AND expires_at >= @now AND status = 'ACTIVE'", null,
+                    ("@no", flightNo), ("@date", flightDate.Date), ("@seat", newSeat), ("@now", DateTime.Now)))
                     if (Convert.ToInt32(hold.ExecuteScalar()) > 0) return false;
 
                 return Exec(con, $"UPDATE passengers SET {column} = @seat WHERE booking_ref = @ref AND name = @name",
