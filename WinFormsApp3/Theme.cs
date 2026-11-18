@@ -27,7 +27,7 @@ public static class Theme
     public static readonly Color Warning = Color.FromArgb(176, 128, 20);
     public static readonly Color Selection = Color.FromArgb(226, 239, 232);
     public static readonly Color RowAlt = Color.FromArgb(250, 252, 251);
-    public static readonly Color DisabledText = Color.FromArgb(160, 172, 166);
+    public static readonly Color DisabledText = Color.FromArgb(118, 132, 125);   // >= 3:1 on DisabledBack so disabled text stays readable
     public static readonly Color DisabledTextSoft = Color.FromArgb(176, 187, 181);
     public static readonly Color DisabledBack = Color.FromArgb(240, 244, 242);
 

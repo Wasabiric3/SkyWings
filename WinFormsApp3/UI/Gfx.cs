@@ -13,6 +13,17 @@ internal static class Gfx
 
     public static float S(Control c, float px) => px * c.DeviceDpi / 96f;
 
+    /// <summary>
+    /// The first opaque colour found walking up the parents: what shows around a control's rounded corners.
+    /// Self-painting controls fill with this instead of being transparent, so repaints do not cascade up the parent chain.
+    /// </summary>
+    public static Color Surface(Control control)
+    {
+        for (Control? c = control.Parent; c is not null; c = c.Parent)
+            if (c.BackColor.A == 255) return c.BackColor;
+        return Theme.BgMain;
+    }
+
     public static GraphicsPath RoundedRect(RectangleF r, float radius)
     {
         float d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));

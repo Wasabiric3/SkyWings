@@ -46,20 +46,12 @@ public class GlassCard : Control
         }
     }
 
-    /// <summary>The first opaque colour found walking up the parents: what shows around the card's rounded corners.</summary>
-    private Color SurfaceColor()
-    {
-        for (Control? c = Parent; c is not null; c = c.Parent)
-            if (c.BackColor.A == 255) return c.BackColor;
-        return Theme.BgMain;
-    }
-
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var g = e.Graphics;
         // Paint the margin ourselves instead of being transparent: no repaint cascade through the parent chain.
-        using (var surface = new SolidBrush(SurfaceColor())) g.FillRectangle(surface, e.ClipRectangle);
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, e.ClipRectangle);
 
         RectangleF card = CardBounds();
         if (card.Width < 4 || card.Height < 4) return;
@@ -76,18 +68,20 @@ public enum GlassButtonStyle { Primary, Secondary, Ghost, Danger }
 /// <summary>Rounded button with hover/pressed/focus states. Behaves like a normal button (AcceptButton, DialogResult).</summary>
 public sealed class GlassButton : Control, IButtonControl, ISelfStyled
 {
+    // One font shared by every button; creating a Font per button leaks GDI handles.
+    private static readonly Font ButtonFont = new(Theme.Body, FontStyle.Bold);
+
     private bool _hover, _pressed, _isDefault;
     private GlassButtonStyle _style = GlassButtonStyle.Primary;
 
     public GlassButton()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.StandardClick, true);
         TabStop = true;
-        BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
-        Font = new Font(Theme.Body, FontStyle.Bold);
+        Font = ButtonFont;
         Height = Gfx.S(this, 40);
         Margin = new Padding(0, 0, Gfx.S(this, 10), 0);
     }
@@ -152,41 +146,37 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var bounds = new RectangleF(1, 1, Width - 3, Height - 3);
-        float radius = Gfx.S(this, 11);
+        float radius = Height * 0.27f;   // the brand kit's buttons round to ~27% of their height
 
-        Color fill, border, text;
+        Color fill, border = Color.Transparent, text;
         switch (_style)
         {
             case GlassButtonStyle.Secondary:
-                fill = _pressed ? Theme.StepPending : _hover ? Color.FromArgb(250, 252, 251) : Color.FromArgb(215, 255, 255, 255);
-                border = _hover ? Theme.Primary : Theme.Border;
-                text = Theme.TextPrimary;
+                fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.12f) : Theme.SoftFill;
+                text = Theme.Accent;
                 break;
             case GlassButtonStyle.Ghost:
-                fill = _pressed ? Color.FromArgb(60, Theme.Primary) : _hover ? Color.FromArgb(34, Theme.Primary) : Color.Transparent;
-                border = Color.Transparent;
+                fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Theme.SoftFill : Color.Transparent;
                 text = Theme.Accent;
                 break;
             case GlassButtonStyle.Danger:
                 fill = _pressed ? Color.FromArgb(200, 48, 40) : _hover ? Color.FromArgb(235, 80, 70) : Theme.DangerRed;
-                border = Color.Transparent;
                 text = Color.White;
                 break;
             default:
-                fill = _pressed ? Theme.Accent : _hover ? Theme.PrimaryLight : Theme.Primary;
-                border = Color.Transparent;
+                fill = _pressed ? Theme.AccentDark : _hover ? Theme.Accent : Theme.Primary;
                 text = Color.White;
                 break;
         }
 
         if (!Enabled)
         {
-            fill = _style == GlassButtonStyle.Primary || _style == GlassButtonStyle.Danger
-                ? Color.FromArgb(190, 207, 199) : Color.FromArgb(120, 238, 242, 240);
+            fill = _style == GlassButtonStyle.Ghost ? Color.Transparent : Theme.DisabledBack;
             border = Color.Transparent;
-            text = Color.FromArgb(140, 156, 148);
+            text = Theme.DisabledText;
         }
 
         using var path = Gfx.RoundedRect(bounds, radius);
@@ -224,10 +214,9 @@ public sealed class StepBar : Control, ISelfStyled
     public StepBar(string[] steps)
     {
         _steps = steps;
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw, true);
-        BackColor = Color.Transparent;
         Height = Gfx.S(this, 70);
         Font = Theme.Small;
         AccessibleName = "Booking progress";
@@ -277,6 +266,7 @@ public sealed class StepBar : Control, ISelfStyled
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         float d = Diameter, cy = CenterY, gap = Gfx.S(this, 8f);
 
@@ -286,55 +276,63 @@ public sealed class StepBar : Control, ISelfStyled
             g.DrawLine(pen, CenterX(i) + d / 2 + gap, cy, CenterX(i + 1) - d / 2 - gap, cy);
         }
 
-        using var numberFont = new Font(Theme.Small, FontStyle.Bold);
+        _numberFont ??= new Font(Theme.Small, FontStyle.Bold);
+        _boldFont ??= new Font(Font, FontStyle.Bold);
+        _regularFont ??= new Font(Font, FontStyle.Regular);
         using var labelFormat = Gfx.Format(StringAlignment.Center, StringAlignment.Near);
         using var centerFormat = Gfx.Format(StringAlignment.Center);
         for (int i = 0; i < _steps.Length; i++)
         {
             var circle = new RectangleF(CenterX(i) - d / 2, cy - d / 2, d, d);
             bool done = i < _current, current = i == _current;
-            if (current)
-            {
-                using var halo = new SolidBrush(Color.FromArgb(46, Theme.Primary));
-                g.FillEllipse(halo, RectangleF.Inflate(circle, Gfx.S(this, 5f), Gfx.S(this, 5f)));
-                using var white = new SolidBrush(Color.White);
-                g.FillEllipse(white, circle);
-                using var ring = new Pen(Theme.Primary, Gfx.S(this, 2f));
-                g.DrawEllipse(ring, circle);
-            }
-            else
-            {
-                using var brush = new SolidBrush(done ? Theme.Primary : Color.FromArgb(232, 240, 236));
+            // Flat circles: active = Primary, done = Accent, pending = StepPending.
+            using (var brush = new SolidBrush(current ? Theme.Primary : done ? Theme.Accent : Theme.StepPending))
                 g.FillEllipse(brush, circle);
-            }
 
-            Color numberColor = current ? Theme.Primary : done ? Color.White : Theme.TextSecondary;
+            Color numberColor = current || done ? Color.White : Theme.TextSecondary;
             using var numberBrush = new SolidBrush(numberColor);
-            g.DrawString(done ? "✓" : (i + 1).ToString(), numberFont, numberBrush, circle, centerFormat);
+            g.DrawString(done ? "✓" : (i + 1).ToString(), _numberFont, numberBrush, circle, centerFormat);
 
             Color labelColor = current ? Theme.TextPrimary : done ? Theme.Accent : Theme.TextSecondary;
-            using var labelFont = new Font(Font, current ? FontStyle.Bold : FontStyle.Regular);
             using var labelBrush = new SolidBrush(labelColor);
             var labelRect = new RectangleF(CenterX(i) - SlotWidth / 2 + 2, cy + d / 2 + Gfx.S(this, 6f), SlotWidth - 4, Gfx.S(this, 22f));
-            g.DrawString(_steps[i], labelFont, labelBrush, labelRect, labelFormat);
+            g.DrawString(_steps[i], current ? _boldFont : _regularFont, labelBrush, labelRect, labelFormat);
         }
+    }
+
+    // Fonts are created once and reused; creating them on every paint is what made this control allocate heavily.
+    private Font? _numberFont, _boldFont, _regularFont;
+
+    private void DisposeFonts()
+    {
+        _numberFont?.Dispose(); _boldFont?.Dispose(); _regularFont?.Dispose();
+        _numberFont = _boldFont = _regularFont = null;
+    }
+
+    protected override void OnFontChanged(EventArgs e) { DisposeFonts(); base.OnFontChanged(e); }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) DisposeFonts();
+        base.Dispose(disposing);
     }
 }
 
 /// <summary>Caption, input and inline message stacked in one row, so inputs always get the full column width.</summary>
 public sealed class FieldRow : Control, ISelfStyled
 {
+    private static readonly Font CaptionFont = new(Theme.Small, FontStyle.Bold);   // shared: one Font per row would leak GDI handles
+
     private readonly Label _caption = new();
     private readonly Label _message = new();
 
     public FieldRow(string caption, Control input)
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor, true);
-        BackColor = Color.Transparent;
+        // No transparency: the row simply inherits its parent's colour (ambient BackColor), so nothing repaints through it.
         Input = input;
 
         _caption.Text = caption;
-        _caption.Font = new Font(Theme.Small, FontStyle.Bold);
+        _caption.Font = CaptionFont;
         _caption.ForeColor = Theme.TextSecondary;
         _caption.AutoSize = false;
         _caption.TextAlign = ContentAlignment.BottomLeft;
@@ -420,15 +418,16 @@ public sealed class FieldRow : Control, ISelfStyled
 /// <summary>Selectable card used for cabin classes.</summary>
 public sealed class ChoiceCard : Control, ISelfStyled
 {
+    private static readonly Font TitleFont = new(Theme.Body, FontStyle.Bold);
+
     private bool _hover;
     private bool _selected;
 
     public ChoiceCard()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.StandardClick, true);
-        BackColor = Color.Transparent;
         TabStop = true;
         Cursor = Cursors.Hand;
         Height = Gfx.S(this, 92);
@@ -466,10 +465,11 @@ public sealed class ChoiceCard : Control, ISelfStyled
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
         using var path = Gfx.RoundedRect(bounds, Gfx.S(this, 14));
-        Color fill = _selected ? Color.FromArgb(235, 244, 239) : _hover ? Color.FromArgb(250, 252, 251) : Color.FromArgb(225, 255, 255, 255);
+        Color fill = _selected ? Theme.SoftFill : _hover ? Theme.BgMuted : Theme.BgCard;
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
         using (var pen = new Pen(_selected ? Theme.Primary : Theme.Border, _selected ? 2f : 1f)) g.DrawPath(pen, path);
         if (Focused && ShowFocusCues)
@@ -480,7 +480,7 @@ public sealed class ChoiceCard : Control, ISelfStyled
 
         // Selection is shown by the border, tint and accent title, so the full width stays available for text.
         float pad = Gfx.S(this, 12f);
-        using var titleFont = new Font(Theme.Body, FontStyle.Bold);
+        var titleFont = TitleFont;
         using var titleBrush = new SolidBrush(_selected ? Theme.Accent : Theme.TextPrimary);
         using var accentBrush = new SolidBrush(Theme.Accent);
         using var mutedBrush = new SolidBrush(Theme.TextSecondary);
