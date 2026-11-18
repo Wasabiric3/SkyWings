@@ -165,7 +165,8 @@ public sealed class SimulatedBookingStoreTests
             {
                 con.Open();
                 using var cmd = con.CreateCommand();
-                cmd.CommandText = "ALTER TABLE bookings DROP COLUMN is_simulated";   // an install from before the column existed
+                // An install from before the column existed has neither the column nor the index that uses it.
+                cmd.CommandText = "DROP INDEX IF EXISTS idx_bookings_simulated; ALTER TABLE bookings DROP COLUMN is_simulated;";
                 cmd.ExecuteNonQuery();
             }
             SqliteConnection.ClearAllPools();
