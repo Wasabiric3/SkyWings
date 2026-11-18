@@ -81,6 +81,19 @@ public static class AppData
     /// <summary>How long a waitlisted traveller has to book once seats are offered to them.</summary>
     public const int WaitlistOfferHours = 24;
 
+    /// <summary>
+    /// When a waitlist offer made at <paramref name="now"/> for a flight leaving at <paramref name="departure"/> lapses: after
+    /// <see cref="WaitlistOfferHours"/>, but never later than the booking cutoff (nobody can book after it, so holding the
+    /// seats longer would only waste them). Null when the cutoff has already passed: no offer can be made.
+    /// </summary>
+    public static DateTime? WaitlistOfferDeadline(DateTime now, DateTime departure)
+    {
+        DateTime cutoff = departure.AddHours(-BookingCutoffHours);
+        if (now >= cutoff) return null;
+        DateTime full = now.AddHours(WaitlistOfferHours);
+        return full < cutoff ? full : cutoff;
+    }
+
     // ========================= PASSENGER RULES =========================
     /// <summary>Minimum age for the senior citizen discount (Philippine law: 60 and above).</summary>
     public const int SeniorMinimumAge = 60;

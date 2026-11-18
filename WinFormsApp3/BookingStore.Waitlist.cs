@@ -185,6 +185,8 @@ public sealed partial class BookingStore
     public List<WaitlistEntry> PromoteWaitlist(string flightNo, DateTime flightDate, DateTime now)
     {
         var offered = new List<WaitlistEntry>();
+        // Offers last up to WaitlistOfferHours but never past the booking cutoff; after the cutoff nobody can book, so no offer.
+        if (AppData.WaitlistOfferDeadline(now, AppData.DepartureOf(flightNo, flightDate)) is not { } offerDeadline) return offered;
         lock (_lock)
         {
             try
@@ -206,7 +208,7 @@ public sealed partial class BookingStore
                     if (seats > left) { free[cls] = left; continue; }
                     free[cls] = left - seats;
                     Exec(con, "UPDATE waitlist_entries SET status='OFFERED', offer_expires_at=@exp WHERE id=@id AND status='WAITING'",
-                        ("@exp", now.AddHours(AppData.WaitlistOfferHours)), ("@id", id));
+                        ("@exp", offerDeadline), ("@id", id));
                     using var read = Cmd(con, $"SELECT {WaitlistColumns} FROM waitlist_entries WHERE id=@id", null, ("@id", id));
                     using var r = read.ExecuteReader();
                     if (r.Read()) offered.Add(ReadWaitlist(r, 0));
@@ -235,6 +237,7 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             using var con = OpenConnection();
+            CloseEntriesOfDepartedFlights(con, now);
             using (var cmd = Cmd(con,
                 "SELECT DISTINCT flight_no,flight_date FROM waitlist_entries WHERE status='OFFERED' AND offer_expires_at <= @now", null, ("@now", now)))
             using (var rs = cmd.ExecuteReader())
@@ -245,6 +248,27 @@ public sealed partial class BookingStore
         var all = new List<WaitlistEntry>();
         foreach (var (flightNo, date) in flights) all.AddRange(PromoteWaitlist(flightNo, date, now));
         return all;
+    }
+
+    /// <summary>
+    /// Closes (EXPIRED) every live entry of a flight that has already left. Travellers who kept waiting after the booking cutoff
+    /// stay in the queue until then, because a late cancellation can still free seats for an earlier offer; after departure
+    /// there is nothing left to wait for.
+    /// </summary>
+    private void CloseEntriesOfDepartedFlights(SqliteConnection con, DateTime now)
+    {
+        var departed = new List<(string FlightNo, DateTime Date)>();
+        using (var cmd = Cmd(con, "SELECT DISTINCT flight_no,flight_date FROM waitlist_entries WHERE status IN ('WAITING','OFFERED')"))
+        using (var rs = cmd.ExecuteReader())
+            while (rs.Read())
+            {
+                string flightNo = Str(rs, "flight_no");
+                DateTime date = Dt(rs, "flight_date");
+                if (AppData.DepartureOf(flightNo, date) <= now) departed.Add((flightNo, date));
+            }
+        foreach (var (flightNo, date) in departed)
+            Exec(con, "UPDATE waitlist_entries SET status='EXPIRED' WHERE flight_no=@f AND flight_date=@d AND status IN ('WAITING','OFFERED')",
+                ("@f", flightNo), ("@d", date.Date));
     }
 
     /// <summary>True when the code is a live (unexpired) offer for exactly this flight, date and cabin.</summary>

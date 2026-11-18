@@ -38,7 +38,7 @@ public sealed class JoinWaitlistForm : GlassForm
         };
         var note = new Label
         {
-            Text = $"Join the waitlist and we will email you the moment seats free up. You then have {AppData.WaitlistOfferHours} hours to book them.",
+            Text = $"Join the waitlist and we will email you the moment seats free up. You then have up to {AppData.WaitlistOfferHours} hours to book them (less if the flight is close to departure; bookings close {AppData.BookingCutoffHours} hours before it leaves).",
             AutoSize = false, Height = D(48), ForeColor = Theme.TextSecondary
         };
         var save = new GlassButton { Text = "Join waitlist" };

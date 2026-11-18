@@ -151,6 +151,55 @@ public sealed class WaitlistTests
         Assert.HasCount(1, raised);
     }
 
+
+    [TestMethod]
+    public void OfferNearDeparture_IsCappedAtTheBookingCutoff()
+    {
+        List<string> refs = FillBusiness();
+        _store.JoinWaitlist(Flight, _date, "Business", "Ana", "a@example.com", 1);
+        WaitlistEntry second = _store.JoinWaitlist(Flight, _date, "Business", "Ben", "b@example.com", 1)!;
+        _store.CancelBooking(refs[0], 0m);   // Ana is offered the seat
+
+        DateTime departure = AppData.DepartureOf(Flight, _date);
+        DateTime nearDeparture = departure.AddHours(-5);   // the next offer is made 5 hours before the flight
+        List<WaitlistEntry> next = _store.ExpireWaitlistOffers(nearDeparture);
+
+        Assert.HasCount(1, next);
+        Assert.AreEqual(second.BookingReference, next[0].BookingReference);
+        DateTime until = _store.FindWaitlistEntry(second.BookingReference, "b@example.com")!.OfferExpiresAt!.Value;
+        Assert.AreEqual(departure.AddHours(-AppData.BookingCutoffHours), until, "the seats must not stay held past the booking cutoff");
+    }
+
+    [TestMethod]
+    public void NoOfferIsMade_OnceBookingsHaveClosed_AndTheTravellerKeepsWaiting()
+    {
+        List<string> refs = FillBusiness();
+        _store.JoinWaitlist(Flight, _date, "Business", "Ana", "a@example.com", 1);
+        WaitlistEntry second = _store.JoinWaitlist(Flight, _date, "Business", "Ben", "b@example.com", 1)!;
+        _store.CancelBooking(refs[0], 0m);   // Ana is offered the seat
+
+        DateTime afterCutoff = AppData.DepartureOf(Flight, _date).AddHours(-1);   // bookings closed an hour ago
+        List<WaitlistEntry> next = _store.ExpireWaitlistOffers(afterCutoff);
+
+        Assert.IsEmpty(next, "no one can still book, so nothing should be offered or held");
+        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(second.BookingReference, "b@example.com")!.Status);
+        Assert.AreEqual(1, _store.CabinSeatsLeft(Flight, _date, "Business"), "the freed seat is not locked behind a dead offer");
+    }
+
+    [TestMethod]
+    public void WaitingEntries_AreClosed_OnceTheFlightHasDeparted_ButNotBefore()
+    {
+        FillBusiness();
+        WaitlistEntry entry = _store.JoinWaitlist(Flight, _date, "Business", "Ana", "a@example.com", 1)!;
+        DateTime departure = AppData.DepartureOf(Flight, _date);
+
+        _store.ExpireWaitlistOffers(departure.AddMinutes(-30));
+        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(entry.BookingReference, "a@example.com")!.Status);
+
+        _store.ExpireWaitlistOffers(departure.AddMinutes(1));
+        Assert.AreEqual(BookingStore.WaitlistExpired, _store.FindWaitlistEntry(entry.BookingReference, "a@example.com")!.Status);
+        Assert.IsEmpty(_store.LoadAllLiveWaitlist().Where(e => e.BookingReference == entry.BookingReference).ToList());
+    }
     [TestMethod]
     public void Convert_AndLookupRequiresMatchingEmail()
     {

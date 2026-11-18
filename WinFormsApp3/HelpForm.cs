@@ -38,7 +38,7 @@ internal static class HelpContent
         new("Waitlist for a sold-out flight",
             "When a cabin is sold out, select the flight on the home screen and choose \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
             "Keep the waitlist code that is shown.\n\n" +
-            $"When a booking is cancelled, the first traveller in line is emailed an offer and the seats are held for {AppData.WaitlistOfferHours} hours. " +
+            $"When a booking is cancelled, the first traveller in line is emailed an offer and the seats are held for up to {AppData.WaitlistOfferHours} hours, or until bookings close for the flight if that comes first. " +
             "To use it, choose \"Waitlist\" on the home screen, enter the code and email, then \"Book now\". " +
             "If the offer is not used in time, the seats go to the next traveller.\n\n" +
             "Staff can see and remove waitlist entries on the Waitlist tab of the staff window."),
