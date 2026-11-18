@@ -20,23 +20,43 @@ public sealed class BookingEmailService
     }
 
     /// <summary>
-    /// The receipt as the same A4 page "Print receipt" shows, as a PDF. A drawing problem must not stop the email, so on failure
-    /// this logs and returns null and the email goes out without the attachment.
+    /// The PDFs sent with the email: always the booking receipt (the same A4 page "Print receipt" shows), and the boarding passes
+    /// (the same pages the boarding pass print preview shows) once at least one traveller has checked in. A drawing problem must not
+    /// stop the email, so each file that fails is logged and left out, and the email still goes out.
     /// </summary>
-    private EmailAttachment? BuildReceiptPdf(BookingRecord booking)
+    private List<EmailAttachment> BuildAttachments(BookingRecord booking)
     {
+        var files = new List<EmailAttachment>();
         try
         {
             IEnumerable<Flight> flights = _store.LoadActiveFlights(domestic: true).Concat(_store.LoadActiveFlights(domestic: false));
             byte[] pdf = ReceiptPdf.Create(ReceiptData.FromStored(booking, flights));
-            return new EmailAttachment($"SkyWings-receipt-{booking.Reference}.pdf", pdf, "application/pdf");
+            files.Add(new EmailAttachment($"SkyWings-receipt-{booking.Reference}.pdf", pdf, "application/pdf", "booking receipt"));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+
+        try
         {
-            AppLogger.Error("Email", ex);
-            return null;
+            List<BoardingPassData> passes = BoardingPassesOf(booking);
+            if (passes.Count > 0)
+                files.Add(new EmailAttachment($"SkyWings-boarding-pass-{booking.Reference}.pdf", BoardingPassPdf.Create(passes, _qr),
+                    "application/pdf", passes.Count == 1 ? "boarding pass" : "boarding passes"));
         }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+        return files;
     }
+
+    /// <summary>One pass for every check-in on the booking, outbound first and then the return leg (none before anyone has checked in).</summary>
+    private List<BoardingPassData> BoardingPassesOf(BookingRecord booking)
+        => _store.LoadCheckIns(booking.Reference)
+            .Select(record => (Record: record, ReturnLeg: IsReturnLeg(booking, record)))
+            .OrderBy(x => x.ReturnLeg).ThenBy(x => x.Record.CheckedInAt)
+            .Select(x => BoardingPassData.From(booking, x.ReturnLeg, x.Record))
+            .ToList();
+
+    private static bool IsReturnLeg(BookingRecord booking, CheckInRecord record)
+        => booking.ReturnFlightNo is { } returnNo && record.FlightNo == returnNo && record.FlightDate.Date == booking.ReturnFlightDateValue?.Date
+           && !(record.FlightNo == booking.FlightNo && record.FlightDate.Date == booking.FlightDateValue.Date);
 
     public async Task<EmailSendResult> SendReceiptAsync(BookingRecord booking, string toEmail)
     {
@@ -48,7 +68,7 @@ public sealed class BookingEmailService
                 return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
 
             byte[] png = _qr.RenderPng(QrPayload.Build(booking.Reference));
-            EmailMessage message = BookingEmailBuilder.Build(booking, toEmail.Trim(), png, _unsubscribeMailbox, BuildReceiptPdf(booking));
+            EmailMessage message = BookingEmailBuilder.Build(booking, toEmail.Trim(), png, _unsubscribeMailbox, BuildAttachments(booking));
             EmailSendResult result = await _sender.SendAsync(message).ConfigureAwait(false);
             _store.WriteAudit("system", "SYSTEM", "EMAIL_RECEIPT", booking.Reference, result.Channel);
             return result;

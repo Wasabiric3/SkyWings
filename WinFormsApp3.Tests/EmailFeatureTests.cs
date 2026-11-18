@@ -183,7 +183,30 @@ public sealed class EmailFeatureTests
         Assert.AreEqual("SkyWings-receipt-SKY-AB12CD34EF56.pdf", pdf.FileName);
         Assert.AreEqual("application/pdf", pdf.MediaType);
         Assert.AreEqual("%PDF-", System.Text.Encoding.ASCII.GetString(pdf.Bytes, 0, 5));
-        StringAssert.Contains(sender.Sent[0].TextBody, "attached as a PDF");
+        StringAssert.Contains(sender.Sent[0].TextBody, "Attached (PDF): booking receipt.");
+    }
+
+    [TestMethod]
+    [DoNotParallelize]   // draws the receipt and tickets, which use the shared cached logo bitmap (GDI+ is not thread-safe)
+    public async Task Service_AddsTheBoardingPassPdfOnceSomeoneHasCheckedIn()
+    {
+        BookingRecord booking = SaveBooking();
+        var sender = new RecordingSender();
+        var service = new BookingEmailService(_store, sender, new FakeQr());
+
+        await service.SendReceiptAsync(booking, "maria@example.com");   // nobody has checked in yet
+        Assert.AreEqual(1, sender.Sent[0].Attachments!.Count);
+
+        DateTime openNow = AppData.DepartureOf("PR-101", booking.FlightDateValue).AddHours(-2);
+        Assert.AreEqual(CheckInOutcome.CheckedIn, _store.CheckIn(booking.Reference, "Maria <Santos>", false, openNow));
+        await service.SendReceiptAsync(booking, "maria@example.com");
+
+        var files = sender.Sent[1].Attachments!;
+        CollectionAssert.AreEqual(
+            new[] { "SkyWings-receipt-SKY-AB12CD34EF56.pdf", "SkyWings-boarding-pass-SKY-AB12CD34EF56.pdf" },
+            files.Select(f => f.FileName).ToArray());
+        Assert.IsTrue(files.All(f => f.MediaType == "application/pdf" && f.Bytes.Length > 1000));
+        StringAssert.Contains(sender.Sent[1].TextBody, "Attached (PDF): booking receipt, boarding pass.");
     }
 
     [TestMethod]
@@ -194,7 +217,7 @@ public sealed class EmailFeatureTests
         {
             BookingRecord booking = SaveBooking();
             var attachment = new EmailAttachment("SkyWings-receipt-X.pdf", new byte[] { 1, 2, 3 }, "application/pdf");
-            EmailMessage message = BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1, 2, 3 }, null, attachment);
+            EmailMessage message = BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1, 2, 3 }, null, new[] { attachment });
 
             EmailSendResult result = await new FileOutboxEmailSender(folder).SendAsync(message);
 

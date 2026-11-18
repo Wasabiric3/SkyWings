@@ -41,8 +41,20 @@ internal static class BoardingPassPrinter
 
     private static void RenderPage(PrintPageEventArgs e, IReadOnlyList<BoardingPassData> passes, int pageIndex, IQrRenderer? qr)
     {
-        Graphics g = e.Graphics!;
         ReceiptPrinter.BeginA4Page(e);
+        DrawPage(e.Graphics!, passes, pageIndex, qr);
+        e.HasMorePages = (pageIndex + 1) * PassesPerPage < passes.Count;
+    }
+
+    /// <summary>How many A4 pages the passes need (three tickets per page, at least one).</summary>
+    public static int PageCount(int passes) => Math.Max(1, (passes + PassesPerPage - 1) / PassesPerPage);
+
+    /// <summary>
+    /// Draws one A4 page of tickets on <paramref name="g"/>, which must use the 794 x 1123 (1/96 inch) design space with the page's
+    /// top-left as the origin. Shared by the printer and the emailed PDF, so both show the same page.
+    /// </summary>
+    public static void DrawPage(Graphics g, IReadOnlyList<BoardingPassData> passes, int pageIndex, IQrRenderer? qr = null)
+    {
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using (var bar = new SolidBrush(Theme.Accent)) g.FillRectangle(bar, 0, 0, ReceiptPrinter.PageWidth, 8);
 
@@ -63,7 +75,6 @@ internal static class BoardingPassPrinter
         string reference = passes.Count > 0 ? passes[0].Reference : "";
         g.DrawString($"SkyWings boarding passes · {reference} · Page {pageIndex + 1} of {pages}", font, gray,
             new RectangleF(0, 1080, ReceiptPrinter.PageWidth, 16), centre);
-        e.HasMorePages = first + PassesPerPage < passes.Count;
     }
 
     // ------------------------------------------------------------------ one ticket (1040 x 430 design space)

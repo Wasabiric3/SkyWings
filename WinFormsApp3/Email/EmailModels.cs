@@ -3,8 +3,8 @@ namespace SkyWings.Email;
 /// <summary>An image shown inside the HTML body, referenced as <c>cid:ContentId</c>.</summary>
 public sealed record InlineImage(string ContentId, byte[] Bytes, string MediaType = "image/png");
 
-/// <summary>A file sent with the email, for example the receipt PDF.</summary>
-public sealed record EmailAttachment(string FileName, byte[] Bytes, string MediaType);
+/// <summary>A file sent with the email, for example the receipt PDF. <paramref name="Label"/> is what the email text calls it ("booking receipt").</summary>
+public sealed record EmailAttachment(string FileName, byte[] Bytes, string MediaType, string? Label = null);
 
 public sealed record EmailMessage(
     string To, string Subject, string HtmlBody, string TextBody,

@@ -30,7 +30,7 @@ public static class ReceiptPdf
         return Wrap(Jpeg(page), width, height);
     }
 
-    private static byte[] Jpeg(Bitmap page)
+    internal static byte[] Jpeg(Bitmap page)
     {
         ImageCodecInfo codec = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
         using var parameters = new EncoderParameters(1);
@@ -40,8 +40,11 @@ public static class ReceiptPdf
         return stream.ToArray();
     }
 
-    /// <summary>A single A4 page (595.28 x 841.89 points) that shows the JPEG over the whole page.</summary>
-    internal static byte[] Wrap(byte[] jpeg, int width, int height)
+    /// <summary>One A4 page (595.28 x 841.89 points) that shows the JPEG over the whole page.</summary>
+    internal static byte[] Wrap(byte[] jpeg, int width, int height) => Wrap(new[] { (jpeg, width, height) });
+
+    /// <summary>A PDF with one A4 page per JPEG, each shown over the whole page.</summary>
+    internal static byte[] Wrap(IReadOnlyList<(byte[] Jpeg, int Width, int Height)> pages)
     {
         var output = new MemoryStream();
         var offsets = new List<long>();
@@ -49,18 +52,23 @@ public static class ReceiptPdf
         void Text(string s) { byte[] b = Encoding.ASCII.GetBytes(s); output.Write(b, 0, b.Length); }
         void Object(string body) { offsets.Add(output.Position); Text($"{offsets.Count} 0 obj\n{body}\nendobj\n"); }
 
+        // Objects: 1 catalog, 2 page list, then for page n (from 0): 3+3n the page, 4+3n its content, 5+3n its picture.
         Text("%PDF-1.4\n");
         Object("<< /Type /Catalog /Pages 2 0 R >>");
-        Object("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-        Object("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>");
-        string content = "q 595.28 0 0 841.89 0 0 cm /Im0 Do Q";
-        Object($"<< /Length {content.Length} >>\nstream\n{content}\nendstream");
+        Object($"<< /Type /Pages /Kids [{string.Join(" ", pages.Select((_, n) => $"{3 + 3 * n} 0 R"))}] /Count {pages.Count} >>");
+        for (int n = 0; n < pages.Count; n++)
+        {
+            Object($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents {4 + 3 * n} 0 R /Resources << /XObject << /Im0 {5 + 3 * n} 0 R >> >> >>");
+            string content = "q 595.28 0 0 841.89 0 0 cm /Im0 Do Q";
+            Object($"<< /Length {content.Length} >>\nstream\n{content}\nendstream");
 
-        offsets.Add(output.Position);
-        Text(string.Create(CultureInfo.InvariantCulture,
-            $"5 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpeg.Length} >>\nstream\n"));
-        output.Write(jpeg, 0, jpeg.Length);
-        Text("\nendstream\nendobj\n");
+            (byte[] jpeg, int width, int height) = pages[n];
+            offsets.Add(output.Position);
+            Text(string.Create(CultureInfo.InvariantCulture,
+                $"{offsets.Count} 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpeg.Length} >>\nstream\n"));
+            output.Write(jpeg, 0, jpeg.Length);
+            Text("\nendstream\nendobj\n");
+        }
 
         long xref = output.Position;
         Text($"xref\n0 {offsets.Count + 1}\n0000000000 65535 f \n");
