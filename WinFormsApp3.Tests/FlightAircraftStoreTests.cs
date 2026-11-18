@@ -121,3 +121,59 @@ public sealed class FlightAircraftStoreTests
         Assert.AreEqual("A320", store.LoadAircraft("PR-101").Id);
     }
 }
+
+[TestClass]
+public sealed class SeedDefaultFlightsTests
+{
+    private string _dbPath = "";
+    private string _connection = "";
+
+    [TestInitialize]
+    public void Setup()
+    {
+        _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-sdf-{Guid.NewGuid():N}.db");
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+    }
+
+    [TestCleanup]
+    public void Cleanup()
+    {
+        SqliteConnection.ClearAllPools();
+        if (File.Exists(_dbPath)) File.Delete(_dbPath);
+    }
+
+    [TestMethod]
+    public void ABrandNewDatabase_GetsRealisticAircraft()
+    {
+        var store = new BookingStore(_connection);
+        Assert.IsFalse(store.HasFlights());
+
+        store.SeedDefaultFlights();
+
+        Assert.IsTrue(store.HasFlights());
+        Assert.AreEqual("A320", store.LoadAircraft("PR-101").Id);
+        Assert.AreEqual("A330", store.LoadAircraft("PR-201").Id);
+        Assert.AreEqual("B777", store.LoadAircraft("PR-301").Id);
+    }
+
+    [TestMethod]
+    public void AnExistingDatabase_KeepsItsLegacyLayouts_EvenWhenSeededAgain()
+    {
+        var store = new BookingStore(_connection);
+        store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, 180, 220);   // an older install
+
+        store.SeedDefaultFlights();
+
+        Assert.AreEqual(Aircraft.LegacyId, store.LoadAircraft("PR-101").Id);
+        Assert.AreEqual(Aircraft.LegacyId, store.LoadAircraft("PR-301").Id);
+    }
+
+    [TestMethod]
+    public void SeedingTwice_IsHarmless()
+    {
+        var store = new BookingStore(_connection);
+        store.SeedDefaultFlights();
+        store.SeedDefaultFlights();
+        Assert.AreEqual("A320", store.LoadAircraft("PR-101").Id);
+    }
+}

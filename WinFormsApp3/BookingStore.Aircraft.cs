@@ -25,6 +25,31 @@ public sealed partial class BookingStore
         }
     }
 
+
+    /// <summary>True when the flights table exists and has at least one flight.</summary>
+    public bool HasFlights()
+    {
+        lock (_lock)
+        {
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = Cmd(con, "SELECT 1 FROM flights LIMIT 1");
+                using var rs = cmd.ExecuteReader();
+                return rs.Read();
+            }
+            catch (SqliteException) { return false; }   // no flights table yet: a brand-new database
+        }
+    }
+
+    /// <summary>
+    /// Seeds the standard schedule. A brand-new database gets realistic aircraft (and so wide-body seat maps); a database that
+    /// already has flights keeps its existing layouts, and anything new is added the same way it always was.
+    /// </summary>
+    public void SeedDefaultFlights()
+        => SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
+            AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity, assignAircraft: !HasFlights());
+
     /// <summary>
     /// Every seat code assigned on confirmed bookings of a flight, on any date (outbound seats and return-leg seats), normalized.
     /// Used to check that a change of aircraft would not strand a booked seat.

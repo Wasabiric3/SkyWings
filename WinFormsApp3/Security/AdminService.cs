@@ -68,8 +68,7 @@ public sealed class AdminService
     public List<FlightAdminRow> LoadFlights()
     {
         Session.Require(Permission.ManageFlights);
-        _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
-            AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
+        _store.SeedDefaultFlights();
         return _store.LoadAllFlights();
     }
 

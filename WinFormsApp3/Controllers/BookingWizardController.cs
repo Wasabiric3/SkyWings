@@ -64,8 +64,7 @@ public sealed class BookingWizardController
     /// <exception cref="IOException">The database could not be read.</exception>
     public List<Flight> LoadFlights()
     {
-        _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
-            AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
+        _store.SeedDefaultFlights();
         DateTime today = DateTime.Today;
         return _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false))
             .OrderBy(f => IsFromManila(f) ? f.Destination : f.Origin)

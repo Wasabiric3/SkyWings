@@ -57,8 +57,7 @@ public sealed class HomeController
     /// <exception cref="IOException">The database could not be read.</exception>
     public Dashboard LoadDashboard()
     {
-        _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
-            AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
+        _store.SeedDefaultFlights();
         var all = _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false))
             .Where(f => f.Origin.StartsWith("Manila", StringComparison.Ordinal)).ToList();
 
