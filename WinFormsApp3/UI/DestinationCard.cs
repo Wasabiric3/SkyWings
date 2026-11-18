@@ -30,8 +30,8 @@ public sealed class DestinationCard : GlassCard
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Color Accent { get; set; } = Theme.Primary;
 
-    protected override void OnMouseEnter(EventArgs e) { _hover = true; Opacity = 245; Invalidate(); base.OnMouseEnter(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hover = false; Opacity = 210; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseEnter(EventArgs e) { _hover = true; BackColor = Gfx.Mix(Theme.BgCard, Theme.SoftFill, 0.5f); Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hover = false; BackColor = Theme.BgCard; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
     protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
     protected override void OnMouseDown(MouseEventArgs e) { Focus(); base.OnMouseDown(e); }

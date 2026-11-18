@@ -3,21 +3,24 @@ using System.Drawing.Drawing2D;
 
 namespace SkyWings.UI;
 
-/// <summary>Translucent rounded card with a soft shadow. Child controls are laid out inside <see cref="DisplayRectangle"/>.</summary>
+/// <summary>Flat rounded white card with a thin border. Child controls are laid out inside <see cref="DisplayRectangle"/>.</summary>
 public class GlassCard : Control
 {
     private int _contentPadding = 24;
 
     public GlassCard()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
-                 ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
-                 ControlStyles.ResizeRedraw, true);
-        BackColor = Color.Transparent;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        BackColor = Theme.BgCard;
     }
 
     [DefaultValue(16)] public int Radius { get; set; } = 16;
+
+    /// <summary>Kept for layout compatibility: it still sets the margin around the card, but no shadow is drawn.</summary>
     [DefaultValue(10)] public int ShadowSize { get; set; } = 10;
+
+    /// <summary>Ignored. Cards are opaque; kept so existing callers still compile.</summary>
     [DefaultValue(210)] public int Opacity { get; set; } = 210;
 
     /// <summary>Space between the card edge and its content, in 96-dpi pixels. Used instead of <see cref="Control.Padding"/>.</summary>
@@ -43,64 +46,28 @@ public class GlassCard : Control
         }
     }
 
-    // The shadow is ~10 anti-aliased path fills; render the whole card once and blit it on later paints.
-    private Bitmap? _cache;
-    private (int W, int H, int Dpi, int Radius, int Shadow, int Opacity) _cacheKey;
+    /// <summary>The first opaque colour found walking up the parents: what shows around the card's rounded corners.</summary>
+    private Color SurfaceColor()
+    {
+        for (Control? c = Parent; c is not null; c = c.Parent)
+            if (c.BackColor.A == 255) return c.BackColor;
+        return Theme.BgMain;
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        if (Width < 1 || Height < 1) return;
-        var key = (Width, Height, DeviceDpi, Radius, ShadowSize, Opacity);
-        if (_cache is null || _cacheKey != key)
-        {
-            _cache?.Dispose();
-            _cache = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            using (var cg = Graphics.FromImage(_cache)) DrawCard(cg);
-            _cacheKey = key;
-        }
-        e.Graphics.DrawImageUnscaled(_cache, 0, 0);
-    }
+        var g = e.Graphics;
+        // Paint the margin ourselves instead of being transparent: no repaint cascade through the parent chain.
+        using (var surface = new SolidBrush(SurfaceColor())) g.FillRectangle(surface, e.ClipRectangle);
 
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) { _cache?.Dispose(); _cache = null; }
-        base.Dispose(disposing);
-    }
-
-    private void DrawCard(Graphics g)
-    {
-        Gfx.HighQuality(g);
         RectangleF card = CardBounds();
         if (card.Width < 4 || card.Height < 4) return;
-        float radius = Gfx.S(this, Radius);
-
-        using var cardPath = Gfx.RoundedRect(card, radius);
-        int shadow = Gfx.S(this, ShadowSize);
-
-        // Shadow is drawn outside the card only, so the translucent fill stays clean.
-        var oldClip = g.Clip;
-        g.SetClip(cardPath, CombineMode.Exclude);
-        for (int i = 0; i < shadow; i++)
-        {
-            RectangleF r = RectangleF.Inflate(card, i, i);
-            r.Offset(0, shadow / 3f);
-            int alpha = (int)(9 * (1 - i / (float)shadow));
-            if (alpha <= 0) continue;
-            using var path = Gfx.RoundedRect(r, radius + i);
-            using var brush = new SolidBrush(Color.FromArgb(alpha, 38, 72, 62));
-            g.FillPath(brush, path);
-        }
-        g.Clip = oldClip;
-
-        using (var fill = new SolidBrush(Color.FromArgb(Opacity, 255, 255, 255)))
-            g.FillPath(fill, cardPath);
-        using (var edge = new Pen(Color.FromArgb(60, 70, 110, 95), 1f))
-            g.DrawPath(edge, cardPath);
-        RectangleF inner = RectangleF.Inflate(card, -1, -1);
-        using var innerPath = Gfx.RoundedRect(inner, Math.Max(0, radius - 1));
-        using var highlight = new Pen(Color.FromArgb(190, 255, 255, 255), 1f);
-        g.DrawPath(highlight, innerPath);
+        Gfx.HighQuality(g);
+        using var path = Gfx.RoundedRect(card, Gfx.S(this, Radius));
+        using (var fill = new SolidBrush(BackColor)) g.FillPath(fill, path);
+        using var edge = new Pen(Theme.BorderLight, 1f);
+        g.DrawPath(edge, path);
     }
 }
 
