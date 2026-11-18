@@ -45,6 +45,21 @@ public class PanelPaintTests
         Assert.AreEqual(255, bmp.GetPixel(0, 0).A, "corner must be painted, not transparent");
     }
 
+
+    [TestMethod]
+    public void ReceiptPanel_TitleDefaultsToBookingReceipt_AndCanBeChangedForBoardingPasses()
+    {
+        using var panel = new ReceiptPanel();
+        Assert.AreEqual("Booking receipt", panel.Title);
+        Assert.AreEqual("Booking receipt", panel.AccessibleName);
+
+        panel.Title = "Boarding pass";
+
+        Assert.AreEqual("Boarding pass", panel.Title);
+        Assert.AreEqual("Boarding pass", panel.AccessibleName);
+        panel.SetReceipt("SKY-TEST", new[] { ("Class", "Business") });
+        using Bitmap bmp = Render(panel, 760, 300);   // paints with the custom title without throwing
+    }
     [TestMethod]
     public void DestinationCard_ArtBand_IsFlatAccent()
     {

@@ -31,8 +31,18 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw, true);
-        AccessibleName = "Booking receipt";
+        AccessibleName = _title;
         _copyTimer.Tick += (_, _) => { _copyTimer.Stop(); _copyLabel = CopyIdle; Invalidate(); };
+    }
+
+    private string _title = "Booking receipt";
+
+    /// <summary>The heading in the green band. "Booking receipt" for receipts; the boarding pass screen sets "Boarding pass".</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string Title
+    {
+        get => _title;
+        set { _title = value; AccessibleName = value; Invalidate(); }
     }
 
     public void SetReceipt(string reference, IEnumerable<(string Label, string Value)> rows)
@@ -121,7 +131,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         using var left = Gfx.Format(StringAlignment.Near);
         using var right = Gfx.Format(StringAlignment.Far);
         float pad = Gfx.S(this, 20f);
-        g.DrawString("SkyWings  ·  Boarding pass", bandFont, white,
+        g.DrawString($"SkyWings  ·  {Title}", bandFont, white,
             new RectangleF(bounds.X + pad, bounds.Y, bounds.Width * 0.6f, bandH), left);
         Bitmap? logo = Assets.Logo(LogoVariant.White, DeviceDpi);
         if (logo is not null)

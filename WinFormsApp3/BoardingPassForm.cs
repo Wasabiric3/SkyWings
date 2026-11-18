@@ -37,7 +37,7 @@ public sealed class BoardingPassForm : GlassForm
             };
             _passes.Add((booking.Reference, rows));
 
-            var pass = new ReceiptPanel { Height = D(100) + ((rows.Count + 1) / 2) * D(58) };
+            var pass = new ReceiptPanel { Title = "Boarding pass", Height = D(100) + ((rows.Count + 1) / 2) * D(58) };
             pass.SetReceipt(booking.Reference, rows);
             items.Add(pass);
             items.Add(new Panel { Height = D(14) });
