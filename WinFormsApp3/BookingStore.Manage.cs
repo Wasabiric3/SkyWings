@@ -5,25 +5,11 @@ namespace SkyWings;
 public sealed partial class BookingStore
 {
     /// <summary>
-    /// Customer lookup: a booking is returned only when the reference exists and the last name matches one of its
-    /// passengers. Callers show one generic "not found" message for both failures, so references cannot be guessed.
+    /// Customer lookup: a booking is found by its reference alone (the reference is a random 12-character code). Callers count
+    /// misses towards the lookup lock (<see cref="LookupGuard"/>) so references cannot be guessed by trying many.
     /// </summary>
-    public BookingRecord? FindForCustomer(string reference, string lastName)
-    {
-        string key = lastName.Trim();
-        if (reference.Trim().Length == 0 || key.Length == 0) return null;
-        BookingRecord? booking = FindByReference(reference.Trim().ToUpperInvariant());
-        if (booking is null) return null;
-        bool match = booking.Passengers.Any(p => string.Equals(LastWord(p.Name), key, StringComparison.OrdinalIgnoreCase));
-        return match ? booking : null;
-    }
-
-    private static string LastWord(string fullName)
-    {
-        string trimmed = fullName.Trim();
-        int space = trimmed.LastIndexOf(' ');
-        return space < 0 ? trimmed : trimmed[(space + 1)..];
-    }
+    public BookingRecord? FindForCustomer(string reference)
+        => reference.Trim().Length == 0 ? null : FindByReference(reference.Trim().ToUpperInvariant());
 
     /// <summary>
     /// Cancels a confirmed booking and records the refund. Returns false when the booking is missing or is no longer

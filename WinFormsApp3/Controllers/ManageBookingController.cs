@@ -44,10 +44,10 @@ public sealed class ManageBookingController
 
     // ------------------------------------------------------------------ lookup
 
-    /// <summary>Finds a booking by reference and traveller last name. Wrong details count towards the lookup lock.</summary>
-    public LookupResult Find(string reference, string lastName)
+    /// <summary>Finds a booking by its reference. A reference that matches nothing counts towards the lookup lock.</summary>
+    public LookupResult Find(string reference)
     {
-        LookupResult result = CustomerLookup.Find(_store, Screen, "ManageBooking", reference, lastName);
+        LookupResult result = CustomerLookup.Find(_store, Screen, "ManageBooking", reference);
         if (result.Found) Current = result.Booking;
         return result;
     }

@@ -95,15 +95,14 @@ public sealed partial class BookingStore
         return entry with { Position = Convert.ToInt64(pos.ExecuteScalar()) };
     }
 
-    /// <summary>Looks up an entry by its code. Requires the matching email so codes cannot be guessed.</summary>
-    public WaitlistEntry? FindWaitlistEntry(string code, string email)
+    /// <summary>Looks up an entry by its code alone (a random code, like a booking reference).</summary>
+    public WaitlistEntry? FindWaitlistEntry(string code)
     {
+        if (code.Trim().Length == 0) return null;
         lock (_lock)
         {
             using var con = OpenConnection();
-            WaitlistEntry? entry = FindWaitlistCore(con, code.Trim().ToUpperInvariant());
-            return entry is not null && string.Equals(entry.Email, email.Trim(), StringComparison.OrdinalIgnoreCase)
-                ? entry : null;
+            return FindWaitlistCore(con, code.Trim().ToUpperInvariant());
         }
     }
 

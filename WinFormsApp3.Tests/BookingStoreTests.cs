@@ -194,14 +194,14 @@ public sealed class BookingStoreTests
     }
 
     [TestMethod]
-    public void FindForCustomer_NeedsReferenceAndMatchingLastName()
+    public void FindForCustomer_FindsByReferenceAlone()
     {
         SaveRoundTrip("SKY-FIND0001", DateTime.Today.AddDays(30), DateTime.Today.AddDays(35), "ECO5A", "ECO6A");
 
-        Assert.IsNotNull(_store.FindForCustomer("sky-find0001", "santos"));
-        Assert.IsNull(_store.FindForCustomer("SKY-FIND0001", "Reyes"));
-        Assert.IsNull(_store.FindForCustomer("SKY-NOPE0000", "Santos"));
-        Assert.IsNull(_store.FindForCustomer("SKY-FIND0001", ""));
+        Assert.IsNotNull(_store.FindForCustomer("sky-find0001"));
+        Assert.IsNotNull(_store.FindForCustomer("  SKY-FIND0001 "));
+        Assert.IsNull(_store.FindForCustomer("SKY-NOPE0000"));
+        Assert.IsNull(_store.FindForCustomer(""));
     }
 
     [TestMethod]

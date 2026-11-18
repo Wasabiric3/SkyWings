@@ -11,8 +11,7 @@ public sealed class ManageBookingForm : GlassForm
 {
     private readonly BookingStore _store;
     private readonly TextBox _reference = new() { CharacterCasing = CharacterCasing.Upper, MaxLength = 24 };
-    private readonly TextBox _lastName = new() { MaxLength = BookingRules.MaxNameLength };
-    private readonly FieldRow _referenceRow, _lastNameRow;
+    private readonly FieldRow _referenceRow;
     private readonly Panel _lookupPage = new() { Dock = DockStyle.Fill };
     private readonly Panel _detailsPage = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Label _title = new();
@@ -40,10 +39,8 @@ public sealed class ManageBookingForm : GlassForm
         Padding = new Padding(D(20), D(12), D(20), D(16));
 
         _referenceRow = new FieldRow("BOOKING REFERENCE", _reference);
-        _lastNameRow = new FieldRow("LAST NAME OF A TRAVELLER", _lastName);
         _reference.PlaceholderText = "e.g. SKY-1A2B3C4D";
         _reference.TextChanged += (_, _) => _referenceRow.ClearMessage();
-        _lastName.TextChanged += (_, _) => _lastNameRow.ClearMessage();
 
         BuildLookupPage(D);
         BuildDetailsPage(D);
@@ -59,22 +56,25 @@ public sealed class ManageBookingForm : GlassForm
 
     private void BuildLookupPage(Func<int, int> D)
     {
-        var heading = new Label { Text = "Find your booking", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleLeft };
+        var heading = new Label { Text = "Find your booking", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleCenter };
         var hint = new Label
         {
-            Text = "Enter the reference from your receipt and the last name of any traveller on the booking.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(34)
+            Text = "Enter the booking reference from your receipt.",
+            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.TopCenter
         };
         _find.Height = D(44);
         _find.Click += (_, _) => Find();
         var findHost = new Panel { Height = D(64), Padding = new Padding(0, D(12), 0, 0) };
-        _find.Dock = DockStyle.Left;
+        _find.Dock = DockStyle.None;
         _find.Width = D(170);
         findHost.Controls.Add(_find);
+        findHost.Resize += (_, _) => _find.Left = (findHost.ClientSize.Width - _find.Width) / 2;   // centred under the field
         AcceptButton = _find;
 
-        Layouts.Stack(_lookupPage, heading, hint, _referenceRow, _lastNameRow, findHost);
-        _lookupPage.Padding = new Padding(0, 0, D(160), 0);   // keep the form narrower than the card
+        // The lookup is one field, so it sits in the middle of the card instead of the left.
+        var column = new Panel();
+        column.Height = Layouts.Stack(column, heading, hint, _referenceRow, findHost);
+        Layouts.CenterColumn(_lookupPage, column, D(480), D(30));
     }
 
     private void BuildDetailsPage(Func<int, int> D)
@@ -141,11 +141,11 @@ public sealed class ManageBookingForm : GlassForm
 
     private void Find()
     {
-        LookupResult result = _controller.Find(_reference.Text, _lastName.Text);
+        LookupResult result = _controller.Find(_reference.Text);
         if (result.NormalizedReference is not null) _reference.Text = result.NormalizedReference;
         if (!result.Found)
         {
-            _lastNameRow.SetMessage(result.Error!);
+            _referenceRow.SetMessage(result.Error!);
             return;
         }
         ShowBooking(result.Booking!);

@@ -42,8 +42,7 @@ internal static class LookupGuard
             return $"Too many attempts. Locked for {Format((int)length.TotalSeconds)}.";
         }
         store?.WriteAudit("customer", "", "LOOKUP_FAILED", screen);
-        // Same message for a wrong reference and a wrong name, so references cannot be probed.
-        return "We couldn't find a booking with those details.";
+        return "We couldn't find a booking with that reference.";
     }
 
     public static void RecordSuccess()

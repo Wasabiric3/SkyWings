@@ -17,6 +17,25 @@ internal static class Layouts
         return total;
     }
 
+    /// <summary>
+    /// Keeps <paramref name="column"/> a fixed width and centred in <paramref name="page"/>, horizontally and a little above the middle
+    /// vertically, and re-centres it whenever the page is resized. Used by the lookup screens so the form sits in the middle of the card.
+    /// </summary>
+    public static void CenterColumn(Control page, Control column, int width, int liftPx = 0)
+    {
+        column.Dock = DockStyle.None;
+        column.Width = width;
+        void Place()
+        {
+            column.Left = Math.Max(0, (page.ClientSize.Width - width) / 2);
+            column.Top = Math.Max(0, (page.ClientSize.Height - column.Height) / 2 - liftPx);
+        }
+        page.Controls.Add(column);
+        page.Resize += (_, _) => Place();
+        page.VisibleChanged += (_, _) => Place();
+        Place();
+    }
+
     /// <summary>Puts controls side by side in equal columns, separated by <paramref name="gap"/> pixels.</summary>
     public static TableLayoutPanel Row(int gap, params Control[] columns)
     {

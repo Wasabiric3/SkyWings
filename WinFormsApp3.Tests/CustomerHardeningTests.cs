@@ -138,6 +138,6 @@ public sealed class LookupGuardTests
         // A fresh counter: the message never says whether the reference or the name was wrong.
         LookupGuard.Reset();
         LookupGuard.Clock = () => _now;
-        Assert.AreEqual("We couldn't find a booking with those details.", LookupGuard.RecordFailure());
+        Assert.AreEqual("We couldn't find a booking with that reference.", LookupGuard.RecordFailure());
     }
 }

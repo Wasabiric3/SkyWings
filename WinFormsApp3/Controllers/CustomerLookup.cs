@@ -9,11 +9,11 @@ public sealed record LookupResult(BookingRecord? Booking, string? Error, string?
 
 /// <summary>
 /// The customer lookup shared by Manage booking and Check-in: honours the brute-force lock, accepts a scanned QR code,
-/// and counts wrong details towards the lock (see <see cref="LookupGuard"/>).
+/// and counts misses towards the lock (see <see cref="LookupGuard"/>).
 /// </summary>
 internal static class CustomerLookup
 {
-    public static LookupResult Find(BookingStore store, string screen, string logSource, string reference, string lastName)
+    public static LookupResult Find(BookingStore store, string screen, string logSource, string reference)
     {
         if (LookupGuard.LockedMessage() is { } locked) return new LookupResult(null, locked, reference);
 
@@ -22,7 +22,7 @@ internal static class CustomerLookup
         try
         {
             normalized = SkyWings.Email.QrPayload.Normalize(reference);   // accepts a scanned QR code too
-            booking = store.FindForCustomer(normalized, lastName);
+            booking = store.FindForCustomer(normalized);
         }
         catch (Exception ex)
         {

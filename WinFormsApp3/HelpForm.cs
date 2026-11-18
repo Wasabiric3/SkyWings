@@ -31,7 +31,7 @@ internal static class HelpContent
             "If the time runs out, the seat is released and someone else can take it, so pick the seats again before paying."),
 
         new("Change a seat or cancel",
-            "Choose \"Manage booking\" on the home screen. Enter the reference from the receipt and the last name of any traveller on the booking.\n\n" +
+            "Choose \"Manage booking\" on the home screen. Enter the booking reference from the receipt.\n\n" +
             "A confirmed booking can have its seats changed or be cancelled. Once the flight has departed, the booking can no longer be changed.\n\n" +
             "Refunds depend on how far away the flight is. See the \"Fares & policies\" tab."),
 
@@ -39,7 +39,7 @@ internal static class HelpContent
             "When a cabin is sold out, select the flight on the home screen and choose \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
             "Keep the waitlist code that is shown.\n\n" +
             $"When a booking is cancelled, the first traveller in line is emailed an offer and the seats are held for up to {AppData.WaitlistOfferHours} hours, or until bookings close for the flight if that comes first. " +
-            "To use it, choose \"Waitlist\" on the home screen, enter the code and email, then \"Book now\". " +
+            "To use it, choose \"Waitlist\" on the home screen, enter the waitlist code, then \"Book now\". " +
             "If the offer is not used in time, the seats go to the next traveller.\n\n" +
             "Staff can see and remove waitlist entries on the Waitlist tab of the staff window."),
 
@@ -53,7 +53,7 @@ internal static class HelpContent
 
         new("Check in and boarding pass",
             $"Online check-in opens {AppData.CheckInWindowHours} hours before departure and closes at departure.\n\n" +
-            "Choose \"Check-in\", enter the reference and a traveller's last name, then print or save the boarding pass."),
+            "Choose \"Check-in\", enter the booking reference, then print or save the boarding pass."),
 
         new("Senior and PWD discounts",
             $"Senior citizens (age {AppData.SeniorMinimumAge} and above) and persons with disability get {AppData.DiscountRate:P0} off, " +

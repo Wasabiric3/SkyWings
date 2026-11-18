@@ -10,8 +10,7 @@ namespace SkyWings;
 public sealed class CheckInForm : GlassForm
 {
     private readonly TextBox _reference = new() { CharacterCasing = CharacterCasing.Upper, MaxLength = 24 };
-    private readonly TextBox _lastName = new() { MaxLength = BookingRules.MaxNameLength };
-    private readonly FieldRow _referenceRow, _lastNameRow;
+    private readonly FieldRow _referenceRow;
     private readonly GlassButton _find = new() { Text = "Find booking" };
     private readonly Panel _lookupPage = new() { Dock = DockStyle.Fill };
     private readonly Panel _checkInPage = new() { Dock = DockStyle.Fill, Visible = false };
@@ -35,10 +34,8 @@ public sealed class CheckInForm : GlassForm
         Padding = new Padding(D(20), D(12), D(20), D(16));
 
         _referenceRow = new FieldRow("BOOKING REFERENCE", _reference);
-        _lastNameRow = new FieldRow("LAST NAME OF A TRAVELLER", _lastName);
         _reference.PlaceholderText = "e.g. SKY-1A2B3C4D";
         _reference.TextChanged += (_, _) => _referenceRow.ClearMessage();
-        _lastName.TextChanged += (_, _) => _lastNameRow.ClearMessage();
 
         BuildLookupPage(D);
         BuildCheckInPage(D);
@@ -54,22 +51,25 @@ public sealed class CheckInForm : GlassForm
 
     private void BuildLookupPage(Func<int, int> D)
     {
-        var heading = new Label { Text = "Online check-in", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleLeft };
+        var heading = new Label { Text = "Online check-in", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleCenter };
         var hint = new Label
         {
-            Text = $"Check-in opens {AppData.CheckInWindowHours} hours before departure. Enter your reference and a traveller's last name.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(34)
+            Text = $"Check-in opens {AppData.CheckInWindowHours} hours before departure. Enter your booking reference.",
+            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.TopCenter
         };
         _find.Height = D(44);
         _find.Click += (_, _) => Find();
         var findHost = new Panel { Height = D(64), Padding = new Padding(0, D(12), 0, 0) };
-        _find.Dock = DockStyle.Left;
+        _find.Dock = DockStyle.None;
         _find.Width = D(170);
         findHost.Controls.Add(_find);
+        findHost.Resize += (_, _) => _find.Left = (findHost.ClientSize.Width - _find.Width) / 2;   // centred under the field
         AcceptButton = _find;
 
-        Layouts.Stack(_lookupPage, heading, hint, _referenceRow, _lastNameRow, findHost);
-        _lookupPage.Padding = new Padding(0, 0, D(160), 0);
+        // The lookup is one field, so it sits in the middle of the card instead of the left.
+        var column = new Panel();
+        column.Height = Layouts.Stack(column, heading, hint, _referenceRow, findHost);
+        Layouts.CenterColumn(_lookupPage, column, D(480), D(30));
     }
 
     private void BuildCheckInPage(Func<int, int> D)
@@ -111,9 +111,9 @@ public sealed class CheckInForm : GlassForm
 
     private void Find()
     {
-        LookupResult result = _controller.Find(_reference.Text, _lastName.Text);
+        LookupResult result = _controller.Find(_reference.Text);
         if (result.NormalizedReference is not null) _reference.Text = result.NormalizedReference;
-        if (!result.Found) { _lastNameRow.SetMessage(result.Error!); return; }
+        if (!result.Found) { _referenceRow.SetMessage(result.Error!); return; }
 
         _loading = true;
         _leg.Items.Clear();

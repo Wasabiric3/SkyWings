@@ -35,7 +35,7 @@ public static class PolicyInfo
             {
                 ("Seats are held while you book", $"{AppData.SeatHoldMinutes} minutes"),
                 ("Travellers per booking", BookingRules.MaxPassengersPerBooking.ToString()),
-                ("Change seats or cancel", "Manage booking, with your reference and a traveller's last name"),
+                ("Change seats or cancel", "Manage booking, with your booking reference"),
             }),
         });
 

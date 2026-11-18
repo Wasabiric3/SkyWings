@@ -86,13 +86,12 @@ public sealed class JoinWaitlistForm : GlassForm
     }
 }
 
-/// <summary>Looks up a waitlist entry by code and email. When seats are offered, "Book now" hands the entry back to start the booking.</summary>
+/// <summary>Looks up a waitlist entry by its code. When seats are offered, "Book now" hands the entry back to start the booking.</summary>
 public sealed class WaitlistStatusForm : GlassForm
 {
     private readonly BookingStore _store;
     private readonly TextBox _code = new() { MaxLength = 20, CharacterCasing = CharacterCasing.Upper };
-    private readonly TextBox _email = new() { MaxLength = 200 };
-    private readonly FieldRow _codeRow, _emailRow;
+    private readonly FieldRow _codeRow;
     private readonly Label _result = new() { AutoSize = false, Height = 90 };
     private readonly GlassButton _book = new() { Text = "Book now  →", Visible = false };
     private readonly GlassButton _leave = new() { Text = "Leave waitlist", Style = GlassButtonStyle.Secondary, Visible = false };
@@ -110,12 +109,11 @@ public sealed class WaitlistStatusForm : GlassForm
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(560), D(520));
+        ClientSize = new Size(D(560), D(440));
         _result.Height = D(90);
 
         _codeRow = new FieldRow("WAITLIST CODE", _code);
-        _emailRow = new FieldRow("EMAIL USED TO JOIN", _email);
-        var title = new Label { Text = "Check your waitlist spot", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft };
+        var title = new Label { Text = "Check your waitlist spot", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleCenter };
         var find = new GlassButton { Text = "Look up" };
         find.Click += (_, _) => Lookup();
         _book.Click += (_, _) => { OfferToBook = _entry; DialogResult = DialogResult.OK; Close(); };
@@ -128,7 +126,7 @@ public sealed class WaitlistStatusForm : GlassForm
         buttons.Controls.Add(find);
 
         var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, _codeRow, _emailRow, _result, buttons);
+        Layouts.Stack(card, title, _codeRow, _result, buttons);
         Controls.Add(card);
         Padding = new Padding(D(10));
         Theme.Apply(this);
@@ -140,11 +138,10 @@ public sealed class WaitlistStatusForm : GlassForm
     {
         _entry = null;
         _book.Visible = _leave.Visible = false;
-        try { _entry = _store.FindWaitlistEntry(_code.Text, _email.Text); }
+        try { _entry = _store.FindWaitlistEntry(_code.Text); }
         catch (IOException ex) { AppLogger.Error("Waitlist", ex); _result.Text = "The waitlist could not be read: " + ex.Message; return; }
 
-        // One message for a wrong code and a wrong email, so codes cannot be guessed.
-        if (_entry is null) { _result.Text = "No waitlist entry matches that code and email."; return; }
+        if (_entry is null) { _result.Text = "No waitlist entry matches that code."; return; }
 
         string route = $"{_entry.FlightNo} · {_entry.FlightDate:ddd, d MMM yyyy} · {_entry.ClassName} · {_entry.SeatsWanted} seat(s)";
         switch (_entry.Status)

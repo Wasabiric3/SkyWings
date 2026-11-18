@@ -46,9 +46,9 @@ public sealed class CheckInControllerTests
     private DateTime Departure => AppData.DepartureOf("PR-101", _flightDate);
 
     [TestMethod]
-    public void Find_WrongDetails_FailsAndCurrentStaysEmpty()
+    public void Find_UnknownReference_FailsAndCurrentStaysEmpty()
     {
-        LookupResult result = _controller.Find("SKY-CHK000001", "Nobody");
+        LookupResult result = _controller.Find("SKY-NOPE00000");
 
         Assert.IsFalse(result.Found);
         Assert.IsNull(_controller.Current);
@@ -57,7 +57,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void LegLabels_OneWay_HasOnlyOutbound()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         IReadOnlyList<string> labels = _controller.LegLabels();
 
@@ -68,7 +68,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void Load_BeforeWindow_ShowsWhenItOpens()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         CheckInView view = _controller.Load(false, Departure.AddHours(-AppData.CheckInWindowHours - 1));
 
@@ -79,7 +79,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void Load_InsideWindow_IsOpenAndListsTravellersWithSeats()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         CheckInView view = _controller.Load(false, Departure.AddHours(-2));
 
@@ -93,7 +93,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void Load_AfterDeparture_IsClosed()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         CheckInView view = _controller.Load(false, Departure.AddHours(1));
 
@@ -104,7 +104,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void CheckIn_SeatedTraveller_SucceedsAndShowsAsCheckedIn()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
         DateTime now = Departure.AddHours(-2);
 
         CheckInSummary summary = _controller.CheckIn(new[] { "Maria Santos" }, false, now);
@@ -120,7 +120,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void CheckIn_TravellerWithoutSeat_ReportsProblem()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         CheckInSummary summary = _controller.CheckIn(new[] { "Juan Santos" }, false, Departure.AddHours(-2));
 
@@ -132,7 +132,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void CheckIn_BeforeWindow_ReportsNotOpen()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
 
         CheckInSummary summary = _controller.CheckIn(new[] { "Maria Santos" }, false, Departure.AddHours(-100));
 
@@ -143,7 +143,7 @@ public sealed class CheckInControllerTests
     [TestMethod]
     public void PassRecords_CanFilterByName()
     {
-        _controller.Find("SKY-CHK000001", "Santos");
+        _controller.Find("SKY-CHK000001");
         _controller.CheckIn(new[] { "Maria Santos" }, false, Departure.AddHours(-2));
 
         Assert.HasCount(1, _controller.PassRecords(false, new[] { "Maria Santos" }));

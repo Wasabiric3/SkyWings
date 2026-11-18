@@ -91,7 +91,7 @@ public sealed class WaitlistTests
 
         Assert.HasCount(1, raised);
         Assert.AreEqual(first.BookingReference, raised[0].BookingReference);
-        WaitlistEntry? now = _store.FindWaitlistEntry(first.BookingReference, "a@example.com");
+        WaitlistEntry? now = _store.FindWaitlistEntry(first.BookingReference);
         Assert.AreEqual(BookingStore.WaitlistOffered, now!.Status);
         Assert.IsNotNull(now.OfferExpiresAt);
     }
@@ -121,7 +121,7 @@ public sealed class WaitlistTests
 
         Assert.HasCount(1, next);
         Assert.AreEqual(second.BookingReference, next[0].BookingReference);
-        Assert.AreEqual(BookingStore.WaitlistExpired, _store.FindWaitlistEntry(first.BookingReference, "a@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistExpired, _store.FindWaitlistEntry(first.BookingReference)!.Status);
     }
 
     [TestMethod]
@@ -133,7 +133,7 @@ public sealed class WaitlistTests
 
         _store.CancelBooking(refs[0], 0m);
 
-        Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(solo.BookingReference, "solo@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(solo.BookingReference)!.Status);
     }
 
     [TestMethod]
@@ -166,7 +166,7 @@ public sealed class WaitlistTests
 
         Assert.HasCount(1, next);
         Assert.AreEqual(second.BookingReference, next[0].BookingReference);
-        DateTime until = _store.FindWaitlistEntry(second.BookingReference, "b@example.com")!.OfferExpiresAt!.Value;
+        DateTime until = _store.FindWaitlistEntry(second.BookingReference)!.OfferExpiresAt!.Value;
         Assert.AreEqual(departure.AddHours(-AppData.BookingCutoffHours), until, "the seats must not stay held past the booking cutoff");
     }
 
@@ -182,7 +182,7 @@ public sealed class WaitlistTests
         List<WaitlistEntry> next = _store.ExpireWaitlistOffers(afterCutoff);
 
         Assert.IsEmpty(next, "no one can still book, so nothing should be offered or held");
-        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(second.BookingReference, "b@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(second.BookingReference)!.Status);
         Assert.AreEqual(1, _store.CabinSeatsLeft(Flight, _date, "Business"), "the freed seat is not locked behind a dead offer");
     }
 
@@ -194,20 +194,22 @@ public sealed class WaitlistTests
         DateTime departure = AppData.DepartureOf(Flight, _date);
 
         _store.ExpireWaitlistOffers(departure.AddMinutes(-30));
-        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(entry.BookingReference, "a@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistWaiting, _store.FindWaitlistEntry(entry.BookingReference)!.Status);
 
         _store.ExpireWaitlistOffers(departure.AddMinutes(1));
-        Assert.AreEqual(BookingStore.WaitlistExpired, _store.FindWaitlistEntry(entry.BookingReference, "a@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistExpired, _store.FindWaitlistEntry(entry.BookingReference)!.Status);
         Assert.IsEmpty(_store.LoadAllLiveWaitlist().Where(e => e.BookingReference == entry.BookingReference).ToList());
     }
     [TestMethod]
-    public void Convert_AndLookupRequiresMatchingEmail()
+    public void Convert_AndLookupByCodeAlone()
     {
         List<string> refs = FillBusiness();
         WaitlistEntry entry = _store.JoinWaitlist(Flight, _date, "Business", "Ana", "a@example.com", 1)!;
         _store.CancelBooking(refs[0], 0m);
 
-        Assert.IsNull(_store.FindWaitlistEntry(entry.BookingReference, "someone@else.com"));
+        Assert.IsNotNull(_store.FindWaitlistEntry(entry.BookingReference));
+        Assert.IsNull(_store.FindWaitlistEntry("WL-NOPE0000"));
+        Assert.IsNull(_store.FindWaitlistEntry(""));
         Assert.IsTrue(_store.MarkWaitlistConverted(entry.BookingReference));
         Assert.IsFalse(_store.HasLiveOffer(entry.BookingReference, Flight, _date, "Business", 1, DateTime.Now));
     }

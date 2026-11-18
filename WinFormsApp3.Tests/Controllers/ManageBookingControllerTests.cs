@@ -50,7 +50,7 @@ public sealed class ManageBookingControllerTests
     public void BuildReceipt_ForTheOpenBooking_CarriesItsDetailsAndAFareThatAddsUp()
     {
         BookingRecord saved = Save("SKY-MNG000099", DateTime.Today.AddDays(30), total: 4_000m);
-        Assert.IsTrue(_controller.Find("SKY-MNG000099", "Santos").Found);
+        Assert.IsTrue(_controller.Find("SKY-MNG000099").Found);
 
         ReceiptData? receipt = _controller.BuildReceipt();
 
@@ -67,30 +67,30 @@ public sealed class ManageBookingControllerTests
     {
         Save("SKY-MNG000001", DateTime.Today.AddDays(30));
 
-        LookupResult result = _controller.Find("SKY-MNG000001", "Santos");
+        LookupResult result = _controller.Find("SKY-MNG000001");
 
         Assert.IsTrue(result.Found);
         Assert.AreEqual("SKY-MNG000001", _controller.Current!.Reference);
     }
 
     [TestMethod]
-    public void Find_WrongName_GivesGenericMessage()
+    public void Find_UnknownReference_GivesGenericMessage()
     {
         Save("SKY-MNG000002", DateTime.Today.AddDays(30));
 
-        LookupResult result = _controller.Find("SKY-MNG000002", "Wrong");
+        LookupResult result = _controller.Find("SKY-MNG000009");
 
         Assert.IsFalse(result.Found);
-        Assert.AreEqual("We couldn't find a booking with those details.", result.Error);
+        Assert.AreEqual("We couldn't find a booking with that reference.", result.Error);
         Assert.IsNull(_controller.Current);
     }
 
     [TestMethod]
     public void Find_LocksAfterRepeatedFailures()
     {
-        for (int i = 0; i < 5; i++) _controller.Find("SKY-NOPE00000", "Nobody");
+        for (int i = 0; i < 5; i++) _controller.Find("SKY-NOPE00000");
 
-        LookupResult result = _controller.Find("SKY-NOPE00000", "Nobody");
+        LookupResult result = _controller.Find("SKY-NOPE00000");
 
         StringAssert.StartsWith(result.Error, "Too many attempts");
     }
@@ -111,7 +111,7 @@ public sealed class ManageBookingControllerTests
     public void PreviewCancel_UsesRefundRuleForTheFlightDate()
     {
         BookingRecord booking = Save("SKY-MNG000004", DateTime.Today.AddDays(30), 4_000m);
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
 
         CancelPreview? preview = _controller.PreviewCancel();
 
@@ -131,7 +131,7 @@ public sealed class ManageBookingControllerTests
     public void Cancel_CancelsOnceAndRecordsRefund()
     {
         BookingRecord booking = Save("SKY-MNG000005", DateTime.Today.AddDays(30), 4_000m);
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
 
         CancelResult first = _controller.Cancel();
         BookingRecord? fresh = _controller.Reload();
@@ -147,7 +147,7 @@ public sealed class ManageBookingControllerTests
     public void Cancel_AlreadyCanceledElsewhere_ReportsAlreadyChanged()
     {
         BookingRecord booking = Save("SKY-MNG000006", DateTime.Today.AddDays(30));
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
         _store.CancelBooking(booking.Reference, 0m);
 
         CancelResult result = _controller.Cancel();
@@ -159,7 +159,7 @@ public sealed class ManageBookingControllerTests
     public void RefreshEmail_NoAddress_ReportsNone()
     {
         BookingRecord booking = Save("SKY-MNG000007", DateTime.Today.AddDays(30));
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
 
         EmailBarState state = _controller.RefreshEmail();
 
@@ -171,7 +171,7 @@ public sealed class ManageBookingControllerTests
     {
         BookingRecord booking = Save("SKY-MNG000008", DateTime.Today.AddDays(30));
         _store.SaveBookingContact(booking.Reference, "maria@example.com");
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
 
         EmailBarState before = _controller.RefreshEmail();
         Assert.IsTrue(_controller.ToggleEmail());
@@ -188,7 +188,7 @@ public sealed class ManageBookingControllerTests
     public void Reload_DropsBookingThatNoLongerExists()
     {
         BookingRecord booking = Save("SKY-MNG000009", DateTime.Today.AddDays(30));
-        _controller.Find(booking.Reference, "Santos");
+        _controller.Find(booking.Reference);
         _controller.Clear();
 
         Assert.IsNull(_controller.Reload());

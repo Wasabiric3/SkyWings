@@ -297,7 +297,7 @@ public sealed class SimulationServiceTests
 
         Assert.IsTrue(_sim.CancelSimulatedBooking(demoRef));
 
-        Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(entry.BookingReference, "ana@example.com")!.Status);
+        Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(entry.BookingReference)!.Status);
     }
 
     // ------------------------------------------------------------------ switch and reset
