@@ -469,9 +469,9 @@ public sealed class ChoiceCard : Control, ISelfStyled
         Gfx.HighQuality(g);
         var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
         using var path = Gfx.RoundedRect(bounds, Gfx.S(this, 14));
-        Color fill = _selected ? Theme.SoftFill : _hover ? Theme.BgMuted : Theme.BgCard;
+        Color fill = !Enabled ? Theme.DisabledBack : _selected ? Theme.SoftFill : _hover ? Theme.BgMuted : Theme.BgCard;
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
-        using (var pen = new Pen(_selected ? Theme.Primary : Theme.Border, _selected ? 2f : 1f)) g.DrawPath(pen, path);
+        using (var pen = new Pen(_selected && Enabled ? Theme.Primary : Theme.Border, _selected && Enabled ? 2f : 1f)) g.DrawPath(pen, path);
         if (Focused && ShowFocusCues)
         {
             using var ring = new Pen(Color.FromArgb(150, Theme.Primary), 1f) { DashStyle = DashStyle.Dot };
@@ -481,9 +481,9 @@ public sealed class ChoiceCard : Control, ISelfStyled
         // Selection is shown by the border, tint and accent title, so the full width stays available for text.
         float pad = Gfx.S(this, 12f);
         var titleFont = TitleFont;
-        using var titleBrush = new SolidBrush(_selected ? Theme.Accent : Theme.TextPrimary);
-        using var accentBrush = new SolidBrush(Theme.Accent);
-        using var mutedBrush = new SolidBrush(Theme.TextSecondary);
+        using var titleBrush = new SolidBrush(!Enabled ? Theme.DisabledText : _selected ? Theme.Accent : Theme.TextPrimary);
+        using var accentBrush = new SolidBrush(Enabled ? Theme.Accent : Theme.DisabledText);
+        using var mutedBrush = new SolidBrush(Enabled ? Theme.TextSecondary : Theme.DisabledText);
         using var near = Gfx.Format(StringAlignment.Near, StringAlignment.Near);
         float lineH = Gfx.S(this, 24f);
         float y = bounds.Top + Gfx.S(this, 10f);

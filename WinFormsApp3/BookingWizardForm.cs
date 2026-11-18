@@ -558,12 +558,27 @@ public sealed class BookingWizardForm : GlassForm
 
     private void UpdateClassCards()
     {
+        // Only the cabins the chosen aircraft (and the return aircraft, for a round trip) actually has can be picked.
+        IReadOnlyList<string> available = _session.SelectedFlight is { } flight
+            ? _controller.AvailableClasses(flight, _session.ReturnFlight)
+            : AppData.ClassNames;
+        if (available.Count > 0 && !available.Contains(_selectedClass))
+        {
+            _selectedClass = available[0];
+            _session.ClassName = _selectedClass;
+            PopulateCabinOptions();   // refills baggage and meal for the new class (re-enters here once, now valid)
+        }
         for (int i = 0; i < _classCards.Length; i++)
         {
+            bool offered = available.Contains(AppData.ClassNames[i]);
             decimal perTraveller = (_session.SelectedFlight?.BasePrice ?? 0m) + (_session.ReturnFlight?.BasePrice ?? 0m);
-            _classCards[i].Subtitle = perTraveller > 0
-                ? $"PHP {perTraveller * AppData.ClassMultipliers[i]:N0} per traveller"
-                : $"×{AppData.ClassMultipliers[i]:0.0} base fare";
+            _classCards[i].Enabled = offered;
+            _classCards[i].Selected = AppData.ClassNames[i] == _selectedClass;
+            _classCards[i].Subtitle = !offered
+                ? "Not offered on this aircraft"
+                : perTraveller > 0
+                    ? $"PHP {perTraveller * AppData.ClassMultipliers[i]:N0} per traveller"
+                    : $"×{AppData.ClassMultipliers[i]:0.0} base fare";
             _classCards[i].Invalidate();
         }
     }
