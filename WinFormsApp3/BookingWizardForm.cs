@@ -97,6 +97,7 @@ public sealed class BookingWizardForm : GlassForm
     // step 6: receipt
     private readonly ReceiptPanel _receipt = new() { Dock = DockStyle.Top };
     private List<(string Label, string Value)> _receiptRows = new();
+    private BookingRecord? _receiptBooking;   // the stored booking the receipt page and the printout are built from
     private readonly Label _emailStatus = new() { AutoSize = false, Height = 0, Dock = DockStyle.Top, Font = Theme.Small };
 
     private readonly Font _boldFont = new(Theme.Body, FontStyle.Bold);
@@ -779,6 +780,7 @@ public sealed class BookingWizardForm : GlassForm
 
     private void BuildReceipt(BookingRecord booking)
     {
+        _receiptBooking = booking;
         var rows = new List<(string, string)>
         {
             ("Passengers", string.Join(", ", booking.Passengers.Select(p => p.Name))),
@@ -806,27 +808,13 @@ public sealed class BookingWizardForm : GlassForm
 
     private void PrintReceipt()
     {
-        using var document = new PrintDocument { DocumentName = $"SkyWings receipt {_session.BookingReference}" };
-        document.PrintPage += (_, e) =>
-        {
-            Graphics g = e.Graphics!;
-            using var title = new Font("Segoe UI", 20, FontStyle.Bold);
-            using var heading = new Font("Segoe UI", 12, FontStyle.Bold);
-            using var body = new Font("Segoe UI", 11);
-            float x = e.MarginBounds.Left, y = e.MarginBounds.Top;
-            g.DrawString("SkyWings · Booking receipt", title, Brushes.Black, x, y);
-            y += 56;
-            g.DrawString($"Reference: {_session.BookingReference}", heading, Brushes.Black, x, y);
-            y += 40;
-            foreach (var (label, value) in _receiptRows)
-            {
-                g.DrawString($"{label}:", heading, Brushes.Black, x, y);
-                g.DrawString(value, body, Brushes.Black, new RectangleF(x + 160, y, e.MarginBounds.Width - 160, 40));
-                y += 30;
-            }
-            e.HasMorePages = false;
-        };
-        using var preview = new PrintPreviewDialog { Document = document, Width = 900, Height = 720 };
+        if (_receiptBooking is null) return;
+        ReceiptData receipt = ReceiptData.From(_receiptBooking, _session);
+
+        using var document = new PrintDocument { DocumentName = $"SkyWings receipt {receipt.Reference}" };
+        document.DefaultPageSettings.PaperSize = new PaperSize("A4", 827, 1169);   // hundredths of an inch
+        document.PrintPage += (_, e) => ReceiptPrinter.RenderPage(e, receipt);
+        using var preview = new PrintPreviewDialog { Document = document, Width = 900, Height = 1000 };
         preview.ShowDialog(this);
     }
 

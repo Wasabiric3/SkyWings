@@ -4,6 +4,7 @@ using SkyWings.UI;
 namespace SkyWings.Tests;
 
 [TestClass]
+[DoNotParallelize]   // draws shared cached bitmaps/fonts: GDI+ objects are not thread-safe
 public class PanelPaintTests
 {
     private static Bitmap Render(Control control, int w, int h)
