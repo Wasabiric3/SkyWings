@@ -52,6 +52,7 @@ public partial class HomeForm : GlassForm
         StartPosition = FormStartPosition.CenterScreen;
         SizeForScreen(1180, 680, 1060, 560);
         BuildLayout();
+        Theme.Flatten(this);   // HomeForm styles itself (no Theme.Apply): drop transparent labels/panels so repaints do not cascade
         LoadDashboard();
 
         // The departures board ticks once a second; see Tick().

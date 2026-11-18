@@ -57,6 +57,25 @@ public class ThemeTests
     }
 
     [TestMethod]
+    public void Flatten_ResetsTransparentPanelsAndLabels_ButNotSelfStyledOrExplicitColours()
+    {
+        using var form = new Form { BackColor = Theme.BgMain };
+        var panel = new Panel { BackColor = Color.Transparent };
+        var label = new Label { BackColor = Color.Transparent };
+        var tinted = new Label { BackColor = Color.Red };
+        var own = new SelfStyledPanel { BackColor = Color.Transparent };
+        panel.Controls.Add(label);
+        form.Controls.AddRange(new Control[] { panel, tinted, own });
+
+        Theme.Flatten(form);
+
+        Assert.AreEqual(Theme.BgMain.ToArgb(), panel.BackColor.ToArgb());
+        Assert.AreEqual(Theme.BgMain.ToArgb(), label.BackColor.ToArgb());
+        Assert.AreEqual(Color.Red.ToArgb(), tinted.BackColor.ToArgb());
+        Assert.AreEqual(Color.Transparent.ToArgb(), own.BackColor.ToArgb());
+    }
+
+    [TestMethod]
     public void Apply_TabPageTakesBgMain()
     {
         using var tabs = new TabControl();

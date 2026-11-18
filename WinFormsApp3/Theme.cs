@@ -44,6 +44,23 @@ public static class Theme
     public const int Sp6 = 6, Sp10 = 10, Sp12 = 12, Sp16 = 16, Sp20 = 20, Sp24 = 24, Sp30 = 30;
 
     /// <summary>
+    /// Removes transparent backgrounds from panels, labels and check/radio buttons in a tree (they inherit their parent's
+    /// colour instead) without touching fonts or other colours. For forms that style themselves and do not call <see cref="Apply"/>.
+    /// </summary>
+    public static void Flatten(Control control)
+    {
+        if (control is SkyWings.UI.ISelfStyled) return;
+        ResetIfTransparent(control);
+        foreach (Control child in control.Controls) Flatten(child);
+    }
+
+    private static void ResetIfTransparent(Control control)
+    {
+        if (control is Panel or Label or CheckBox or RadioButton && control.BackColor == Color.Transparent)
+            control.ResetBackColor();   // fall back to the parent's colour (ambient BackColor)
+    }
+
+    /// <summary>
     /// Applies the default look to a control tree. Controls that style themselves (buttons, cards, seat map,
     /// fields...) are skipped. Panels and labels inherit the colour of the surface they sit on; transparency is
     /// removed because it makes every repaint cascade through the parent chain.
@@ -53,8 +70,7 @@ public static class Theme
         if (control is SkyWings.UI.ISelfStyled) return;
 
         if (control is Form or TabPage) control.BackColor = BgMain;
-        else if (control is Panel or Label or CheckBox or RadioButton && control.BackColor == Color.Transparent)
-            control.ResetBackColor();   // fall back to the parent's colour (ambient BackColor)
+        else ResetIfTransparent(control);
         control.ForeColor = TextPrimary;
 
         // Only labels still on the default 9pt font get the body font; explicit fonts are kept.

@@ -588,7 +588,6 @@ public sealed class BookingWizardForm : GlassForm
         _mapHost.Controls.Add(_outboundMap);
         _mapHost.Controls.Add(_returnMap);
         _mapHost.Resize += (_, _) => CenterMaps();
-        _mapHost.BackColor = Color.Transparent;
 
         _seatTabOut.Click += (_, _) => ShowSeatLeg(returnLeg: false);
         _seatTabBack.Click += (_, _) => ShowSeatLeg(returnLeg: true);

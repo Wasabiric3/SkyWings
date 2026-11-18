@@ -65,17 +65,4 @@ internal static class Gfx
             FormatFlags = StringFormatFlags.NoWrap
         };
 
-    /// <summary>Soft radial glow used for the frosted background.</summary>
-    public static void Glow(Graphics g, float cx, float cy, float radius, Color color)
-    {
-        if (radius <= 1) return;
-        using var path = new GraphicsPath();
-        path.AddEllipse(cx - radius, cy - radius, radius * 2, radius * 2);
-        using var brush = new PathGradientBrush(path)
-        {
-            CenterColor = color,
-            SurroundColors = new[] { Color.FromArgb(0, color) }
-        };
-        g.FillPath(brush, path);
-    }
 }

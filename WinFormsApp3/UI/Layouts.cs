@@ -23,8 +23,7 @@ internal static class Layouts
         var table = new TableLayoutPanel
         {
             Dock = DockStyle.Top, ColumnCount = columns.Length, RowCount = 1,
-            Height = columns.Max(c => c.Height), Margin = Padding.Empty, Padding = Padding.Empty,
-            BackColor = Color.Transparent
+            Height = columns.Max(c => c.Height), Margin = Padding.Empty, Padding = Padding.Empty
         };
         for (int i = 0; i < columns.Length; i++)
         {
