@@ -12,6 +12,12 @@ public sealed class ReceiptPanel : Control, ISelfStyled
 {
     private const string CopyIdle = "Copy", CopyDone = "Copied ✓", CopyFailed = "Try again";
 
+    // Shared fonts: creating them on every paint (one was never disposed) allocated GDI handles on each repaint.
+    private static readonly Font BandFont = new(Theme.Body, FontStyle.Bold);
+    private static readonly Font PlaneFont = new(Theme.Header, FontStyle.Regular);
+    private static readonly Font ValueFont = new(Theme.Body, FontStyle.Bold);
+    private static readonly Font PillFont = new(Theme.Small, FontStyle.Bold);
+
     private string _reference = "";
     private List<(string Label, string Value)> _rows = new();
     private RectangleF _copyRect, _referenceRect;
@@ -21,10 +27,9 @@ public sealed class ReceiptPanel : Control, ISelfStyled
 
     public ReceiptPanel()
     {
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+        SetStyle(ControlStyles.UserPaint |
                  ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.ResizeRedraw, true);
-        BackColor = Color.Transparent;
         AccessibleName = "Booking receipt";
         _copyTimer.Tick += (_, _) => { _copyTimer.Stop(); _copyLabel = CopyIdle; Invalidate(); };
     }
@@ -92,6 +97,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
         if (bounds.Width < 200 || bounds.Height < 120) return;
@@ -101,24 +107,29 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         using (var fill = new SolidBrush(Color.White)) g.FillPath(fill, path);
         using (var border = new Pen(Theme.Border, 1f)) g.DrawPath(border, path);
 
-        // Header band.
+        // Header band: flat brand green (no gradient).
         float bandH = Gfx.S(this, 50f);
         var oldClip = g.Clip;
         g.SetClip(path, CombineMode.Intersect);
-        using (var band = new LinearGradientBrush(new RectangleF(bounds.X, bounds.Y, bounds.Width, bandH),
-                   Theme.Primary, Theme.Accent, LinearGradientMode.Horizontal))
+        using (var band = new SolidBrush(Theme.Primary))
             g.FillRectangle(band, bounds.X, bounds.Y, bounds.Width, bandH);
         g.Clip = oldClip;
 
         using var white = new SolidBrush(Color.White);
-        using var bandFont = new Font(Theme.Body, FontStyle.Bold);
+        var bandFont = BandFont;
         using var left = Gfx.Format(StringAlignment.Near);
         using var right = Gfx.Format(StringAlignment.Far);
         float pad = Gfx.S(this, 20f);
         g.DrawString("SkyWings  ·  Boarding pass", bandFont, white,
             new RectangleF(bounds.X + pad, bounds.Y, bounds.Width * 0.6f, bandH), left);
-        g.DrawString("✈", new Font(Theme.Header, FontStyle.Regular), white,
-            new RectangleF(bounds.Right - pad - 80, bounds.Y, 80, bandH), right);
+        Bitmap? logo = Assets.Logo(LogoVariant.White, DeviceDpi);
+        if (logo is not null)
+        {
+            int mark = (int)(bandH * 0.72f);
+            BrandArt.DrawScaled(g, logo, new Rectangle((int)(bounds.Right - pad - mark), (int)(bounds.Y + (bandH - mark) / 2), mark, mark));
+        }
+        else
+            g.DrawString("✈", PlaneFont, white, new RectangleF(bounds.Right - pad - 80, bounds.Y, 80, bandH), right);
 
         // Stub (right) and details (left) are split by a dashed line.
         float stubW = Math.Max(Gfx.S(this, 250f), bounds.Width * 0.30f);
@@ -128,7 +139,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
 
         using var mutedBrush = new SolidBrush(Theme.TextSecondary);
         using var textBrush = new SolidBrush(Theme.TextPrimary);
-        using var valueFont = new Font(Theme.Body, FontStyle.Bold);
+        var valueFont = ValueFont;
         using var topLeft = Gfx.Format(StringAlignment.Near, StringAlignment.Near);
 
         float colW = (splitX - bounds.X - pad * 2) / 2;
@@ -160,14 +171,13 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         {
             bool done = _copyLabel == CopyDone;
             using var pill = Gfx.RoundedRect(_copyRect, Gfx.S(this, 9f));
-            using (var pillFill = new SolidBrush(done ? Color.FromArgb(226, 239, 232) : _copyHover ? Color.FromArgb(235, 243, 238) : Color.White))
+            using (var pillFill = new SolidBrush(done ? Theme.SoftFill : _copyHover ? Theme.BgMuted : Color.White))
                 g.FillPath(pillFill, pill);
             using (var pillBorder = new Pen(_copyHover || done ? Theme.Primary : Theme.Border, 1f))
                 g.DrawPath(pillBorder, pill);
             using var pillText = new SolidBrush(Theme.Accent);
-            using var pillFont = new Font(Theme.Small, FontStyle.Bold);
             using var centered = Gfx.Format(StringAlignment.Center);
-            g.DrawString(_copyLabel, pillFont, pillText, _copyRect, centered);
+            g.DrawString(_copyLabel, PillFont, pillText, _copyRect, centered);
         }
 
         float barsY = startY + Gfx.S(this, 112f);

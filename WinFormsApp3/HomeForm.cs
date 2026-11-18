@@ -673,70 +673,52 @@ public partial class HomeForm : GlassForm
 
     // ------------------------------------------------------------------ artwork
 
-    /// <summary>Soft sky, mountains and a plane, drawn proportionally so it scales with the window.</summary>
+    /// <summary>
+    /// The brand kit's sage hero background with the logo mark and a faint wing watermark. Rendered once per size
+    /// into a bitmap, so repainting the home screen is a single blit.
+    /// </summary>
     private sealed class HeroArt : Control, ISelfStyled
     {
+        private readonly BackdropCache _backdrop = new();
+
         public HeroArt()
         {
-            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
-                     ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            BackColor = Color.Transparent;
-            AccessibleName = "Illustration of an aircraft over mountains";
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            AccessibleName = "SkyWings brand artwork";
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            var g = e.Graphics;
-            Gfx.HighQuality(g);
-            var r = new RectangleF(0, 0, Width - 1, Height - 1);
-            if (r.Width < 40 || r.Height < 40) return;
-            using var clip = Gfx.RoundedRect(r, Gfx.S(this, 16f));
+            if (Width < 40 || Height < 40) return;
+            using (var surface = new SolidBrush(Gfx.Surface(this))) e.Graphics.FillRectangle(surface, e.ClipRectangle);
+            e.Graphics.DrawImageUnscaled(_backdrop.Get(Size, DeviceDpi, PaintBackdrop), 0, 0);
+        }
+
+        private void PaintBackdrop(Graphics g)
+        {
+            var r = new Rectangle(0, 0, Width, Height);
+            using var clip = Gfx.RoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), Gfx.S(this, 16f));
             g.SetClip(clip);
+            BrandArt.FillHero(g, r, DeviceDpi);
 
-            using (var sky = new LinearGradientBrush(r, Color.FromArgb(196, 224, 232), Color.FromArgb(240, 246, 240), 90f))
-                g.FillRectangle(sky, r);
-            using (var sun = new SolidBrush(Color.FromArgb(120, 255, 252, 235)))
-                g.FillEllipse(sun, r.Width * 0.62f, r.Height * 0.08f, r.Height * 0.36f, r.Height * 0.36f);
+            Bitmap? mark = Assets.Watermark(DeviceDpi);
+            if (mark is not null)
+            {
+                int size = (int)(Height * 1.15f);
+                BrandArt.DrawScaled(g, mark, new Rectangle(r.Right - size + Gfx.S(this, 30), r.Bottom - size + Gfx.S(this, 20), size, size));
+            }
 
-            using (var far = new SolidBrush(Color.FromArgb(150, 168, 196, 192)))
-                g.FillPolygon(far, new[]
-                {
-                    new PointF(0, r.Height), new PointF(0, r.Height * 0.62f), new PointF(r.Width * 0.22f, r.Height * 0.36f),
-                    new PointF(r.Width * 0.42f, r.Height * 0.66f), new PointF(r.Width * 0.66f, r.Height * 0.3f),
-                    new PointF(r.Width, r.Height * 0.62f), new PointF(r.Width, r.Height)
-                });
-            using (var near = new SolidBrush(Color.FromArgb(190, 120, 160, 146)))
-                g.FillPolygon(near, new[]
-                {
-                    new PointF(0, r.Height), new PointF(0, r.Height * 0.8f), new PointF(r.Width * 0.3f, r.Height * 0.6f),
-                    new PointF(r.Width * 0.58f, r.Height * 0.84f), new PointF(r.Width * 0.82f, r.Height * 0.66f),
-                    new PointF(r.Width, r.Height * 0.82f), new PointF(r.Width, r.Height)
-                });
+            int logo = Math.Min(Gfx.S(this, 96), Height - Gfx.S(this, 32));
+            BrandArt.DrawScaled(g, Assets.Logo(LogoVariant.Green, DeviceDpi),
+                new Rectangle((Width - logo) / 2, (Height - logo) / 2, logo, logo));
+        }
 
-            // Plane
-            float cx = r.Width * 0.46f, cy = r.Height * 0.4f, len = r.Width * 0.5f;
-            using var body = new SolidBrush(Color.FromArgb(250, 255, 255, 255));
-            using var shade = new SolidBrush(Color.FromArgb(70, 70, 110, 100));
-            g.FillEllipse(shade, cx - len / 2 + 4, cy + r.Height * 0.05f, len, r.Height * 0.1f);
-            g.FillEllipse(body, cx - len / 2, cy, len, r.Height * 0.11f);
-            g.FillPolygon(body, new[]
-            {
-                new PointF(cx - len * 0.02f, cy + r.Height * 0.04f), new PointF(cx + len * 0.2f, cy - r.Height * 0.2f),
-                new PointF(cx + len * 0.28f, cy - r.Height * 0.19f), new PointF(cx + len * 0.12f, cy + r.Height * 0.06f)
-            });
-            g.FillPolygon(body, new[]
-            {
-                new PointF(cx - len * 0.04f, cy + r.Height * 0.08f), new PointF(cx + len * 0.14f, cy + r.Height * 0.24f),
-                new PointF(cx + len * 0.2f, cy + r.Height * 0.23f), new PointF(cx + len * 0.1f, cy + r.Height * 0.07f)
-            });
-            g.FillPolygon(body, new[]
-            {
-                new PointF(cx - len * 0.46f, cy + r.Height * 0.03f), new PointF(cx - len * 0.5f, cy - r.Height * 0.08f),
-                new PointF(cx - len * 0.4f, cy - r.Height * 0.08f), new PointF(cx - len * 0.3f, cy + r.Height * 0.03f)
-            });
-            using var line = new Pen(Color.FromArgb(160, Theme.Primary), Gfx.S(this, 2f));
-            g.DrawLine(line, cx - len * 0.3f, cy + r.Height * 0.055f, cx + len * 0.3f, cy + r.Height * 0.055f);
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _backdrop.Dispose();
+            base.Dispose(disposing);
         }
     }
 }

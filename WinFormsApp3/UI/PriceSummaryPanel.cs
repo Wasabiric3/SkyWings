@@ -8,6 +8,9 @@ public sealed record PriceLine(string Label, string Value, PriceLineKind Kind = 
 /// <summary>Right-hand live summary: trip details and the fare breakdown, redrawn as the booking changes.</summary>
 public sealed class PriceSummaryPanel : GlassCard
 {
+    private static readonly Font TitleFont = new(Theme.Subtitle, FontStyle.Bold);
+    private static readonly Font BoldFont = new(Theme.Body, FontStyle.Bold);
+
     private List<PriceLine> _lines = new();
 
     public PriceSummaryPanel()
@@ -35,9 +38,9 @@ public sealed class PriceSummaryPanel : GlassCard
 
         using var left = Gfx.Format(StringAlignment.Near);
         using var right = Gfx.Format(StringAlignment.Far);
-        using var titleFont = new Font(Theme.Subtitle, FontStyle.Bold);
-        using var boldFont = new Font(Theme.Body, FontStyle.Bold);
-        using var totalFont = new Font(Theme.Subtitle, FontStyle.Bold);
+        var titleFont = TitleFont;
+        var boldFont = BoldFont;
+        var totalFont = TitleFont;
         using var textBrush = new SolidBrush(Theme.TextPrimary);
         using var mutedBrush = new SolidBrush(Theme.TextSecondary);
         using var accentBrush = new SolidBrush(Theme.Accent);

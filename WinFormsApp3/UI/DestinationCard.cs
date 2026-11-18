@@ -6,6 +6,8 @@ namespace SkyWings.UI;
 /// <summary>Clickable glass card for a region: gradient artwork on top, title and route summary below.</summary>
 public sealed class DestinationCard : GlassCard
 {
+    private static readonly Font TitleFont = new(Theme.Body, FontStyle.Bold);
+
     private bool _hover;
 
     public DestinationCard()
@@ -53,26 +55,21 @@ public sealed class DestinationCard : GlassCard
         float inset = Gfx.S(this, 8f);
         float artH = area.Height * 0.46f;
         var art = new RectangleF(area.Left + inset, area.Top + inset, area.Width - 2 * inset, artH - inset);
+        // Flat accent band with the kit's map-pin icon, instead of a gradient landscape.
         using (var path = Gfx.RoundedRect(art, Gfx.S(this, 12f)))
+        using (var band = new SolidBrush(Accent))
+            g.FillPath(band, path);
+        Bitmap? pin = Assets.Icon("Map_Pin", white: true, DeviceDpi);
+        if (pin is not null)
         {
-            var oldClip = g.Clip;
-            g.SetClip(path, CombineMode.Intersect);
-            using (var sky = new LinearGradientBrush(art, Gfx.Mix(Color.White, Accent, 0.28f), Accent, 40f))
-                g.FillRectangle(sky, art);
-            using (var hills = new SolidBrush(Color.FromArgb(120, Theme.Accent)))
-            {
-                g.FillEllipse(hills, art.X - art.Width * 0.1f, art.Y + art.Height * 0.45f, art.Width * 0.7f, art.Height * 0.9f);
-                g.FillEllipse(hills, art.X + art.Width * 0.35f, art.Y + art.Height * 0.55f, art.Width * 0.8f, art.Height * 0.9f);
-            }
-            using (var sun = new SolidBrush(Color.FromArgb(150, 255, 255, 255)))
-                g.FillEllipse(sun, art.Right - art.Width * 0.28f, art.Y + art.Height * 0.12f, art.Height * 0.3f, art.Height * 0.3f);
-            g.Clip = oldClip;
+            int iconSize = Gfx.S(this, 32);
+            BrandArt.DrawScaled(g, pin, new Rectangle((int)(art.X + (art.Width - iconSize) / 2), (int)(art.Y + (art.Height - iconSize) / 2), iconSize, iconSize));
         }
 
         float textX = area.Left + inset + Gfx.S(this, 4f);
         float textW = area.Width - 2 * inset - Gfx.S(this, 8f);
         float y = art.Bottom + Gfx.S(this, 8f);
-        using var titleFont = new Font(Theme.Body, FontStyle.Bold);
+        var titleFont = TitleFont;
         using var titleBrush = new SolidBrush(Theme.TextPrimary);
         using var mutedBrush = new SolidBrush(Theme.TextSecondary);
         using var accentBrush = new SolidBrush(Theme.Accent);

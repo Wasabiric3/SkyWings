@@ -5,6 +5,8 @@ namespace SkyWings.UI;
 /// <summary>Small glass tile showing one headline number (used on the admin reports page).</summary>
 public sealed class StatTile : GlassCard
 {
+    private static readonly Font ValueFont = new(Theme.Title, FontStyle.Bold);
+
     public StatTile()
     {
         ContentPadding = 6;
@@ -43,7 +45,7 @@ public sealed class StatTile : GlassCard
         using var near = Gfx.Format(StringAlignment.Near);
         using var muted = new SolidBrush(Theme.TextSecondary);
         using var accent = new SolidBrush(Accent);
-        using var valueFont = new Font(Theme.Title, FontStyle.Bold);
+        var valueFont = ValueFont;
         float pad = Gfx.S(this, 10f);
         g.DrawString(Title.ToUpperInvariant(), Theme.Small, muted,
             new RectangleF(area.Left + pad, area.Top + Gfx.S(this, 4f), area.Width - 2 * pad, Gfx.S(this, 22f)), near);
