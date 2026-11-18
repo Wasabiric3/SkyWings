@@ -30,6 +30,8 @@ public sealed class SmtpEmailSender : IEmailSender
         foreach (InlineImage image in message.InlineImages)
             html.LinkedResources.Add(new LinkedResource(new MemoryStream(image.Bytes), image.MediaType) { ContentId = image.ContentId });
         mail.AlternateViews.Add(html);
+        foreach (EmailAttachment file in message.Attachments ?? Array.Empty<EmailAttachment>())
+            mail.Attachments.Add(new Attachment(new MemoryStream(file.Bytes), file.FileName, file.MediaType));
 
         using var client = new SmtpClient(_settings.Host, _settings.Port) { EnableSsl = _settings.UseSsl, Timeout = 15000 };
         if (_settings.User.Length > 0) client.Credentials = new NetworkCredential(_settings.User, _settings.Password);

@@ -25,8 +25,7 @@ public sealed class ManageBookingForm : GlassForm
     private readonly GlassButton _cancel = new() { Text = "Cancel booking", Style = GlassButtonStyle.Danger };
     private readonly ManageBookingController _controller;
     private readonly Label _emailStatus = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, Font = Theme.Small };
-    private readonly GlassButton _toggleEmail = new() { Text = "Stop emails", Style = GlassButtonStyle.Secondary };
-    private readonly GlassButton _sendEmail = new() { Text = "Email me this receipt", Style = GlassButtonStyle.Secondary };
+    private readonly GlassButton _sendEmail = new() { Text = "Send this receipt", Style = GlassButtonStyle.Secondary };
     private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Secondary };
     private readonly FlowLayoutPanel _emailBar = new() { WrapContents = false };
 
@@ -119,12 +118,10 @@ public sealed class ManageBookingForm : GlassForm
         _emailBar.Padding = new Padding(0, D(6), 0, 0);
         _emailStatus.Width = D(220);
         _emailStatus.Height = D(40);
-        _toggleEmail.Click += (_, _) => ToggleEmail();
         _sendEmail.Click += async (_, _) => await SendReceipt();
         _print.Click += (_, _) => PrintReceipt();
         _emailBar.Controls.Add(_print);
         _emailBar.Controls.Add(_emailStatus);
-        _emailBar.Controls.Add(_toggleEmail);
         _emailBar.Controls.Add(_sendEmail);
 
         _detailsPage.Controls.Add(_policy);
@@ -203,20 +200,10 @@ public sealed class ManageBookingForm : GlassForm
     {
         if (_controller.Current is null) return;
         EmailBarState state = _controller.RefreshEmail();
-        _toggleEmail.Visible = state.HasEmail;
         _sendEmail.Visible = state.HasEmail;
         _emailStatus.Text = state.StatusText;
         if (!state.HasEmail) return;
-        _toggleEmail.Text = state.ToggleText;
         _sendEmail.Enabled = state.Subscribed;
-    }
-
-    private void ToggleEmail()
-    {
-        if (!_controller.ToggleEmail())
-            MessageBox.Show(this, "The email setting could not be saved. Please try again.", "Manage booking",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        RefreshEmailBar();
     }
 
     /// <summary>Opens the A4 print preview of this booking's receipt (works for any booking you can see here, not just a new one).</summary>
@@ -244,7 +231,7 @@ public sealed class ManageBookingForm : GlassForm
         _sendEmail.Enabled = true;
         MessageBox.Show(this,
             result.Delivered
-                ? (result.Channel == "SMTP" ? "The receipt was emailed." : "The receipt was saved as a file:\n" + result.Detail)
+                ? (result.Channel == "SMTP" ? "The receipt was sent to " + ManageBookingController.MaskEmail(_controller.ContactEmail!) + "." : "The receipt was saved as a file:\n" + result.Detail)
                 : "No email was sent. " + result.Detail,
             "Email receipt", MessageBoxButtons.OK, result.Delivered ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }

@@ -145,7 +145,7 @@ public sealed class EmailFeatureTests
 
         StringAssert.Contains(message.Subject, "SKY-AB12CD34EF56");
         StringAssert.Contains(message.HtmlBody, "cid:" + BookingEmailBuilder.QrContentId);
-        StringAssert.Contains(message.HtmlBody, "Manage booking");
+        StringAssert.Contains(message.HtmlBody, "contact SkyWings staff");
         StringAssert.Contains(message.HtmlBody, "Maria &lt;Santos&gt;");   // names are escaped, not injected as markup
         Assert.IsFalse(message.HtmlBody.Contains("Maria <Santos>"));
         StringAssert.Contains(message.TextBody, "SKY-AB12CD34EF56");
@@ -167,6 +167,46 @@ public sealed class EmailFeatureTests
         var audit = _store.LoadAudit(50, booking.Reference).Where(a => a.Action == "EMAIL_RECEIPT").ToList();
         Assert.AreEqual(1, audit.Count);
         Assert.IsFalse(audit[0].Detail.Contains('@') || audit[0].Target.Contains('@'));
+    }
+
+    [TestMethod]
+    [DoNotParallelize]   // draws the receipt, which uses the shared cached logo bitmap (GDI+ is not thread-safe)
+    public async Task Service_AttachesTheSamePdfReceiptThatPrintReceiptShows()
+    {
+        BookingRecord booking = SaveBooking();
+        var sender = new RecordingSender();
+        var service = new BookingEmailService(_store, sender, new FakeQr());
+
+        await service.SendReceiptAsync(booking, "maria@example.com");
+
+        EmailAttachment pdf = sender.Sent[0].Attachments!.Single();
+        Assert.AreEqual("SkyWings-receipt-SKY-AB12CD34EF56.pdf", pdf.FileName);
+        Assert.AreEqual("application/pdf", pdf.MediaType);
+        Assert.AreEqual("%PDF-", System.Text.Encoding.ASCII.GetString(pdf.Bytes, 0, 5));
+        StringAssert.Contains(sender.Sent[0].TextBody, "attached as a PDF");
+    }
+
+    [TestMethod]
+    public async Task OutboxSender_SavesAttachmentsBesideTheHtml()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "skywings-outbox-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            BookingRecord booking = SaveBooking();
+            var attachment = new EmailAttachment("SkyWings-receipt-X.pdf", new byte[] { 1, 2, 3 }, "application/pdf");
+            EmailMessage message = BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1, 2, 3 }, null, attachment);
+
+            EmailSendResult result = await new FileOutboxEmailSender(folder).SendAsync(message);
+
+            string[] pdfs = Directory.GetFiles(folder, "*-SkyWings-receipt-X.pdf");
+            Assert.AreEqual(1, pdfs.Length);
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(pdfs[0]));
+            Assert.AreEqual(Path.ChangeExtension(result.Detail, null), pdfs[0][..^"-SkyWings-receipt-X.pdf".Length]);
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        }
     }
 
     [TestMethod]

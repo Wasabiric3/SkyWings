@@ -46,7 +46,7 @@ Tests use a temporary data folder, so they never touch real data.
 
 ## Receipt emails and QR codes
 
-If a customer gives an email address while booking, SkyWings sends a receipt with a QR code (the booking reference). Customers can switch emails off, or ask for the receipt again, in **Manage booking**. Check-in and Manage booking also accept a scanned QR code in the reference box.
+If a customer gives an email address while booking, SkyWings sends a receipt with a QR code (the booking reference). Staff can send the receipt again, to the address saved on the booking, with **Send this receipt** in **Manage booking**. The email carries the same one-page A4 receipt as **Print receipt**, as a PDF attachment. Check-in and Manage booking also accept a scanned QR code in the reference box.
 
 - With no mail settings, each email is saved as an `.html` file in `%LocalAppData%\SkyWings\outbox`. Open it in a browser.
 - To send real emails, add these keys to `db.properties` (next to the exe or in the data folder). For Gmail use an app password, not your normal password.
@@ -62,7 +62,7 @@ smtp.from=your.address@gmail.com
 
 - If the mail server cannot be reached, the email is saved to the outbox instead, so nothing is lost.
 - `db.properties` holds a password in plain text. Do not commit it or share screenshots of it.
-- Unsubscribe is done inside the app (no web link), because SkyWings has no public website.
+- There is no unsubscribe link, because SkyWings has no public website. The receipt email tells customers to contact staff to stop receipt emails.
 
 ## Demo data
 

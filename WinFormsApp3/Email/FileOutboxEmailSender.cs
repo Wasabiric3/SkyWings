@@ -27,6 +27,9 @@ public sealed class FileOutboxEmailSender : IEmailSender
         string header = $"<!-- To: {System.Net.WebUtility.HtmlEncode(message.To)} | Subject: {System.Net.WebUtility.HtmlEncode(message.Subject)} -->\r\n";
         string path = Path.Combine(_directory, $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}.html");
         await File.WriteAllTextAsync(path, header + html, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+        // Attachments are saved beside the .html with the same name, so the outbox shows exactly what the customer would get.
+        foreach (EmailAttachment file in message.Attachments ?? Array.Empty<EmailAttachment>())
+            await File.WriteAllBytesAsync(Path.ChangeExtension(path, null) + "-" + Path.GetFileName(file.FileName), file.Bytes, cancellationToken).ConfigureAwait(false);
         return new EmailSendResult(true, Name, path);
     }
 }

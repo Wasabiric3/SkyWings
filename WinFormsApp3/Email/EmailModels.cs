@@ -3,9 +3,13 @@ namespace SkyWings.Email;
 /// <summary>An image shown inside the HTML body, referenced as <c>cid:ContentId</c>.</summary>
 public sealed record InlineImage(string ContentId, byte[] Bytes, string MediaType = "image/png");
 
+/// <summary>A file sent with the email, for example the receipt PDF.</summary>
+public sealed record EmailAttachment(string FileName, byte[] Bytes, string MediaType);
+
 public sealed record EmailMessage(
     string To, string Subject, string HtmlBody, string TextBody,
-    IReadOnlyList<InlineImage> InlineImages, string? UnsubscribeMailbox = null);
+    IReadOnlyList<InlineImage> InlineImages, string? UnsubscribeMailbox = null,
+    IReadOnlyList<EmailAttachment>? Attachments = null);
 
 /// <summary>What happened to a message: <see cref="Channel"/> is "SMTP", "Outbox", or "Skipped".</summary>
 public sealed record EmailSendResult(bool Delivered, string Channel, string Detail);

@@ -19,6 +19,25 @@ public sealed class BookingEmailService
         _unsubscribeMailbox = unsubscribeMailbox;
     }
 
+    /// <summary>
+    /// The receipt as the same A4 page "Print receipt" shows, as a PDF. A drawing problem must not stop the email, so on failure
+    /// this logs and returns null and the email goes out without the attachment.
+    /// </summary>
+    private EmailAttachment? BuildReceiptPdf(BookingRecord booking)
+    {
+        try
+        {
+            IEnumerable<Flight> flights = _store.LoadActiveFlights(domestic: true).Concat(_store.LoadActiveFlights(domestic: false));
+            byte[] pdf = ReceiptPdf.Create(ReceiptData.FromStored(booking, flights));
+            return new EmailAttachment($"SkyWings-receipt-{booking.Reference}.pdf", pdf, "application/pdf");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return null;
+        }
+    }
+
     public async Task<EmailSendResult> SendReceiptAsync(BookingRecord booking, string toEmail)
     {
         try
@@ -29,7 +48,7 @@ public sealed class BookingEmailService
                 return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
 
             byte[] png = _qr.RenderPng(QrPayload.Build(booking.Reference));
-            EmailMessage message = BookingEmailBuilder.Build(booking, toEmail.Trim(), png, _unsubscribeMailbox);
+            EmailMessage message = BookingEmailBuilder.Build(booking, toEmail.Trim(), png, _unsubscribeMailbox, BuildReceiptPdf(booking));
             EmailSendResult result = await _sender.SendAsync(message).ConfigureAwait(false);
             _store.WriteAudit("system", "SYSTEM", "EMAIL_RECEIPT", booking.Reference, result.Channel);
             return result;

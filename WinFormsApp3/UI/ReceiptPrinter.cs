@@ -170,9 +170,10 @@ internal static class ReceiptPrinter
         // ---- route ----
         Spaced("FLIGHT INFORMATION", f.Make(10, true), green, 69, 262, 2.4f);
         Font code = f.Make(54, true), city = f.Make(15);
-        Text(d.OriginCode, code, dark, new RectangleF(68, 284, 190, 66));
+        // Boxes are taller than the 54 px font's line (about 72 px): with LineLimit set, GDI+ draws nothing when the line does not fit.
+        Text(d.OriginCode, code, dark, new RectangleF(68, 280, 190, 80));
         Text(d.OriginCity, city, gray, new RectangleF(70, 350, 220, 22));
-        Text(d.DestinationCode, code, dark, new RectangleF(480, 284, 200, 66));
+        Text(d.DestinationCode, code, dark, new RectangleF(480, 280, 200, 80));
         Text(d.DestinationCity, city, gray, new RectangleF(482, 350, 240, 22));
         if (paint)
         {

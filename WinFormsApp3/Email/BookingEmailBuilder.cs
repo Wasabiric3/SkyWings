@@ -9,10 +9,11 @@ public static class BookingEmailBuilder
     public const string QrContentId = "booking-qr";
 
     public const string UnsubscribeText =
-        "You are receiving this because an email address was given for this booking. To stop these emails, open " +
-        "Manage booking in SkyWings, look up the booking, and switch email notifications off.";
+        "You are receiving this because an email address was given for this booking. To stop these emails, " +
+        "contact SkyWings staff and ask for the address to be removed from receipt emails.";
 
-    public static EmailMessage Build(BookingRecord booking, string toEmail, byte[] qrPng, string? unsubscribeMailbox = null)
+    public static EmailMessage Build(BookingRecord booking, string toEmail, byte[] qrPng, string? unsubscribeMailbox = null,
+        EmailAttachment? receipt = null)
     {
         var rows = BookingSummary.Rows(booking).Where(r => r.Label != "Refund" || booking.RefundAmount > 0).ToList();
         string subject = $"SkyWings booking {booking.Reference}: {booking.Origin} to {booking.Destination}";
@@ -21,7 +22,7 @@ public static class BookingEmailBuilder
         html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
         html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
         html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
-        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">Your booking is confirmed</div>");
+        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">Your booking is confirmed" + (receipt is null ? "" : ". Your receipt is attached as a PDF.") + "</div>");
         html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
         html.Append("<table style=\"width:100%;border-collapse:collapse;margin:18px 0\">");
         foreach ((string label, string value) in rows)
@@ -34,13 +35,15 @@ public static class BookingEmailBuilder
 
         var text = new StringBuilder();
         text.AppendLine("SkyWings - your booking is confirmed").AppendLine();
+        if (receipt is not null) text.AppendLine("Your receipt is attached as a PDF (" + receipt.FileName + ").").AppendLine();
         text.AppendLine("Booking reference: " + booking.Reference);
         foreach ((string label, string value) in rows) text.AppendLine($"{label}: {value}");
         text.AppendLine().AppendLine("Show your booking reference (the QR code in the HTML version) at check-in.");
         text.AppendLine().AppendLine(UnsubscribeText);
 
         return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(),
-            new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox);
+            new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox,
+            receipt is null ? null : new[] { receipt });
     }
 
     /// <summary>The "a seat is available" email sent to the first waitlisted traveller. Carries the code needed to book.</summary>
