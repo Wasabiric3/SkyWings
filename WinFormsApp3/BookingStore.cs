@@ -508,6 +508,8 @@ public sealed partial class BookingStore
             {
                 using var con = OpenConnection();
                 Exec(con, ddl);
+                // A flights table made by an older version has no aircraft column yet.
+                EnsureColumn(con, "ALTER TABLE flights ADD COLUMN aircraft VARCHAR(10) NULL");
                 void Insert(Flight f, int dom, int cap)
                 {
                     var dep = AppData.FlightScheduledTimes.TryGetValue(f.FlightNo, out var t) ? t : new TimeOnly(8, 0);
