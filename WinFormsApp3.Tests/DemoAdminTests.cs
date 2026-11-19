@@ -66,6 +66,7 @@ public sealed class DemoAdminTests
     [TestMethod]
     public void RunDemoNow_DoesNothingWhileOff_AndFillsTheFlightsWhenOn()
     {
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, SimulationService.LoadVersion);   // an up-to-date database
         _admin.SetDemoActivity(false);
         Assert.IsNull(_admin.RunDemoNow());
         Assert.AreEqual(0, _admin.LoadDemoStatus().DemoBookings);

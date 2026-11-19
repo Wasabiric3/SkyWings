@@ -393,6 +393,28 @@ public sealed class SimulationServiceTests
     }
 
     [TestMethod]
+    public void RunIfEnabled_OnAnOldDatabaseWithTheSimulationSwitchedOff_StillMovesToVersion3_AndRuns()
+    {
+        // The switch lived on the Demo tab, which is gone: a database where it was turned off must not stay stuck.
+        var p = new PassengerRecord("Old Sim", "Demo data", "09170000000", 30, "1996-01-01", "DEMO", false, false,
+            new SeatAssignment("Old Sim", "ECO31A"), Array.Empty<string>(), 4000m);
+        _store.SaveSimulatedBooking(new BookingRecord("SIM-0000000000F2", DateTime.Now, "PR-101", "Manila (MNL)", "Cebu (CEB)",
+            Now.Date.AddDays(1), true, "Economy", "GCash", "**** 1111", 4000m, "Scheduled", new[] { p }, AppData.StatusConfirmed,
+            AppData.PaymentPaid, "SIM-TXN", DateTime.Now, 0m));
+        _store.SetSetting(BookingStore.SettingDemoActivity, "0");
+        _store.SetSetting(BookingStore.SettingDemoInReports, "0");
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, "2");
+
+        SimulationTick? tick = _sim.RunIfEnabled(Now);
+
+        Assert.IsNotNull(tick, "the simulation runs");
+        Assert.IsNull(_store.FindByReference("SIM-0000000000F2"));
+        Assert.IsTrue(_store.DemoActivityEnabled);
+        Assert.IsTrue(_store.IncludeSimulatedInReports);
+        Assert.AreEqual(SimulationService.LoadVersion, _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
+    }
+
+    [TestMethod]
     public void CancelSimulatedBooking_RefusesARealBooking()
     {
         BookingRecord real = RealBooking("SKY-REALCANCEL01", "PR-101", Now.Date.AddDays(3), "ECO4A");
@@ -407,6 +429,7 @@ public sealed class SimulationServiceTests
     [TestMethod]
     public void RunIfEnabled_DoesNothing_WhileTheSwitchIsOff()
     {
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, SimulationService.LoadVersion);   // an up-to-date database
         _store.SetSetting(BookingStore.SettingDemoActivity, "0");
         Assert.IsNull(_sim.RunIfEnabled(Now));
         Assert.IsEmpty(_store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)));

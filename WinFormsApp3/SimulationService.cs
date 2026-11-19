@@ -354,21 +354,29 @@ public sealed class SimulationService
     // ------------------------------------------------------------------ switch and reset
 
     /// <summary>
-    /// Called once a minute by the home screen: does nothing if staff switched the demo activity off, otherwise makes sure
-    /// the flights are filled (regenerating loads from an older formula once) and takes one live step. Returns null when it is off.
+    /// Brings a database made by an older version up to date, once: its simulated bookings (an older formula, or SIM- references
+    /// and placeholder passenger details) are deleted to be generated again, and the simulation is switched on and counted in
+    /// reports — since version 3 it always runs and counts like any other traffic, and there is no screen to change either.
+    /// Real bookings are not touched. Returns true when it did something.
+    /// </summary>
+    public bool MigrateIfNeeded()
+    {
+        if (_store.GetSetting(BookingStore.SettingDemoLoadVersion, "1") == LoadVersion) return false;
+        _store.DeleteSimulatedBookings();
+        _store.SetSetting(BookingStore.SettingDemoActivity, "1");
+        _store.SetSetting(BookingStore.SettingDemoInReports, "1");
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, LoadVersion);
+        return true;
+    }
+
+    /// <summary>
+    /// Called once a minute by the home screen: brings an older database up to date (which also switches the simulation on), then,
+    /// unless the simulation is off, makes sure the flights are filled and takes one live step. Returns null when it is off.
     /// </summary>
     public SimulationTick? RunIfEnabled(DateTime now)
     {
+        MigrateIfNeeded();   // before the switch: an old database may have it off, and nothing on screen can turn it back on
         if (!_store.DemoActivityEnabled) return null;
-        if (_store.GetSetting(BookingStore.SettingDemoLoadVersion, "1") != LoadVersion)
-        {
-            // Loads made by an older version (an older formula, or SIM- references and placeholder passenger details) would keep
-            // showing for two weeks: replace them now, once. Since version 3 simulated traffic counts in reports like any other,
-            // and there is no screen to change that, so it is switched on here too.
-            _store.DeleteSimulatedBookings();
-            _store.SetSetting(BookingStore.SettingDemoInReports, "1");
-            _store.SetSetting(BookingStore.SettingDemoLoadVersion, LoadVersion);
-        }
         int loads = EnsureLoad(now);
         int checkIns = ProgressCheckIns(now);
         SimulationTick tick = Tick(now, FlightStatusEngine.StableSeed($"tick|{now:yyyyMMddHHmm}"));

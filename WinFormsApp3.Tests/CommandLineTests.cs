@@ -45,7 +45,54 @@ public sealed class CommandLineTests
         Assert.HasCount(1, _store.LoadCheckIns("SKY-REALRESET0001"), "and so does its check-in");
         Assert.IsGreaterThan(0, _store.CountSimulatedBookings(), "simulated traffic is generated again");
         Assert.IsTrue(_store.IsSimulatedBooking(anySimulated), "same flights, same (deterministic) bookings");
-        Assert.IsTrue(_store.LoadAudit().Any(e => e.Action == "SIMULATION_RESET"));
+        Assert.IsTrue(_store.LoadAudit().Any(e => e.Action == "MAINTENANCE_RESET"), "a neutral name in the staff Audit tab");
+        Assert.IsFalse(_store.LoadAudit().Any(e => e.Action.Contains("SIMULATION")));
+    }
+
+    [TestMethod]
+    public void ResetSimulation_OnAnOldDatabase_LeavesItOnVersion3_WithEverythingCounted()
+    {
+        _store.SetSetting(BookingStore.SettingDemoActivity, "0");
+        _store.SetSetting(BookingStore.SettingDemoInReports, "0");
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, "2");
+
+        CommandLine.Run(new[] { CommandLine.ResetSimulation }, _store, Now);
+
+        Assert.AreEqual(SimulationService.LoadVersion, _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
+        Assert.IsTrue(_store.IncludeSimulatedInReports);
+        Assert.IsTrue(_store.DemoActivityEnabled);
+    }
+
+    [TestMethod]
+    public void ResetSimulation_OnAFreshDatabase_SeedsTheFlightsFirst()
+    {
+        string db = Path.Combine(Path.GetTempPath(), $"skywings-cmdline-fresh-{Guid.NewGuid():N}.db");
+        try
+        {
+            var fresh = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true }.ConnectionString);
+
+            string? message = CommandLine.Run(new[] { CommandLine.ResetSimulation }, fresh, Now);
+
+            StringAssert.DoesNotMatch(message, new System.Text.RegularExpressions.Regex(" 0 flight dates"));
+            Assert.IsGreaterThan(0, fresh.CountSimulatedBookings());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(db)) File.Delete(db);
+        }
+    }
+
+    [TestMethod]
+    public void BookingsHaveAnIndexOnFlightDate()
+    {
+        // The staff Bookings tab reads one flight date at a time; without this every load scans the whole table.
+        using var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath }.ConnectionString);
+        con.Open();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM pragma_index_list('bookings') l JOIN pragma_index_info(l.name) i " +
+                          "WHERE i.seqno = 0 AND i.name = 'flight_date'";
+        Assert.IsGreaterThan(0L, (long)cmd.ExecuteScalar()!);
     }
 
     [TestMethod]
