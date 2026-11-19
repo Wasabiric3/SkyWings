@@ -25,6 +25,7 @@ public static class Theme
     public static readonly Color StepPending = Color.FromArgb(0xE8, 0xF0, 0xEB);
     public static readonly Color BgMuted = Color.FromArgb(0xF5, 0xF8, 0xF6);
     public static readonly Color Warning = Color.FromArgb(176, 128, 20);
+    public static readonly Color Info = Color.FromArgb(60, 110, 170);   // flights in the air on the departures board
     public static readonly Color Selection = Color.FromArgb(226, 239, 232);
     public static readonly Color RowAlt = Color.FromArgb(250, 252, 251);
     public static readonly Color DisabledText = Color.FromArgb(118, 132, 125);   // >= 3:1 on DisabledBack so disabled text stays readable

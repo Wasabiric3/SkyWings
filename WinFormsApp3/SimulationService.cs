@@ -45,17 +45,34 @@ public sealed class SimulationService
 
     // ------------------------------------------------------------------ pre-filled load
 
-    /// <summary>How full a flight tends to be, before randomness: fuller the closer it is to departure, domestic a little fuller.</summary>
-    internal static double BaseLoad(int daysOut, bool domestic)
-        => Math.Clamp(0.90 - 0.04 * Math.Max(0, daysOut) + (domestic ? 0.03 : -0.03), 0.25, 0.92);
+    /// <summary>Generated cabins are always between these: busy enough to look real, never so full that nothing can be booked.</summary>
+    internal const double MinLoad = 0.60, MaxLoad = 0.90;
 
+    /// <summary>Bumped whenever the load formula changes, so demo bookings made by the old one are regenerated once.</summary>
+    public const string LoadVersion = "2";
+
+    /// <summary>
+    /// How full a flight tends to be, before randomness: about 85% on the day, easing to about 66% two weeks out, domestic a
+    /// little fuller. Always within <see cref="MinLoad"/>..<see cref="MaxLoad"/>.
+    /// </summary>
+    internal static double BaseLoad(int daysOut, bool domestic)
+        => Math.Clamp(0.84 - 0.013 * Math.Max(0, daysOut) + (domestic ? 0.02 : -0.02), 0.66, 0.86);
+
+    /// <summary>Premium cabins run a little emptier than Economy.</summary>
     private static double CabinFactor(string className) => className switch
     {
         "Economy" => 1.0,
-        "Premium Economy" => 0.85,
-        "Business" => 0.70,
-        _ => 0.55
+        "Premium Economy" => 0.96,
+        "Business" => 0.92,
+        _ => 0.88
     };
+
+    /// <summary>The seats to fill for an occupancy, kept so the cabin itself shows 60–90% (rounding a small cabin can't push it out).</summary>
+    internal static int TargetSeats(double occupancy, int seats)
+    {
+        int low = (int)Math.Ceiling(MinLoad * seats), high = (int)Math.Floor(MaxLoad * seats);
+        return Math.Clamp((int)Math.Round(occupancy * seats), Math.Min(low, high), high);
+    }
 
     private List<Flight> AllFlights() => _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false)).ToList();
 
@@ -94,9 +111,11 @@ public sealed class SimulationService
         long seed = FlightStatusEngine.StableSeed($"sim|{flight.FlightNo}|{date:yyyyMMdd}");
         var rng = new JavaRandom(seed);
         int daysOut = (date.Date - now.Date).Days;
-        double load = BaseLoad(daysOut, flight.Domestic) + (rng.NextDouble() - 0.5) * 0.16;
-        bool soldOutDay = seed % 12 == 0;   // about one flight in twelve has a cabin that is completely sold out
-        string soldOutCabin = aircraft.Cabin("Business") is not null ? "Business" : "Economy";
+        double load = BaseLoad(daysOut, flight.Domestic) + (rng.NextDouble() - 0.5) * 0.12;   // each flight its own ±6%
+        // About one flight in twelve has a premium cabin that is completely sold out (the waitlist needs something to show).
+        // Economy never sells out here, so the board's load stays in the 60–90% range.
+        bool soldOutDay = seed % 12 == 0;
+        string? soldOutCabin = aircraft.Cabin("Business") is not null ? "Business" : aircraft.Cabin("First Class") is not null ? "First Class" : null;
 
         var result = new List<BookingRecord>();
         int counter = 0;
@@ -105,8 +124,10 @@ public sealed class SimulationService
             List<Seat> free = AllSeats(cabin).Where(s => !realTaken.Contains(SeatLayout.Normalize(cabin.Code(s.Row + 1, cabin.Letters[s.Col])))).ToList();
             Shuffle(free, rng);
             bool soldOut = soldOutDay && cabin.ClassName == soldOutCabin;
-            double occupancy = Math.Clamp(load * CabinFactor(cabin.ClassName) + (rng.NextDouble() - 0.5) * 0.08, 0.05, 0.97);
-            int target = soldOut ? free.Count : Math.Min((int)Math.Floor(occupancy * cabin.Seats), Math.Max(0, free.Count - 1));
+            double occupancy = load * CabinFactor(cabin.ClassName) + (rng.NextDouble() - 0.5) * 0.06;
+            // Seats real bookings already took count towards the load.
+            int realInCabin = cabin.Seats - free.Count;
+            int target = soldOut ? free.Count : Math.Clamp(TargetSeats(occupancy, cabin.Seats) - realInCabin, 0, Math.Max(0, free.Count - 1));
 
             var remaining = new HashSet<Seat>(free);
             int confirmedBookings = 0, used = 0;
@@ -297,12 +318,18 @@ public sealed class SimulationService
     // ------------------------------------------------------------------ switch and reset
 
     /// <summary>
-    /// Called once a minute by the home screen: does nothing unless staff switched the demo activity on, otherwise makes sure
-    /// the flights are filled and takes one live step. Returns null when it is off.
+    /// Called once a minute by the home screen: does nothing if staff switched the demo activity off, otherwise makes sure
+    /// the flights are filled (regenerating loads from an older formula once) and takes one live step. Returns null when it is off.
     /// </summary>
     public SimulationTick? RunIfEnabled(DateTime now)
     {
         if (!_store.DemoActivityEnabled) return null;
+        if (_store.GetSetting(BookingStore.SettingDemoLoadVersion, "1") != LoadVersion)
+        {
+            // Loads made by an older formula would keep showing for two weeks: replace them now, once.
+            _store.DeleteSimulatedBookings();
+            _store.SetSetting(BookingStore.SettingDemoLoadVersion, LoadVersion);
+        }
         int loads = EnsureLoad(now);
         SimulationTick tick = Tick(now, FlightStatusEngine.StableSeed($"tick|{now:yyyyMMddHHmm}"));
         return tick with { LoadsGenerated = loads };

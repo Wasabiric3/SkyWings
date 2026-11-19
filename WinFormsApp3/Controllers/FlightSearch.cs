@@ -6,10 +6,20 @@ public sealed record FlightRow(string FlightNo, string Route, string Departs, st
 {
     public bool SoldOut => Seats == 0;
 
+    /// <summary>Under this many seats left, the board shows the count in amber.</summary>
+    public const int FewSeatsThreshold = 20;
+
+    /// <summary>Some seats are left, but not many.</summary>
+    public bool FewSeatsLeft => Seats is > 0 and < FewSeatsThreshold;
+
     /// <summary>How full the searched cabin is on that date, e.g. "78% full". Shown as a column on the departures board.</summary>
     public string LoadText { get; init; } = "";
 
+    /// <summary>The same load as a number, 0–100, for the board's load bar.</summary>
+    public int LoadPercent { get; init; }
+
     // Text for the departures board columns.
+    public string DestinationText => Flight.Destination;
     public string ScheduledText => Status.Scheduled.ToString("h:mm tt");
     public string EstimatedText => Status.Estimated.ToString("h:mm tt");
     public string GateText => Status.Gate.Length > 0 ? Status.Gate : "—";
@@ -52,7 +62,7 @@ public static class FlightSearch
             rows.Add(new FlightRow(f.FlightNo, $"{f.Origin} → {f.Destination}", departure.ToString("h:mm tt"),
                 arrival.ToString("h:mm tt") + (arrival.Date > departure.Date ? " +1" : ""), $"{minutes / 60}h {minutes % 60:00}m",
                 $"PHP {AppData.Round2(f.BasePrice * multiplier):N0}", seats == 0 ? "Sold out" : seats.ToString("N0"), f, seats, status)
-            { LoadText = $"{percent}% full" });
+            { LoadText = $"{percent}% full", LoadPercent = percent });
         }
         return rows;
     }

@@ -664,8 +664,8 @@ public sealed class AdminForm : GlassForm
         _demoInReports.Checked = status.IncludeInReports;
         _loadingDemo = false;
         _demoInfo.Text =
-            "SkyWings is a demonstration system. With demo activity on, flights are pre-filled with simulated bookings (some seats taken, " +
-            "some cancelled and freed, some cabins sold out) and, while the home screen is open, seat holds appear and expire and bookings " +
+            "SkyWings is a demonstration system. Demo activity is on by default: flights are pre-filled with simulated bookings (each " +
+            "cabin 60–90% full, some bookings cancelled and freed, an occasional premium cabin sold out) and, while the home screen is open, seat holds appear and expire and bookings " +
             "are made and cancelled once a minute. A cancelled demo seat is offered to real waitlisted travellers, like any cancellation." +
             Environment.NewLine + Environment.NewLine +
             "Demo bookings are tagged (references start with SIM-) and are left out of reports, revenue and the Bookings tab unless you tick " +

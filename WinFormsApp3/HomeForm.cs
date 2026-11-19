@@ -302,20 +302,22 @@ public partial class HomeForm : GlassForm
         _flights.Dock = DockStyle.Fill;
         _flights.AutoGenerateColumns = false;
         _flights.ColumnHeadersHeight = D(34);
-        _flights.RowTemplate.Height = D(32);
-        AddFlightColumn("Flight", nameof(FlightRow.FlightNo), 0.8f);
-        AddFlightColumn("Route", nameof(FlightRow.Route), 2.5f);
-        AddFlightColumn("Scheduled", nameof(FlightRow.ScheduledText), 0.9f);
-        AddFlightColumn("Estimated", nameof(FlightRow.EstimatedText), 0.9f);
-        AddFlightColumn("Gate", nameof(FlightRow.GateText), 0.6f);
+        _flights.RowTemplate.Height = D(38);
+        // Every flight on this board leaves Manila, so the destination alone is enough and leaves room for times and fares.
+        AddFlightColumn("Flight", nameof(FlightRow.FlightNo), 0.75f);
+        AddFlightColumn("To", nameof(FlightRow.DestinationText), 1.9f);
+        AddFlightColumn("Scheduled", nameof(FlightRow.ScheduledText), 0.95f);
+        AddFlightColumn("Estimated", nameof(FlightRow.EstimatedText), 0.95f);
+        AddFlightColumn("Gate", nameof(FlightRow.GateText), 0.55f);
         AddFlightColumn("Status", nameof(FlightRow.StatusText), 1.3f);
         AddFlightColumn("Countdown", nameof(FlightRow.CountdownText), 1.4f);
-        AddFlightColumn("Fare", nameof(FlightRow.Price), 0.9f, right: true);
+        AddFlightColumn("Fare", nameof(FlightRow.Price), 1.0f, right: true);
         AddFlightColumn("Seats left", nameof(FlightRow.SeatsLeft), 0.8f, right: true);
-        AddFlightColumn("Load", nameof(FlightRow.LoadText), 0.9f, right: true);
+        AddFlightColumn("Load", nameof(FlightRow.LoadPercent), 1.3f);
         _flights.SelectionChanged += (_, _) => UpdateBookButton();
         _flights.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) BookSelectedFlight(null, EventArgs.Empty); };
         _flights.CellFormatting += FormatBoardCell;
+        _flights.CellPainting += PaintBoardCell;
 
         card.Controls.Add(_flights);
         card.Controls.Add(header);
@@ -324,39 +326,102 @@ public partial class HomeForm : GlassForm
 
     private static readonly Font StatusFont = new(Theme.Small, FontStyle.Bold);
 
-    /// <summary>Colours the status and dims flights that have already left.</summary>
+    private static bool HasLeft(FlightRow row)
+        => row.Status.Kind is FlightStatusKind.Departed or FlightStatusKind.InFlight or FlightStatusKind.Landed;
+
+    private static Color StatusColor(FlightStatusKind kind) => kind switch
+    {
+        FlightStatusKind.CheckInOpen => Theme.Accent,
+        FlightStatusKind.Boarding or FlightStatusKind.Delayed => Theme.Warning,
+        FlightStatusKind.GateClosing => Theme.DangerRed,
+        FlightStatusKind.Departed or FlightStatusKind.InFlight => Theme.Info,
+        _ => Theme.TextSecondary
+    };
+
+    /// <summary>Green for a normal load, amber from 90% (nearly full), red from 98% (full).</summary>
+    private static Color LoadColor(int percent) => percent >= 98 ? Theme.DangerRed : percent >= 90 ? Theme.Warning : Theme.Primary;
+
+    /// <summary>Text colours for the plain cells; dims flights that have already left. Status and load are painted below.</summary>
     private void FormatBoardCell(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _flights.Rows[e.RowIndex].DataBoundItem is not FlightRow row) return;
         string column = _flights.Columns[e.ColumnIndex].DataPropertyName;
-        FlightStatusKind kind = row.Status.Kind;
-        bool past = kind is FlightStatusKind.Departed or FlightStatusKind.InFlight or FlightStatusKind.Landed;
+        bool past = HasLeft(row);
 
-        if (column == nameof(FlightRow.StatusText))
+        if (column == nameof(FlightRow.FlightNo))
         {
-            e.Value = "● " + row.StatusText;
             e.CellStyle!.Font = StatusFont;
-            e.CellStyle.ForeColor = kind switch
-            {
-                FlightStatusKind.CheckInOpen => Theme.Accent,
-                FlightStatusKind.Boarding or FlightStatusKind.Delayed => Color.FromArgb(176, 128, 20),
-                FlightStatusKind.GateClosing => Theme.DangerRed,
-                FlightStatusKind.Departed or FlightStatusKind.InFlight => Color.FromArgb(60, 110, 170),
-                _ => Theme.TextSecondary
-            };
-            return;
+            e.CellStyle.ForeColor = past ? Theme.TextSecondary : Theme.AccentDark;
         }
-        if (column == nameof(FlightRow.EstimatedText) && row.Status.DelayMinutes > 0)
+        else if (column == nameof(FlightRow.EstimatedText) && row.Status.DelayMinutes > 0)
         {
-            e.CellStyle!.ForeColor = Color.FromArgb(176, 128, 20);
+            e.CellStyle!.ForeColor = Theme.Warning;
             e.CellStyle.Font = StatusFont;
         }
-        else if (column == nameof(FlightRow.LoadText) && e.Value is string load && int.TryParse(load.Split('%')[0], out int percent) && percent >= 90)
-            e.CellStyle!.ForeColor = percent >= 100 ? Theme.DangerRed : Color.FromArgb(176, 128, 20);   // nearly full: amber, full: red
-        else if (column == nameof(FlightRow.SeatsLeft) && e.Value is "Sold out")
-            e.CellStyle!.ForeColor = Theme.DangerRed;
+        else if (column == nameof(FlightRow.SeatsLeft) && (row.SoldOut || row.FewSeatsLeft))
+        {
+            e.CellStyle!.ForeColor = row.SoldOut ? Theme.DangerRed : Theme.Warning;   // sold out: red, under 20 left: amber
+            e.CellStyle.Font = StatusFont;
+        }
         else if (past)
             e.CellStyle!.ForeColor = Theme.TextSecondary;
+    }
+
+    /// <summary>Draws the status as a coloured pill and the load as a bar with its percentage.</summary>
+    private void PaintBoardCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is null || _flights.Rows[e.RowIndex].DataBoundItem is not FlightRow row) return;
+        string column = _flights.Columns[e.ColumnIndex].DataPropertyName;
+        if (column != nameof(FlightRow.StatusText) && column != nameof(FlightRow.LoadPercent)) return;
+
+        e.PaintBackground(e.ClipBounds, true);   // row colour, selection highlight and grid line as usual
+        Graphics g = e.Graphics;
+        GraphicsState state = g.Save();
+        try
+        {
+            Gfx.HighQuality(g);
+            if (column == nameof(FlightRow.StatusText)) PaintStatusPill(g, e.CellBounds, row);
+            else PaintLoadBar(g, e.CellBounds, row);
+        }
+        finally { g.Restore(state); }
+        e.Handled = true;
+    }
+
+    private void PaintStatusPill(Graphics g, Rectangle cell, FlightRow row)
+    {
+        Color color = StatusColor(row.Status.Kind);
+        Size text = TextRenderer.MeasureText(g, row.StatusText, StatusFont, Size.Empty, TextFormatFlags.NoPadding);
+        int height = D(22), maxWidth = Math.Max(0, cell.Width - D(16));
+        var pill = new Rectangle(cell.X + D(8), cell.Y + (cell.Height - height) / 2, Math.Min(text.Width + D(20), maxWidth), height);
+        using (GraphicsPath path = Gfx.RoundedRect(pill, height / 2f))
+        using (var fill = new SolidBrush(Gfx.Mix(color, Color.White, 0.86f)))
+            g.FillPath(fill, path);
+        TextRenderer.DrawText(g, row.StatusText, StatusFont, pill, color,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+    }
+
+    private void PaintLoadBar(Graphics g, Rectangle cell, FlightRow row)
+    {
+        int percent = Math.Clamp(row.LoadPercent, 0, 100);
+        bool past = HasLeft(row);
+        Color color = LoadColor(percent);
+        if (past) color = Gfx.Mix(color, Color.White, 0.45f);
+
+        int textWidth = D(40), gap = D(8), barHeight = D(8);
+        var label = new Rectangle(cell.Right - D(10) - textWidth, cell.Y, textWidth, cell.Height);
+        var track = new RectangleF(cell.X + D(10), cell.Y + (cell.Height - barHeight) / 2f, Math.Max(0, label.X - gap - cell.X - D(10)), barHeight);
+        using (GraphicsPath path = Gfx.RoundedRect(track, barHeight / 2f))
+        using (var back = new SolidBrush(Theme.StepPending))
+            g.FillPath(back, path);
+        if (percent > 0 && track.Width > 0)
+        {
+            var filled = track with { Width = Math.Max(barHeight, track.Width * percent / 100f) };
+            using GraphicsPath path = Gfx.RoundedRect(filled, barHeight / 2f);
+            using var brush = new SolidBrush(color);
+            g.FillPath(brush, path);
+        }
+        TextRenderer.DrawText(g, percent + "%", StatusFont, label, past ? Theme.TextSecondary : Theme.TextPrimary,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
     }
 
     private void AddFlightColumn(string header, string property, float weight, bool right = false)

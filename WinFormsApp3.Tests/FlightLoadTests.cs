@@ -128,7 +128,19 @@ public sealed class FlightLoadTests
             int total = _store.LoadAircraft(row.FlightNo).Cabin("Economy")!.Seats;
             int expected = (int)Math.Round(100.0 * (total - row.Seats) / total);
             Assert.AreEqual($"{expected}% full", row.LoadText, row.FlightNo);
+            Assert.AreEqual(expected, row.LoadPercent, row.FlightNo);
         }
+    }
+
+    [TestMethod]
+    public void TheBoard_NamesTheDestination_AndFlagsFewSeatsLeft()
+    {
+        FlightRow row = FlightSearch.Search(_store, "Cebu (CEB)", Now.Date.AddDays(1), "Economy", Now).First();
+        Assert.AreEqual("Cebu (CEB)", row.DestinationText);
+        Assert.IsFalse(row.FewSeatsLeft, "an empty flight has plenty of seats");
+
+        Assert.IsTrue((row with { Seats = 12 }).FewSeatsLeft);
+        Assert.IsFalse((row with { Seats = 0 }).FewSeatsLeft, "sold out is shown as sold out, not as few left");
     }
 
     [TestMethod]

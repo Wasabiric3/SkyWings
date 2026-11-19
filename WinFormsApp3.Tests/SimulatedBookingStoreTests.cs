@@ -140,9 +140,9 @@ public sealed class SimulatedBookingStoreTests
     }
 
     [TestMethod]
-    public void Settings_DefaultOff_AndRoundTrip()
+    public void Settings_DemoOnAndReportsOffByDefault_AndRoundTrip()
     {
-        Assert.IsFalse(_store.DemoActivityEnabled);
+        Assert.IsTrue(_store.DemoActivityEnabled, "a fresh install shows realistic flight loads");
         Assert.IsFalse(_store.IncludeSimulatedInReports);
         Assert.AreEqual("x", _store.GetSetting("nothing.here", "x"));
 

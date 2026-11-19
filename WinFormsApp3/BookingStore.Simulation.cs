@@ -13,6 +13,8 @@ public sealed partial class BookingStore
     public const string SimulatedPrefix = "SIM-";
     public const string SettingDemoActivity = "demo.activity";
     public const string SettingDemoInReports = "demo.in_reports";
+    /// <summary>Which version of the load algorithm made the current demo bookings; a newer one regenerates them once.</summary>
+    public const string SettingDemoLoadVersion = "demo.load_version";
 
     // ------------------------------------------------------------------ settings
 
@@ -47,8 +49,11 @@ public sealed partial class BookingStore
         }
     }
 
-    /// <summary>Whether the demo activity (simulated bookings, holds and cancellations) runs. Off unless a staff member switches it on.</summary>
-    public bool DemoActivityEnabled => GetSetting(SettingDemoActivity, "0") == "1";
+    /// <summary>
+    /// Whether the demo activity (simulated bookings, holds and cancellations) runs. On by default so the board shows realistic
+    /// loads; an admin can switch it off. Demo bookings stay out of reports either way unless <see cref="IncludeSimulatedInReports"/>.
+    /// </summary>
+    public bool DemoActivityEnabled => GetSetting(SettingDemoActivity, "1") == "1";
 
     /// <summary>Whether staff reports include simulated bookings. Off by default so real numbers stay clean.</summary>
     public bool IncludeSimulatedInReports => GetSetting(SettingDemoInReports, "0") == "1";

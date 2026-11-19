@@ -40,12 +40,49 @@ public sealed class SimulationServiceTests
     [TestMethod]
     public void BaseLoad_IsFullerCloserToDeparture_AndStaysInBounds()
     {
-        for (int d = 0; d < 14; d++)
+        for (int d = 0; d < 30; d++)
         {
-            Assert.IsTrue(SimulationService.BaseLoad(d, true) is >= 0.2 and <= 0.95, $"day {d}");
-            Assert.IsTrue(SimulationService.BaseLoad(d, false) is >= 0.2 and <= 0.95, $"day {d}");
+            Assert.IsTrue(SimulationService.BaseLoad(d, true) is >= 0.60 and <= 0.90, $"day {d}");
+            Assert.IsTrue(SimulationService.BaseLoad(d, false) is >= 0.60 and <= 0.90, $"day {d}");
         }
         Assert.IsGreaterThan(SimulationService.BaseLoad(10, true), SimulationService.BaseLoad(1, true));
+    }
+
+    [TestMethod]
+    public void EnsureLoad_KeepsEveryEconomyCabinBetween60And90PercentFull()
+    {
+        _sim.EnsureLoad(Now, horizonDays: 14);
+
+        foreach (Flight flight in _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false)))
+            for (int d = 0; d < 14; d++)
+            {
+                double load = Occupancy(flight.FlightNo, Now.Date.AddDays(d), "Economy");
+                Assert.IsTrue(load is >= 0.60 and <= 0.90, $"{flight.FlightNo} day {d}: {load:P0}");
+            }
+    }
+
+    [TestMethod]
+    public void EnsureLoad_VariesTheLoadFromFlightToFlight()
+    {
+        _sim.EnsureLoad(Now, horizonDays: 1);
+
+        var percents = _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false))
+            .Select(f => (int)Math.Round(Occupancy(f.FlightNo, Now.Date, "Economy") * 100)).Distinct().Count();
+        Assert.IsGreaterThan(5, percents, "every flight showing the same load does not look real");
+    }
+
+    [TestMethod]
+    public void RunIfEnabled_RegeneratesLoadsMadeByAnOlderVersionOfTheAlgorithm()
+    {
+        _sim.EnsureLoad(Now, horizonDays: 2);
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, "1");
+
+        SimulationTick? tick = _sim.RunIfEnabled(Now);
+
+        Assert.IsNotNull(tick);
+        Assert.IsGreaterThan(0, tick.LoadsGenerated, "old loads are replaced, not kept");
+        Assert.AreEqual(SimulationService.LoadVersion, _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
+        Assert.AreEqual(0, _sim.RunIfEnabled(Now)!.LoadsGenerated, "and only once");
     }
 
     [TestMethod]
@@ -305,6 +342,7 @@ public sealed class SimulationServiceTests
     [TestMethod]
     public void RunIfEnabled_DoesNothing_WhileTheSwitchIsOff()
     {
+        _store.SetSetting(BookingStore.SettingDemoActivity, "0");
         Assert.IsNull(_sim.RunIfEnabled(Now));
         Assert.IsEmpty(_store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)));
     }
