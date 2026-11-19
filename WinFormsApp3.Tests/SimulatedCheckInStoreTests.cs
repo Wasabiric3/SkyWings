@@ -102,6 +102,23 @@ public sealed class SimulatedCheckInStoreTests
     }
 
     [TestMethod]
+    public void LoadCheckInsByBooking_CanLeaveDemoCheckInsOut()
+    {
+        DateTime date = Now.Date.AddDays(1);
+        SaveReal(RealBooking("SKY-REALCHECKIN04", "PR-101", date, "ECO9E"));
+        Assert.IsTrue(_store.CheckInPassenger("SKY-REALCHECKIN04", "Real Person", "PR-101", date, "ECO9E", AppData.DepartureOf("PR-101", date).AddHours(-3)));
+        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        SimCheckInCandidate demo = _store.LoadSimulatedCheckInCandidates(date, date)[0];
+        _store.SaveSimulatedCheckIns(new[] { From(demo, AppData.DepartureOf(demo.FlightNo, demo.FlightDate).AddHours(-2)) });
+
+        Dictionary<string, List<CheckInRecord>> realOnly = _store.LoadCheckInsByBooking(includeSimulated: false);
+
+        Assert.IsTrue(realOnly.ContainsKey("SKY-REALCHECKIN04"));
+        Assert.IsFalse(realOnly.Keys.Any(k => k.StartsWith(BookingStore.SimulatedPrefix)));
+        Assert.IsTrue(_store.LoadCheckInsByBooking().ContainsKey(demo.Reference), "by default everything is read");
+    }
+
+    [TestMethod]
     public void DeleteSimulatedBookings_RemovesDemoCheckIns_KeepsRealOnes()
     {
         DateTime date = Now.Date.AddDays(1);

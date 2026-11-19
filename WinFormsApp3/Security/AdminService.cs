@@ -37,11 +37,19 @@ public sealed class AdminService
     public string? CancelRefusal(BookingRecord booking)
         => booking.Status == AppData.StatusCanceled ? "This booking is already canceled." : null;
 
+    /// <summary>The live trip status of one booking, reading only its own check-ins.</summary>
+    public Controllers.TripStatusInfo LoadTripStatus(BookingRecord booking, DateTime now)
+    {
+        Session.Require(Permission.ViewBookings);
+        return Controllers.TripStatus.Of(booking, _store.LoadCheckIns(booking.Reference), now);
+    }
+
     /// <summary>The live trip status of each booking (by reference), with every check-in read in one query.</summary>
     public Dictionary<string, Controllers.TripStatusInfo> LoadTripStatuses(IReadOnlyList<BookingRecord> bookings, DateTime now)
     {
         Session.Require(Permission.ViewBookings);
-        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsByBooking();
+        // Demo check-ins are only needed when the Bookings tab shows demo bookings.
+        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsByBooking(_store.IncludeSimulatedInReports);
         var none = new List<CheckInRecord>();
         return bookings.ToDictionary(b => b.Reference,
             b => Controllers.TripStatus.Of(b, checkIns.GetValueOrDefault(b.Reference) ?? none, now), StringComparer.Ordinal);

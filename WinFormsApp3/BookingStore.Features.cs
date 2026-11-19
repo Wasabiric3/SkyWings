@@ -188,8 +188,12 @@ public sealed partial class BookingStore
         }
     }
 
-    /// <summary>Every check-in, grouped by booking reference, in one query (for showing many bookings' trip status at once).</summary>
-    public Dictionary<string, List<CheckInRecord>> LoadCheckInsByBooking()
+    /// <summary>
+    /// Every check-in, grouped by booking reference, in one query (for showing many bookings' trip status at once).
+    /// With <paramref name="includeSimulated"/> false, demo (<c>SIM-</c>) check-ins are left out, which keeps the read small
+    /// when the staff screens hide demo bookings.
+    /// </summary>
+    public Dictionary<string, List<CheckInRecord>> LoadCheckInsByBooking(bool includeSimulated = true)
     {
         lock (_lock)
         {
@@ -197,7 +201,9 @@ public sealed partial class BookingStore
             try
             {
                 using var con = OpenConnection();
-                using var cmd = Cmd(con, "SELECT * FROM check_ins");
+                using var cmd = includeSimulated
+                    ? Cmd(con, "SELECT * FROM check_ins")
+                    : Cmd(con, "SELECT * FROM check_ins WHERE booking_ref NOT LIKE @sim", null, ("@sim", SimulatedPrefix + "%"));
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                 {

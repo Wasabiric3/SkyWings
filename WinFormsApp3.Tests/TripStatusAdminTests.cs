@@ -40,6 +40,17 @@ public sealed class TripStatusAdminTests
     }
 
     [TestMethod]
+    public void LoadTripStatus_ForOneBooking_ReadsItsOwnCheckIns()
+    {
+        DateTime lastWeek = DateTime.Today.AddDays(-7);
+        BookingRecord booking = SaveReal("SKY-TRIPADMIN010", lastWeek, "ECO2B");
+        Assert.IsTrue(_store.CheckInPassenger("SKY-TRIPADMIN010", "Real Person", "PR-101", lastWeek, "ECO2B",
+            AppData.DepartureOf("PR-101", lastWeek).AddHours(-3)));
+
+        Assert.AreEqual(TripPhase.Completed, _admin.LoadTripStatus(booking, DateTime.Now).Phase);
+    }
+
+    [TestMethod]
     public void CancelRefusal_RecognisesAnAlreadyCanceledBooking()
     {
         BookingRecord booking = SaveReal("SKY-TRIPADMIN009", DateTime.Today.AddDays(10), "ECO2A");

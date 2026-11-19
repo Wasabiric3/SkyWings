@@ -439,7 +439,7 @@ public sealed class AdminForm : GlassForm
         if (!Try("Unable to load the booking", () => booking = _service.FindBooking(row.Reference))) return;
         if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
         TripStatusInfo? trip = null;
-        if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatuses(new[] { booking }, DateTime.Now)[booking.Reference])) return;
+        if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatus(booking, DateTime.Now))) return;
         using var details = new BookingDetailForm(booking, trip!);
         details.ShowDialog(this);
     }
