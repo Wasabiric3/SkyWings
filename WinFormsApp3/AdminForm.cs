@@ -375,7 +375,12 @@ public sealed class AdminForm : GlassForm
         _bookings.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _bookings.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowBookingDetails(); };
         _bookings.DataBindingComplete += (_, _) => SizeBookingColumns();
-        return Section(toolbar, _bookings);
+        // The list, with a legend of what each trip status means underneath it.
+        var content = new Panel { Dock = DockStyle.Fill };
+        _bookings.Dock = DockStyle.Fill;
+        content.Controls.Add(_bookings);
+        content.Controls.Add(new TripLegend { Dock = DockStyle.Bottom });
+        return Section(toolbar, content);
     }
 
     /// <summary>Column widths matched to what each column holds, so routes and dates are not cut off.</summary>
@@ -385,7 +390,7 @@ public sealed class AdminForm : GlassForm
         {
             ["Reference"] = (1.0f, null), ["BookedAt"] = (1.3f, null), ["FlightNo"] = (0.9f, null),
             ["Route"] = (2.8f, null), ["FlightDate"] = (1.3f, null), ["Passengers"] = (0.6f, "Pax"),
-            ["TotalAmount"] = (1.0f, null), ["Status"] = (1.25f, null), ["PaymentStatus"] = (1.0f, null),
+            ["TotalAmount"] = (1.0f, null), ["Status"] = (1.6f, null),   // room for the widest pill, "Check-in open" ["PaymentStatus"] = (1.0f, null),
             ["RefundAmount"] = (0.9f, null)
         };
         foreach (DataGridViewColumn column in _bookings.Columns)

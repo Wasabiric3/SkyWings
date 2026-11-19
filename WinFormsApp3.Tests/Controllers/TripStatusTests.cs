@@ -227,6 +227,17 @@ public sealed class TripStatusTests
     }
 
     [TestMethod]
+    public void Legend_ExplainsEveryStatus_InTimelineOrder()
+    {
+        CollectionAssert.AreEqual(
+            new[] { "Upcoming", "Check-in open", "Checked in", "Boarding", "In flight", "Completed", "No-show", "Canceled" },
+            TripStatus.Legend.Select(e => e.Label).ToArray());
+        foreach (var (label, meaning) in TripStatus.Legend)
+            Assert.IsFalse(string.IsNullOrWhiteSpace(meaning), label);
+        StringAssert.Contains(TripStatus.Legend.Single(e => e.Label == "No-show").Meaning, "nobody");
+    }
+
+    [TestMethod]
     public void Matches_InProgressCoversFourPhases()
     {
         TripPhase[] inProgress = { TripPhase.CheckInOpen, TripPhase.CheckedIn, TripPhase.Boarding, TripPhase.InFlight };

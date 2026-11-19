@@ -15,6 +15,19 @@ public sealed record TripStatusInfo(TripPhase Phase, string Label, bool ReturnLe
 /// </summary>
 public static class TripStatus
 {
+    /// <summary>What each status means, in timeline order: the legend under the staff Bookings list.</summary>
+    public static readonly IReadOnlyList<(string Label, string Meaning)> Legend = new[]
+    {
+        ("Upcoming", "check-in not open yet"),
+        ("Check-in open", "within 24 h of departure, nobody checked in yet"),
+        ("Checked in", "at least one traveller has checked in"),
+        ("Boarding", "at the gate; check-in has closed"),
+        ("In flight", "the flight is in the air"),
+        ("Completed", "the flight has landed"),
+        ("No-show", "the flight left and nobody on the booking checked in"),
+        ("Canceled", "the booking was cancelled")
+    };
+
     /// <summary>The choices of the staff Bookings filter.</summary>
     public static readonly string[] Filters = { "All", "Upcoming", "In progress", "Completed", "No-show", "Canceled" };
 
