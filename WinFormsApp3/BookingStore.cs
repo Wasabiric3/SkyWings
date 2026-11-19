@@ -27,21 +27,24 @@ public sealed partial class BookingStore
         InitSchema();
     }
 
-    public FlightInventory LoadFlightInventory(string flightNo)
+    /// <summary>
+    /// Seats on a flight on one date: the aircraft's seats, the seats taken by confirmed travellers that day (outbound and return
+    /// legs), and the seats held right now. (It used to count every confirmed booking of the flight on any date against one
+    /// flight's seats, which showed "0 seats open" as soon as a few days were busy.)
+    /// </summary>
+    public FlightInventory LoadFlightInventory(string flightNo, DateTime flightDate)
     {
+        int total = LoadAircraft(flightNo).Cabins.Sum(c => c.Seats);
+        int taken = LoadTakenSeats(flightNo, flightDate).Count;
         lock (_lock)
         {
             try
             {
                 using var con = OpenConnection();
-                using var capacity = Cmd(con, "SELECT capacity FROM flights WHERE flight_no = @no", null, ("@no", flightNo));
-                int total = Convert.ToInt32(capacity.ExecuteScalar() ?? 0);
-                using var bookings = Cmd(con, "SELECT COUNT(*) FROM bookings WHERE flight_no = @no AND status = 'CONFIRMED'", null, ("@no", flightNo));
-                int confirmed = Convert.ToInt32(bookings.ExecuteScalar() ?? 0);
-                using var holds = Cmd(con, "SELECT COUNT(*) FROM seat_holds WHERE flight_no = @no AND status = 'ACTIVE' AND expires_at > @now", null,
-                    ("@no", flightNo), ("@now", DateTime.Now));
+                using var holds = Cmd(con, "SELECT COUNT(*) FROM seat_holds WHERE flight_no = @no AND flight_date = @date AND status = 'ACTIVE' AND expires_at > @now",
+                    null, ("@no", flightNo), ("@date", flightDate.Date), ("@now", DateTime.Now));
                 int held = Convert.ToInt32(holds.ExecuteScalar() ?? 0);
-                return new FlightInventory(total, confirmed, held);
+                return new FlightInventory(total, taken, held);
             }
             catch (Exception e)
             {

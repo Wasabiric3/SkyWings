@@ -6,6 +6,22 @@ namespace SkyWings.Tests;
 public sealed class BookingRulesTests
 {
     [TestMethod]
+    public void IsBookable_UntilTwoHoursBeforeDeparture_SameDayIncluded()
+    {
+        DateTime today = new(2027, 4, 5);
+        DateTime departure = AppData.DepartureOf("PR-103", today);   // 1:00 PM
+        DateTime cutoff = departure.AddHours(-AppData.BookingCutoffHours);
+
+        Assert.AreEqual(cutoff, AppData.BookingCutoff("PR-103", today));
+        Assert.IsTrue(AppData.IsBookable("PR-103", today, today.AddHours(8)), "same day, five hours ahead");
+        Assert.IsTrue(AppData.IsBookable("PR-103", today, cutoff.AddMinutes(-1)));
+        Assert.IsFalse(AppData.IsBookable("PR-103", today, cutoff), "closed at the cutoff");
+        Assert.IsFalse(AppData.IsBookable("PR-103", today, departure.AddHours(1)));
+        Assert.IsFalse(AppData.IsBookable("PR-103", today.AddDays(-1), today.AddHours(8)), "a past date");
+        Assert.IsTrue(AppData.IsBookable("PR-103", today.AddDays(1), today.AddHours(23)));
+    }
+
+    [TestMethod]
     public void ComputeRefundAmount_UsesFlightDatePolicy()
     {
         decimal refund = AppData.ComputeRefundAmount(10_000m, DateTime.Today.AddDays(8));

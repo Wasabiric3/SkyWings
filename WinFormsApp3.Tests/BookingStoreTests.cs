@@ -44,10 +44,26 @@ public sealed class BookingStoreTests
     [TestMethod]
     public void SeededFlights_ReportFullCapacity()
     {
-        FlightInventory inventory = _store.LoadFlightInventory("PR-101");
+        FlightInventory inventory = _store.LoadFlightInventory("PR-101", DateTime.Today.AddDays(3));
 
-        Assert.AreEqual(AppData.DefaultDomesticCapacity, inventory.Capacity);
-        Assert.AreEqual(AppData.DefaultDomesticCapacity, inventory.AvailableSeats);
+        int seats = _store.LoadAircraft("PR-101").Cabins.Sum(c => c.Seats);
+        Assert.AreEqual(seats, inventory.Capacity);
+        Assert.AreEqual(seats, inventory.AvailableSeats);
+    }
+
+    [TestMethod]
+    public void FlightInventory_CountsOnlyTheChosenDate()
+    {
+        // Was: every confirmed booking of the flight on any date, against one flight's seats ("0 of 180 seats open").
+        DateTime day = DateTime.Today.AddDays(12);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-INV000000001", 4_000m, day, seat: "ECO2A"), false, 4_000m, "Credit Card", "**** 4521", "TXN-I1", DateTime.Now);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-INV000000002", 4_000m, day.AddDays(1), seat: "ECO2B"), false, 4_000m, "Credit Card", "**** 4521", "TXN-I2", DateTime.Now);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-INV000000003", 4_000m, day.AddDays(2), seat: "ECO2C"), false, 4_000m, "Credit Card", "**** 4521", "TXN-I3", DateTime.Now);
+
+        FlightInventory inventory = _store.LoadFlightInventory("PR-101", day);
+
+        Assert.AreEqual(1, inventory.ConfirmedBookings, "booked seats on that date only");
+        Assert.AreEqual(inventory.Capacity - 1, inventory.AvailableSeats);
     }
 
     [TestMethod]
@@ -150,7 +166,7 @@ public sealed class BookingStoreTests
         var international = _store.LoadActiveFlights(false).Select(f => f.FlightNo).ToList();
 
         CollectionAssert.IsSubsetOf(new[] { "PR-301", "PR-401", "PR-701", "PR-801" }, international);
-        Assert.AreEqual(AppData.DefaultNorthAmericaCapacity, _store.LoadFlightInventory("PR-401").Capacity);
+        Assert.AreEqual(AppData.DefaultNorthAmericaCapacity, _store.LoadAllFlights().Single(f => f.FlightNo == "PR-401").Capacity);
     }
 
     [TestMethod]

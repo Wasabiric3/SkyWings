@@ -101,6 +101,7 @@ internal static class HelpContent
             new("Taxes and discounts", "Advance purchase discount", $"{AppData.AdvancePurchaseRate:P0} when booked {AppData.AdvancePurchaseDays}+ days ahead"),
             new("Taxes and discounts", "Peak season surcharge", $"{AppData.PeakSeasonRate:P0}"),
             new("Timing", "Seat hold while booking", $"{AppData.SeatHoldMinutes} minutes"),
+            new("Timing", "Bookings close", $"{AppData.BookingCutoffHours} hours before departure (the same day is fine until then)"),
             new("Timing", "Online check-in", $"Opens {AppData.CheckInWindowHours} hours before departure, closes at departure"),
             new("Limits", "Travellers per booking", $"{BookingRules.MaxPassengersPerBooking}"),
         };

@@ -47,10 +47,11 @@ public sealed class BookingWizardForm : GlassForm
 
     // step 1: flight
     private readonly ComboBox _flight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, DropDownWidth = 560 };
-    private readonly DateTimePicker _flightDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(1) };
+    // Same-day bookings are fine until the cutoff (AppData.IsBookable); the flight step checks the chosen flight.
+    private readonly DateTimePicker _flightDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
     private readonly CheckBox _roundTrip = new() { Text = "Add a return flight", AutoSize = false, Dock = DockStyle.Top };
     private readonly ComboBox _returnFlight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, Enabled = false };
-    private readonly DateTimePicker _returnDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(2), Enabled = false };
+    private readonly DateTimePicker _returnDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(1), Enabled = false };
     private readonly Label _flightInfo = new() { AutoSize = false, Dock = DockStyle.Top };
     private FieldRow _flightRow = null!, _dateRow = null!, _returnFlightRow = null!, _returnDateRow = null!;
 
@@ -300,6 +301,7 @@ public sealed class BookingWizardForm : GlassForm
         _flightDate.ValueChanged += (_, _) =>
         {
             _returnDate.MinDate = _flightDate.Value.Date.AddDays(1);
+            UpdateFlightInfo();   // seats open (and "bookings closed") depend on the date
             SyncSession();
         };
         _roundTrip.CheckedChanged += (_, _) =>
@@ -364,7 +366,7 @@ public sealed class BookingWizardForm : GlassForm
     private void UpdateFlightInfo()
     {
         if (_flight.SelectedItem is not Flight flight) { _flightInfo.Text = ""; return; }
-        _flightInfo.Text = _controller.DescribeFlight(flight);
+        _flightInfo.Text = _controller.DescribeFlight(flight, _flightDate.Value.Date, _selectedClass, DateTime.Now);
     }
 
     private void UpdateReturnFlightChoice()
@@ -879,6 +881,12 @@ public sealed class BookingWizardForm : GlassForm
                     _flightRow.SetMessage("Select a flight to continue.");
                     return false;
                 }
+                if (_controller.FlightDateProblem(_session.SelectedFlight, _session.FlightDate, DateTime.Now) is { } closed)
+                {
+                    _dateRow.SetMessage(closed);
+                    return false;
+                }
+                _dateRow.ClearMessage();
                 if (_roundTrip.Checked)
                 {
                     if (_returnFlight.SelectedItem is not Flight)

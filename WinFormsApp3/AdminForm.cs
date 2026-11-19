@@ -272,8 +272,8 @@ public sealed class AdminForm : GlassForm
         _toggleActive.Text = flight.Status == "Inactive" ? "Activate" : "Deactivate";
         if (!Try("Unable to load seat inventory", () =>
             {
-                var inventory = _service.LoadFlightInventory(flight.FlightNo);
-                _inventoryLabel.Text = $"{flight.FlightNo}: {inventory.ConfirmedBookings} booked · {inventory.HeldSeats} held · {inventory.AvailableSeats} available";
+                var inventory = _service.LoadFlightInventory(flight.FlightNo, DateTime.Today);
+                _inventoryLabel.Text = $"{flight.FlightNo} today: {inventory.ConfirmedBookings} booked · {inventory.HeldSeats} held · {inventory.AvailableSeats} available";
             }))
             _inventoryLabel.Text = "Inventory unavailable";
     }

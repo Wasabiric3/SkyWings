@@ -55,10 +55,12 @@ public sealed class BookingWizardControllerTests
     {
         Flight flight = _controller.LoadFlights().First(f => f.FlightNo == "PR-101");
 
-        string text = _controller.DescribeFlight(flight);
+        int economy = _store.LoadAircraft("PR-101").Cabin("Economy")!.Seats;
+
+        string text = _controller.DescribeFlight(flight, DateTime.Today.AddDays(5), "Economy", DateTime.Now);
 
         StringAssert.StartsWith(text, "Departs ");
-        StringAssert.Contains(text, $"{AppData.DefaultDomesticCapacity} of {AppData.DefaultDomesticCapacity} seats open");
+        StringAssert.Contains(text, $"{economy} of {economy} Economy seats open");
     }
 
     [TestMethod]
@@ -271,5 +273,48 @@ public sealed class BookingWizardControllerTests
         StringAssert.Contains(text, "PR-101");
         StringAssert.Contains(text, "Traveller 0");
         StringAssert.Contains(text, "ECO1A");
+    }
+
+    // ------------------------------------------------------------------ same-day booking and seats open
+
+    private Flight Pr103() => _controller.LoadFlights().First(f => f.FlightNo == "PR-103");   // departs 1:00 PM
+
+    [TestMethod]
+    public void FlightDateProblem_SameDayIsFine_UntilTwoHoursBeforeDeparture()
+    {
+        DateTime today = new(2027, 4, 5);
+        Flight flight = Pr103();
+
+        Assert.IsNull(_controller.FlightDateProblem(flight, today, today.AddHours(8)), "booking at 8 AM for the 1 PM flight");
+        Assert.IsNull(_controller.FlightDateProblem(flight, today.AddDays(1), today.AddHours(20)));
+
+        string? closed = _controller.FlightDateProblem(flight, today, today.AddHours(11).AddMinutes(30));
+        Assert.AreEqual("Bookings for PR-103 on Apr 5 closed at 11:00 AM, 2 hours before departure. Choose a later flight or date.", closed);
+    }
+
+    [TestMethod]
+    public void DescribeFlight_CountsSeatsOpenOnTheChosenDateAndCabin()
+    {
+        Flight flight = Pr103();
+        DateTime day = DateTime.Today.AddDays(9);
+        int economySeats = _store.LoadAircraft("PR-103").Cabin("Economy")!.Seats;
+        var p = new PassengerRecord("Maria Santos", "1 St", "09171234567", 35, "1991-01-01", "P1234567A", false, false,
+            new SeatAssignment("Maria Santos", "ECO3A"), Array.Empty<string>(), 4000m);
+        var other = new BookingRecord("SKY-DESCRIBE0001", DateTime.Now, "PR-103", "Manila (MNL)", "Boracay (MPH)", day.AddDays(1), true,
+            "Economy", "Credit Card", "**** 4521", 4000m, "Scheduled", new[] { p }, AppData.StatusConfirmed, "PAID", "TXN-X", DateTime.Now, 0m);
+        _store.SaveConfirmedBooking(other, false, 4000m, "Credit Card", "**** 4521", "TXN-X", DateTime.Now);   // another date
+
+        string text = _controller.DescribeFlight(flight, day, "Economy", DateTime.Today);
+
+        StringAssert.Contains(text, $"{economySeats} of {economySeats} Economy seats open");
+        StringAssert.Contains(_controller.DescribeFlight(flight, day.AddDays(1), "Economy", DateTime.Today),
+            $"{economySeats - 1} of {economySeats} Economy seats open");
+    }
+
+    [TestMethod]
+    public void DescribeFlight_SaysWhenBookingsHaveClosed()
+    {
+        DateTime today = new(2027, 4, 5);
+        StringAssert.Contains(_controller.DescribeFlight(Pr103(), today, "Economy", today.AddHours(12)), "bookings closed");
     }
 }

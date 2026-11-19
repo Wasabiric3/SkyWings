@@ -194,6 +194,15 @@ public sealed class CheckInControllerTests
 [TestClass]
 public sealed class HomeControllerTests
 {
+    [TestMethod]
+    public void CanBook_TodaysFlight_UntilTwoHoursBeforeDeparture()
+    {
+        DateTime today = new(2027, 4, 5);
+        Assert.IsTrue(HomeController.CanBook("PR-103", today, today.AddHours(10)), "1 PM flight at 10 AM");
+        Assert.IsFalse(HomeController.CanBook("PR-103", today, today.AddHours(11).AddMinutes(1)), "inside the 2-hour cutoff");
+        Assert.IsTrue(HomeController.CanBook("PR-103", today.AddDays(1), today.AddHours(15)));
+    }
+
     private string _dbPath = "";
     private BookingStore _store = null!;
     private HomeController _controller = null!;

@@ -40,6 +40,14 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
+    public void PolicyRowsSayBookingsCloseBeforeDeparture_SameDayIncluded()
+    {
+        var row = HelpContent.PolicyRows().Single(r => r.Area == "Timing" && r.Rule == "Bookings close");
+        StringAssert.Contains(row.Value, $"{AppData.BookingCutoffHours} hours before departure");
+        StringAssert.Contains(row.Value, "same day");
+    }
+
+    [TestMethod]
     public void RefundRowsMatchTheRefundRules()
     {
         var refunds = HelpContent.PolicyRows().Where(r => r.Area == "Refunds").ToList();

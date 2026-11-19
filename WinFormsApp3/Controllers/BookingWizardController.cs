@@ -75,17 +75,21 @@ public sealed class BookingWizardController
 
     private static bool IsFromManila(Flight f) => f.Origin.StartsWith("Manila", StringComparison.Ordinal);
 
-    /// <summary>One line about a flight: departure time, duration and open seats. A database problem only drops the seat count.</summary>
-    public string DescribeFlight(Flight flight)
+    /// <summary>
+    /// One line about a flight on a date: departure time, duration and the seats still open in <paramref name="className"/> that
+    /// day (or "bookings closed" inside the cutoff). A database problem only drops the seat count.
+    /// </summary>
+    public string DescribeFlight(Flight flight, DateTime date, string className, DateTime now)
     {
         string time = AppData.FlightScheduledTimes.TryGetValue(flight.FlightNo, out TimeOnly t) ? t.ToString("h:mm tt") : "—";
         int minutes = AppData.FlightEstDurationMin.GetValueOrDefault(flight.FlightNo, 0);
         string duration = minutes > 0 ? $" · about {minutes / 60}h {minutes % 60:00}m" : "";
+        if (!AppData.IsBookable(flight.FlightNo, date, now)) return $"Departs {time}{duration} · bookings closed";
         string seats = "";
         try
         {
-            FlightInventory inventory = _store.LoadFlightInventory(flight.FlightNo);
-            seats = $" · {inventory.AvailableSeats} of {inventory.Capacity} seats open";
+            if (_store.LoadAircraft(flight.FlightNo).Cabin(className) is { } cabin)
+                seats = $" · {_store.CabinSeatsLeft(flight.FlightNo, date, className)} of {cabin.Seats} {className} seats open";
         }
         catch (IOException ex)
         {
@@ -93,6 +97,16 @@ public sealed class BookingWizardController
         }
         return $"Departs {time}{duration}{seats}";
     }
+
+    /// <summary>
+    /// Why a flight cannot be booked for a date, or null when it can: bookings close <see cref="AppData.BookingCutoffHours"/> hours
+    /// before departure, so a same-day flight is fine until then.
+    /// </summary>
+    public string? FlightDateProblem(Flight flight, DateTime date, DateTime now)
+        => AppData.IsBookable(flight.FlightNo, date, now)
+            ? null
+            : $"Bookings for {flight.FlightNo} on {date:MMM d} closed at {AppData.BookingCutoff(flight.FlightNo, date):h:mm tt}, " +
+              $"{AppData.BookingCutoffHours} hours before departure. Choose a later flight or date.";
 
     // ------------------------------------------------------------------ travellers
 

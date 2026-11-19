@@ -84,6 +84,9 @@ public sealed class HomeController
         => FlightSearch.Search(_store, destination, date, className, now);
 
     /// <summary>Re-works the live status of already loaded rows for a new moment, without touching the database.</summary>
+    /// <summary>Whether the board's flight can still be booked for <paramref name="date"/> (same day included, until the cutoff).</summary>
+    public static bool CanBook(string flightNo, DateTime date, DateTime now) => AppData.IsBookable(flightNo, date, now);
+
     public static List<FlightRow> Restamp(IEnumerable<FlightRow> rows, DateTime date, DateTime now)
         => rows.Select(r => r with { Status = FlightStatusEngine.Evaluate(r.FlightNo, date, now) })
             .OrderBy(r => r.Status.Estimated).ThenBy(r => r.FlightNo).ToList();

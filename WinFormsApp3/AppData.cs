@@ -78,6 +78,15 @@ public static class AppData
     public const int CheckInWindowHours = 24;
     public const int SeatHoldMinutes = 10;
 
+    /// <summary>When bookings for a flight on a date close: <see cref="BookingCutoffHours"/> before its scheduled departure.</summary>
+    public static DateTime BookingCutoff(string flightNo, DateTime flightDate) => DepartureOf(flightNo, flightDate).AddHours(-BookingCutoffHours);
+
+    /// <summary>
+    /// Whether a flight on a date can still be booked at <paramref name="now"/>: until <see cref="BookingCutoffHours"/> before
+    /// departure, so the same day is fine for a flight that is still more than two hours away.
+    /// </summary>
+    public static bool IsBookable(string flightNo, DateTime flightDate, DateTime now) => now < BookingCutoff(flightNo, flightDate);
+
     /// <summary>How long a waitlisted traveller has to book once seats are offered to them.</summary>
     public const int WaitlistOfferHours = 24;
 

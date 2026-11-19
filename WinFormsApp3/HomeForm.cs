@@ -343,13 +343,13 @@ public partial class HomeForm : GlassForm
 
     /// <summary>Green for a normal load, amber from 90% (nearly full), red from 98% (full).</summary>
     private static Color LoadColor(int percent) => percent >= 98 ? Theme.DangerRed : percent >= 90 ? Theme.Warning : Theme.Primary;
-
+    /// <summary>Text colours for the plain cells; dims flights that have left or can no longer be booked. Status and load are painted below.</summary>
     /// <summary>Text colours for the plain cells; dims flights that have already left. Status and load are painted below.</summary>
     private void FormatBoardCell(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _flights.Rows[e.RowIndex].DataBoundItem is not FlightRow row) return;
         string column = _flights.Columns[e.ColumnIndex].DataPropertyName;
-        bool past = HasLeft(row);
+        bool past = HasLeft(row) || !CanBook(row);   // also greyed: inside the 2-hour booking cutoff
 
         if (column == nameof(FlightRow.FlightNo))
         {
@@ -406,7 +406,7 @@ public partial class HomeForm : GlassForm
     private void PaintLoadBar(Graphics g, Rectangle cell, FlightRow row)
     {
         int percent = Math.Clamp(row.LoadPercent, 0, 100);
-        bool past = HasLeft(row);
+        bool past = HasLeft(row) || !CanBook(row);
         Color color = LoadColor(percent);
         if (past) color = Gfx.Mix(color, Color.White, 0.45f);
 
@@ -440,15 +440,15 @@ public partial class HomeForm : GlassForm
 
     private FlightRow? SelectedFlight() => _flights.CurrentRow?.DataBoundItem as FlightRow;
 
-    /// <summary>Booking needs a date from tomorrow on; today's board is for tracking only.</summary>
-    private bool CanBookDate => _date.Value.Date > DateTime.Today;
+    /// <summary>Whether a board row can still be booked: same day included, until the cutoff 2 hours before departure.</summary>
+    private bool CanBook(FlightRow row) => HomeController.CanBook(row.FlightNo, _date.Value.Date, DateTime.Now);
 
     /// <summary>"Book selected" normally; on a sold-out flight the same button becomes "Join waitlist".</summary>
     private void UpdateBookButton()
     {
         FlightRow? row = SelectedFlight();
         _bookSelected.Text = row is { SoldOut: true } ? "Join waitlist  →" : "Book selected  →";
-        _bookSelected.Enabled = CanBookDate && row is not null;
+        _bookSelected.Enabled = row is not null && CanBook(row);
     }
 
     /// <summary>Reloads the board from the database (seats included) for the current destination, date and cabin.</summary>
@@ -530,9 +530,9 @@ public partial class HomeForm : GlassForm
     {
         if (_to.SelectedItem is not DestinationOption option) return;
         string place = option.Destination.Length == 0 ? "All flights from Manila" : $"Flights to {option.Destination}";
-        string tail = CanBookDate
-            ? "Fares are one-way per traveller. Double-click a flight to book it."
-            : "Booking opens from tomorrow. Pick a later date to book.";
+        string tail = _date.Value.Date == DateTime.Today
+            ? $"Fares are one-way per traveller. Today's flights can be booked until {AppData.BookingCutoffHours} hours before departure."
+            : "Fares are one-way per traveller. Double-click a flight to book it.";
         _flightSummary.Text = _boardRows.Count == 0
             ? $"{place}  ·  no flights match"
             : $"{place}  ·  {_boardRows.Count} flight(s)  ·  {_date.Value:ddd, MMM d}  ·  {_cabin.Text}  ·  {tail}";
@@ -692,7 +692,7 @@ public partial class HomeForm : GlassForm
     /// <summary>Starts a booking for the flight chosen in the list, with the date and cabin from the search bar.</summary>
     private void BookSelectedFlight(object? sender, EventArgs e)
     {
-        if (!CanBookDate || SelectedFlight() is not { } row) return;
+        if (SelectedFlight() is not { } row || !CanBook(row)) return;
         if (row.SoldOut)
         {
             using var join = new JoinWaitlistForm(_store, row.Flight, _date.Value.Date, _cabin.Text);

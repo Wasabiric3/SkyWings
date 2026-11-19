@@ -121,10 +121,10 @@ public sealed class AdminService
         return _store.LoadAllFlights();
     }
 
-    public FlightInventory LoadFlightInventory(string flightNo)
+    public FlightInventory LoadFlightInventory(string flightNo, DateTime flightDate)
     {
         Session.Require(Permission.ManageFlights);
-        return _store.LoadFlightInventory(flightNo);
+        return _store.LoadFlightInventory(flightNo, flightDate);
     }
 
     public int CountActiveBookingsForFlight(string flightNo)

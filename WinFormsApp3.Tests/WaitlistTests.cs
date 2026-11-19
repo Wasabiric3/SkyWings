@@ -31,7 +31,7 @@ public sealed class WaitlistTests
     /// <summary>Books every Business seat on the flight with one-passenger bookings; returns the references.</summary>
     private List<string> FillBusiness()
     {
-        int total = SeatLayout.RowCount("Business", _store.LoadFlightInventory(Flight).Capacity)
+        int total = SeatLayout.RowCount("Business", _store.LoadAllFlights().Single(f => f.FlightNo == Flight).Capacity)
                     * AppData.ClassSeatLetters[SeatLayout.ClassIndex("Business")].Length;
         string prefix = AppData.SeatPrefixForClass("Business");
         var refs = new List<string>();
