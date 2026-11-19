@@ -238,7 +238,7 @@ public sealed partial class BookingStore
             catch (SqliteException e)
             {
                 LogError(e);
-                throw new IOException("Error loading demo check-in candidates: " + e.Message, e);
+                throw new IOException("Error loading simulated check-in candidates: " + e.Message, e);
             }
             return result;
         }
@@ -287,7 +287,7 @@ public sealed partial class BookingStore
             }
             catch (SqliteException e)
             {
-                throw new IOException("Error saving demo check-ins: " + e.Message, e);
+                throw new IOException("Error saving simulated check-ins: " + e.Message, e);
             }
         }
     }

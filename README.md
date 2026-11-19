@@ -64,11 +64,21 @@ smtp.from=your.address@gmail.com
 - `db.properties` holds a password in plain text. Do not commit it or share screenshots of it.
 - There is no unsubscribe link, because SkyWings has no public website. The receipt email tells customers to contact staff to stop receipt emails.
 
-## Demo data
+## Simulated traffic (developer note)
 
 The store seeds sample flights and bookings (`BookingStore.Seed.cs`). Review this before using the app with real customers.
 
-With **Demo activity** on (the default, in the staff window), every flight is 60–90% booked with simulated `SIM-` bookings, and demo travellers check in by themselves during the 24-hour check-in window; about 8% of demo bookings never check in and end as no-shows. Demo bookings stay out of reports unless **Include demo bookings in reports** is ticked.
+A simulation runs unseen in the background so the system behaves like a live operation: every flight is 60–90% booked, travellers check in during the 24-hour window (about 8% of bookings end as no-shows), seat holds come and go, and bookings are made and cancelled once a minute while the home screen is open. Simulated bookings look like any other (`SKY-` references, realistic passenger details) and count in the Bookings tab, reports and revenue. The only marker is the `bookings.is_simulated` column; simulator code never creates, changes, checks in or deletes a booking with `is_simulated = 0`.
+
+To wipe and regenerate the simulated traffic (real bookings are kept), start the app from a terminal with:
+
+```
+SkyWings.exe --reset-simulation
+```
+
+It shows how many flight dates were regenerated and exits.
+
+The staff **Bookings** tab shows one flight date at a time (default today); typing a full booking reference in its search box finds that booking on any date.
 
 ## Trip status
 

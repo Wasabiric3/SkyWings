@@ -25,7 +25,18 @@ public sealed class HelpContentTests
         var topic = HelpContent.Topics().Single(t => t.Title == "Trip status");
         foreach (string label in new[] { "Upcoming", "Check-in open", "Checked in", "Boarding", "In flight", "Completed", "No-show", "Canceled" })
             StringAssert.Contains(topic.Body, label);
-        StringAssert.Contains(topic.Body, "demo travellers check in");
+    }
+
+    [TestMethod]
+    public void NoHelpTopicMentionsDemo()
+    {
+        // SkyWings is presented as a live operations system: the simulation runs unseen.
+        foreach (var topic in HelpContent.Topics())
+        {
+            Assert.IsFalse(topic.Title.Contains("demo", StringComparison.OrdinalIgnoreCase), topic.Title);
+            Assert.IsFalse(topic.Body.Contains("demo", StringComparison.OrdinalIgnoreCase), topic.Title);
+        }
+        Assert.IsTrue(HelpContent.Topics().Any(t => t.Title == "Aircraft and seat maps"));
     }
 
     [TestMethod]

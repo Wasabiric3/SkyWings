@@ -43,11 +43,10 @@ internal static class HelpContent
             "If the offer is not used in time, the seats go to the next traveller.\n\n" +
             "Staff can see and remove waitlist entries on the Waitlist tab of the staff window."),
 
-        new("About this demo: aircraft and seat maps",
-            "SkyWings is a demonstration system, not a real airline. Each flight has an aircraft that decides its cabins and seat map: " +
+        new("Aircraft and seat maps",
+            "Each flight has an aircraft that decides its cabins and seat map: " +
             "a narrow-body (Airbus A320, 3-3 seats) on domestic routes, a mid-size wide-body (Airbus A330-300, 2-4-2 seats) to Southeast Asia, " +
-            "and a large wide-body (Boeing 777-300ER, 3-4-3 seats) to Europe and North America. The seat layouts are typical and generic, " +
-            "not any airline's own seat map, and flight numbers are for demonstration only.\n\n" +
+            "and a large wide-body (Boeing 777-300ER, 3-4-3 seats) to Europe and North America.\n\n" +
             "A cabin an aircraft does not have (for example First Class on an A320) is not offered for that flight. " +
             "Staff can change a flight's aircraft in the flight editor; the change is refused if a booked seat would no longer exist."),
 
@@ -61,8 +60,6 @@ internal static class HelpContent
             "A booking becomes a No-show when the flight leaves and nobody on it checked in. A cancelled booking shows Canceled. " +
             "On a return trip the outbound flight decides until it lands; then the return flight does (\"Return · In flight\"), " +
             "and the trip is Completed once the return lands.\n\n" +
-            $"In this demo, demo travellers check in by themselves during the {AppData.CheckInWindowHours}-hour window, " +
-            "most of them in the last 12 hours; about 8% of demo bookings never check in and end as no-shows. " +
             "Staff can filter the Bookings tab by Upcoming, In progress, Completed, No-show or Canceled."),
 
         new("Senior and PWD discounts",

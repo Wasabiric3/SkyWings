@@ -24,6 +24,12 @@ namespace SkyWings
             };
 
             var store = new BookingStore();
+            // A maintenance switch (e.g. "--reset-simulation") does its job, says so, and exits without opening the app.
+            if (CommandLine.Run(Environment.GetCommandLineArgs().Skip(1).ToArray(), store, DateTime.Now) is { } done)
+            {
+                MessageBox.Show(done, "SkyWings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             // Emails the offer to the next waitlisted traveller whenever a cancellation or expiry frees seats.
             SkyWings.Email.EmailServices.CreateWaitlist(store).Attach();
 
