@@ -210,7 +210,7 @@ public sealed class SimulationService
     private BookingRecord MakeBooking(Flight flight, DateTime date, CabinLayout cabin, List<Seat> seats, DateTime now, JavaRandom rng,
         int counter, bool cancelled, string? referenceSalt = null)
     {
-        string reference = BookingStore.SimulatedPrefix +
+        string reference = "SIM-" +   // Task 2 gives these real-looking SKY- references
             ((ulong)FlightStatusEngine.StableSeed($"{flight.FlightNo}|{date:yyyyMMdd}|{referenceSalt}|{counter}")).ToString("X16", CultureInfo.InvariantCulture)[..12];
         int classIndex = Math.Max(0, Array.IndexOf(AppData.ClassNames, cabin.ClassName));
         decimal fare = AppData.Round2(flight.BasePrice * AppData.ClassMultipliers[classIndex] * 1.12m);
@@ -291,7 +291,7 @@ public sealed class SimulationService
         var (flightNo, date) = near[rng.NextInt(near.Count)];
         if (PickFreeSeats(flightNo, date, now, rng) is not { } pick) return false;
         Seat seat = pick.Free[rng.NextInt(pick.Free.Count)];
-        string owner = BookingStore.SimulatedPrefix + rng.NextInt(0x7FFFFFFF).ToString("X8", CultureInfo.InvariantCulture);
+        string owner = BookingStore.SimulatedHoldPrefix + rng.NextInt(0x7FFFFFFF).ToString("X8", CultureInfo.InvariantCulture);
         try { return _store.AddSeatHold(flightNo, date, pick.Cabin.Code(seat.Row + 1, pick.Cabin.Letters[seat.Col]), owner, now); }
         catch (InvalidOperationException) { return false; }   // the per-owner hold limit: not worth more than skipping
     }
@@ -325,7 +325,7 @@ public sealed class SimulationService
     /// </summary>
     public bool CancelSimulatedBooking(string reference)
     {
-        if (!reference.StartsWith(BookingStore.SimulatedPrefix, StringComparison.Ordinal)) return false;
+        if (!_store.IsSimulatedBooking(reference)) return false;   // never a real booking
         BookingRecord? booking = _store.FindByReference(reference);
         return booking is not null && _store.CancelBooking(reference, AppData.Round2(booking.TotalAmount * 0.5m));
     }

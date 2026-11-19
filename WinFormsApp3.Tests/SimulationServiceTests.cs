@@ -338,6 +338,16 @@ public sealed class SimulationServiceTests
         Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(entry.BookingReference)!.Status);
     }
 
+    [TestMethod]
+    public void CancelSimulatedBooking_RefusesARealBooking()
+    {
+        BookingRecord real = RealBooking("SKY-REALCANCEL01", "PR-101", Now.Date.AddDays(3), "ECO4A");
+        _store.SaveConfirmedBooking(real, false, real.TotalAmount, "Credit Card", "**** 4521", real.PaymentTransactionRef, DateTime.Now);
+
+        Assert.IsFalse(_sim.CancelSimulatedBooking("SKY-REALCANCEL01"));
+        Assert.AreEqual(AppData.StatusConfirmed, _store.FindByReference("SKY-REALCANCEL01")!.Status);
+    }
+
     // ------------------------------------------------------------------ switch and reset
 
     [TestMethod]

@@ -203,7 +203,7 @@ public sealed partial class BookingStore
                 using var con = OpenConnection();
                 using var cmd = includeSimulated
                     ? Cmd(con, "SELECT * FROM check_ins")
-                    : Cmd(con, "SELECT * FROM check_ins WHERE booking_ref NOT LIKE @sim", null, ("@sim", SimulatedPrefix + "%"));
+                    : Cmd(con, "SELECT * FROM check_ins WHERE booking_ref IN (SELECT reference FROM bookings WHERE is_simulated = 0)");
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                 {

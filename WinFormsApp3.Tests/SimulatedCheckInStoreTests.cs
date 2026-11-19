@@ -48,7 +48,7 @@ public sealed class SimulatedCheckInStoreTests
 
         List<SimCheckInCandidate> before = _store.LoadSimulatedCheckInCandidates(Now.Date, date);
         Assert.IsNotEmpty(before);
-        Assert.IsTrue(before.All(c => c.Reference.StartsWith(BookingStore.SimulatedPrefix)), "real bookings are never candidates");
+        Assert.IsTrue(before.All(c => _store.IsSimulatedBooking(c.Reference)), "real bookings are never candidates");
         Assert.IsTrue(before.All(c => c.SeatCode.Length > 0));
 
         SimCheckInCandidate first = before[0];
@@ -83,6 +83,21 @@ public sealed class SimulatedCheckInStoreTests
     }
 
     [TestMethod]
+    public void SaveSimulatedCheckIns_IgnoresRealBookings_EvenWithASkyReference()
+    {
+        DateTime date = Now.Date.AddDays(1);
+        SaveReal(RealBooking("SKY-REALCHECKIN05", "PR-101", date, "ECO9F"));
+
+        int saved = _store.SaveSimulatedCheckIns(new[]
+        {
+            new CheckInRecord("SKY-REALCHECKIN05", "Real Person", "PR-101", date, "ECO9F", AppData.DepartureOf("PR-101", date).AddHours(-2))
+        });
+
+        Assert.AreEqual(0, saved);
+        Assert.IsEmpty(_store.LoadCheckIns("SKY-REALCHECKIN05"));
+    }
+
+    [TestMethod]
     public void LoadCheckInsByBooking_GroupsByReference()
     {
         new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
@@ -114,7 +129,7 @@ public sealed class SimulatedCheckInStoreTests
         Dictionary<string, List<CheckInRecord>> realOnly = _store.LoadCheckInsByBooking(includeSimulated: false);
 
         Assert.IsTrue(realOnly.ContainsKey("SKY-REALCHECKIN04"));
-        Assert.IsFalse(realOnly.Keys.Any(k => k.StartsWith(BookingStore.SimulatedPrefix)));
+        Assert.IsFalse(realOnly.Keys.Any(_store.IsSimulatedBooking));
         Assert.IsTrue(_store.LoadCheckInsByBooking().ContainsKey(demo.Reference), "by default everything is read");
     }
 
@@ -133,6 +148,6 @@ public sealed class SimulatedCheckInStoreTests
 
         Dictionary<string, List<CheckInRecord>> all = _store.LoadCheckInsByBooking();
         Assert.IsTrue(all.ContainsKey("SKY-REALCHECKIN03"), "the real check-in survives");
-        Assert.IsFalse(all.Keys.Any(k => k.StartsWith(BookingStore.SimulatedPrefix)), "demo check-ins are removed with their bookings");
+        CollectionAssert.AreEqual(new[] { "SKY-REALCHECKIN03" }, all.Keys.ToArray(), "demo check-ins are removed with their bookings");
     }
 }

@@ -42,6 +42,30 @@ public sealed class SimulatedBookingStoreTests
     }
 
     [TestMethod]
+    public void SaveSimulatedBooking_AcceptsASkyReference_AndMarksItSimulated()
+    {
+        _store.SaveSimulatedBooking(Booking("SKY-00000000AA01", "ECO8A"));
+        SaveReal("SKY-00000000BB01", "ECO8B");
+
+        Assert.IsTrue(_store.IsSimulatedBooking("SKY-00000000AA01"));
+        Assert.IsFalse(_store.IsSimulatedBooking("SKY-00000000BB01"));
+        Assert.IsFalse(_store.IsSimulatedBooking("SKY-DOESNOTEXIST"));
+    }
+
+    [TestMethod]
+    public void SaveSimulatedBooking_NeverOverwritesARealBookingWithTheSameReference()
+    {
+        SaveReal("SKY-00000000CC01", "ECO8C");
+
+        _store.SaveSimulatedBooking(Booking("SKY-00000000CC01", "ECO8D"));
+
+        Assert.IsFalse(_store.IsSimulatedBooking("SKY-00000000CC01"));
+        BookingRecord kept = _store.FindByReference("SKY-00000000CC01")!;
+        Assert.HasCount(1, kept.Passengers, "no simulated passenger is attached to the real booking");
+        Assert.AreEqual("ECO8C", kept.Passengers[0].SeatCode);
+    }
+
+    [TestMethod]
     public void ASimulatedBooking_BlocksItsSeatAndCountsAsBooked()
     {
         int before = _store.CabinSeatsLeft("PR-101", _date, "Economy");
@@ -99,10 +123,6 @@ public sealed class SimulatedBookingStoreTests
         CollectionAssert.AreEquivalent(new[] { "ECO1A", "ECO5F" }, _store.LoadBookedSeatCodes("PR-101").ToArray());
         CollectionAssert.AreEquivalent(new[] { "ECO1A" }, _store.LoadBookedSeatCodes("PR-101", realOnly: true).ToArray());
     }
-
-    [TestMethod]
-    public void OnlyReferencesStartingWithSIM_CanBeSavedAsSimulated()
-        => Assert.ThrowsExactly<ArgumentException>(() => _store.SaveSimulatedBooking(Booking("SKY-REAL00000005", "ECO1B")));
 
     [TestMethod]
     public void DeleteSimulatedBookings_RemovesOnlyDemoRows_AndTheirPassengers()

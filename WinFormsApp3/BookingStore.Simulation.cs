@@ -10,7 +10,9 @@ namespace SkyWings;
 /// </summary>
 public sealed partial class BookingStore
 {
-    public const string SimulatedPrefix = "SIM-";
+    /// <summary>Owner prefix of the simulator's seat holds (internal, never shown). Simulated bookings are marked by
+    /// <c>bookings.is_simulated = 1</c>, not by their reference, which looks like any other (<c>SKY-…</c>).</summary>
+    public const string SimulatedHoldPrefix = "SIM-";
     public const string SettingDemoActivity = "demo.activity";
     public const string SettingDemoInReports = "demo.in_reports";
     /// <summary>Which version of the load algorithm made the current demo bookings; a newer one regenerates them once.</summary>
@@ -74,14 +76,11 @@ public sealed partial class BookingStore
     /// <summary>
     /// Stores generated bookings in one transaction, reusing prepared commands (a day's load is thousands of rows). Writes only the
     /// booking and its passengers: no payment record, promo, loyalty, contact, email or audit entry, so a demo booking has no
-    /// side effects outside the seat map and the board. A reference that already exists is left as it is.
+    /// side effects outside the seat map and the board. A reference that already exists (real or simulated) is left exactly as it
+    /// is, passengers included, so a real booking can never be flagged or changed by accident.
     /// </summary>
-    /// <exception cref="ArgumentException">A reference does not start with <c>SIM-</c>: real bookings can never be flagged by accident.</exception>
     public void SaveSimulatedBookings(IReadOnlyList<BookingRecord> bookings)
     {
-        foreach (BookingRecord b in bookings)
-            if (!b.Reference.StartsWith(SimulatedPrefix, StringComparison.Ordinal))
-                throw new ArgumentException("A simulated booking's reference must start with " + SimulatedPrefix, nameof(bookings));
         if (bookings.Count == 0) return;
         lock (_lock)
         {
@@ -174,7 +173,7 @@ public sealed partial class BookingStore
                 Exec(con, tx, $"DELETE FROM passengers WHERE booking_ref IN ({refs})", args);
                 Exec(con, tx, $"DELETE FROM booking_legs WHERE booking_ref IN ({refs})", args);
                 int removed = Exec(con, tx, $"DELETE FROM bookings WHERE is_simulated = 1{scope}", args);
-                Exec(con, tx, $"UPDATE seat_holds SET status = 'RELEASED' WHERE owner LIKE 'SIM-%' AND status = 'ACTIVE'{scope}", args);
+                Exec(con, tx, $"UPDATE seat_holds SET status = 'RELEASED' WHERE owner LIKE @holds AND status = 'ACTIVE'{scope}", args.Append(("@holds", (object?)(SimulatedHoldPrefix + "%"))).ToArray());
                 // Regenerated bookings may include flights that already left: the next check-in step must look back again.
                 Exec(con, tx, "DELETE FROM app_settings WHERE setting_key = @k", ("@k", SettingDemoCheckInsThrough));
                 tx.Commit();
@@ -246,7 +245,7 @@ public sealed partial class BookingStore
     }
 
     /// <summary>
-    /// Saves demo check-ins in one transaction. Records for anything but a demo booking (<see cref="SimulatedPrefix"/>) are skipped,
+    /// Saves demo check-ins in one transaction. Records for anything but a simulated booking (<c>is_simulated = 1</c>) are skipped,
     /// so the simulator can never check in a real traveller. Returns how many were written.
     /// </summary>
     public int SaveSimulatedCheckIns(IReadOnlyList<CheckInRecord> checkIns) => SaveSimulatedCheckIns(checkIns, null, null);
@@ -275,10 +274,11 @@ public sealed partial class BookingStore
                 }
                 foreach (CheckInRecord c in checkIns)
                 {
-                    if (!c.BookingReference.StartsWith(SimulatedPrefix, StringComparison.Ordinal)) continue;
+                    // Only for a simulated booking: a real traveller is never checked in by the simulator.
                     saved += Exec(con, tx,
                         "INSERT OR IGNORE INTO check_ins (booking_ref,passenger_name,flight_no,flight_date,seat_code,checked_in_at) " +
-                        "VALUES (@ref,@name,@flight,@date,@seat,@at)",
+                        "SELECT @ref,@name,@flight,@date,@seat,@at " +
+                        "WHERE EXISTS (SELECT 1 FROM bookings WHERE reference = @ref AND is_simulated = 1)",
                         ("@ref", c.BookingReference), ("@name", c.PassengerName), ("@flight", c.FlightNo),
                         ("@date", c.FlightDate.Date), ("@seat", c.SeatCode), ("@at", c.CheckedInAt));
                 }
@@ -326,6 +326,17 @@ public sealed partial class BookingStore
                 return map;
             }
             catch (SqliteException e) { LogError(e); throw new IOException("Unable to read booked seats: " + e.Message, e); }
+        }
+    }
+
+    /// <summary>True when the booking exists and was made by the simulator (<c>is_simulated = 1</c>).</summary>
+    public bool IsSimulatedBooking(string reference)
+    {
+        lock (_lock)
+        {
+            using var con = OpenConnection();
+            using var cmd = Cmd(con, "SELECT 1 FROM bookings WHERE reference = @ref AND is_simulated = 1", null, ("@ref", reference));
+            return cmd.ExecuteScalar() is not null;
         }
     }
 
@@ -405,7 +416,7 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             using var con = OpenConnection();
-            using var cmd = Cmd(con, "SELECT COUNT(*) FROM seat_holds WHERE owner LIKE 'SIM-%' AND status = 'ACTIVE' AND expires_at >= @now", null, ("@now", now));
+            using var cmd = Cmd(con, "SELECT COUNT(*) FROM seat_holds WHERE owner LIKE @holds AND status = 'ACTIVE' AND expires_at >= @now", null, ("@now", now), ("@holds", SimulatedHoldPrefix + "%"));
             return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
     }
