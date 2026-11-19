@@ -8,7 +8,7 @@ public sealed record SimulationOptions(
     double BookingChance = 0.35, double CancelChance = 0.20, int MaxHolds = 3, int HoldCap = 30, int HorizonDays = 14);
 
 /// <summary>What one simulation step did (for tests and the staff screen).</summary>
-public sealed record SimulationTick(int HoldsAdded, int BookingsAdded, int BookingsCancelled, int LoadsGenerated);
+public sealed record SimulationTick(int HoldsAdded, int BookingsAdded, int BookingsCancelled, int LoadsGenerated, int CheckInsAdded = 0);
 
 /// <summary>
 /// Makes the demo look like a live operations system. <see cref="EnsureLoad"/> pre-fills every flight over the next days with
@@ -331,8 +331,52 @@ public sealed class SimulationService
             _store.SetSetting(BookingStore.SettingDemoLoadVersion, LoadVersion);
         }
         int loads = EnsureLoad(now);
+        int checkIns = ProgressCheckIns(now);
         SimulationTick tick = Tick(now, FlightStatusEngine.StableSeed($"tick|{now:yyyyMMddHHmm}"));
-        return tick with { LoadsGenerated = loads };
+        return tick with { LoadsGenerated = loads, CheckInsAdded = checkIns };
+    }
+
+    // ------------------------------------------------------------------ demo check-ins
+
+    /// <summary>About this share of demo bookings never check in, so their trip ends as a no-show.</summary>
+    internal const int NoShowPercent = 8;
+
+    /// <summary>How far back missed demo check-ins are caught up (e.g. after the app was closed over a weekend).</summary>
+    private const int CheckInLookbackDays = 7;
+
+    /// <summary>
+    /// When a demo traveller checks in for a flight leaving at <paramref name="departure"/>, or null when the whole booking is a
+    /// no-show. The booking decides the moment, so a party checks in together (each traveller 0–4 minutes apart): some right after
+    /// check-in opens, some the evening before, most in the last 12 hours. Always strictly inside the 24-hour window. Stable.
+    /// </summary>
+    internal static DateTime? PlannedCheckIn(string reference, string passengerName, DateTime departure)
+    {
+        var booking = new JavaRandom(FlightStatusEngine.StableSeed($"checkin|{reference}"));
+        if (booking.NextInt(100) < NoShowPercent) return null;
+        int roll = booking.NextInt(100);
+        double u = booking.NextDouble();
+        double hoursBefore = roll < 15 ? 20 + 3.9 * u : roll < 40 ? 12 + 8 * u : 1 + 11 * u;
+        int jitter = new JavaRandom(FlightStatusEngine.StableSeed($"checkin|{reference}|{passengerName}")).NextInt(5);
+        DateTime at = departure.AddHours(-hoursBefore).AddMinutes(jitter);
+        DateTime latest = departure.AddMinutes(-1);
+        return at < latest ? at : latest;
+    }
+
+    /// <summary>
+    /// Checks in every demo traveller whose planned moment has passed, for flights from a week ago up to 24 hours ahead.
+    /// The check-in is stamped with the planned moment, so catching up after a gap still looks natural. Returns how many were added.
+    /// </summary>
+    public int ProgressCheckIns(DateTime now)
+    {
+        var due = new List<CheckInRecord>();
+        foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(now.Date.AddDays(-CheckInLookbackDays), now.Date.AddDays(1)))
+        {
+            DateTime departure = AppData.DepartureOf(c.FlightNo, c.FlightDate);
+            if (departure > now.AddHours(AppData.CheckInWindowHours)) continue;
+            if (PlannedCheckIn(c.Reference, c.PassengerName, departure) is { } at && at <= now)
+                due.Add(new CheckInRecord(c.Reference, c.PassengerName, c.FlightNo, c.FlightDate, c.SeatCode, at));
+        }
+        return due.Count == 0 ? 0 : _store.SaveSimulatedCheckIns(due);
     }
 
     /// <summary>Removes all demo bookings and holds and generates them again. Real bookings are never touched.</summary>
