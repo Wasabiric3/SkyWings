@@ -447,10 +447,11 @@ public sealed class AdminForm : GlassForm
     private void CancelSelectedBooking()
     {
         if (SelectedBooking() is not { } row) { ShowInfo("Select a booking first."); return; }
-        if (row.Status == AppData.StatusCanceled) { ShowInfo("This booking is already canceled."); return; }
         BookingRecord? booking = null;
         if (!Try("Unable to load the booking", () => booking = _service.FindBooking(row.Reference))) return;
         if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
+        // The row shows the trip label ("Canceled"), not the stored status, so the check reads the booking itself.
+        if (_service.CancelRefusal(booking) is { } refusal) { ShowInfo(refusal); return; }
         decimal refund = AppData.ComputeRefundAmount(booking.TotalAmount, booking.FlightDateValue);
         if (MessageBox.Show(this, $"Cancel {booking.Reference}?\nEstimated refund: PHP {refund:N2}",
             "Confirm cancellation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;

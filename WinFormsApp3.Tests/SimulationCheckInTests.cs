@@ -172,6 +172,57 @@ public sealed class SimulationCheckInTests
         Assert.IsGreaterThan(0.85, checkedIn / (double)(checkedIn + waiting), "not a wall of no-shows after a reset");
     }
 
+    private double ShareCheckedIn(string flightNo, DateTime date)
+    {
+        int waiting = _store.LoadSimulatedCheckInCandidates(date, date).Where(c => c.FlightNo == flightNo).Select(c => c.Reference).Distinct().Count();
+        int checkedIn = AllCheckIns().Where(c => c.FlightNo == flightNo && c.FlightDate.Date == date).Select(c => c.BookingReference).Distinct().Count();
+        return checkedIn + waiting == 0 ? double.NaN : checkedIn / (double)(checkedIn + waiting);
+    }
+
+    [TestMethod]
+    public void ADeactivatedFlight_StillHasItsDemoTravellersCheckIn()
+    {
+        // Deactivating a flight leaves its existing bookings alone, so the flight still flies with them.
+        _sim.EnsureLoad(Now, horizonDays: 2);
+        _sim.ProgressCheckIns(Now);
+        _store.SetFlightActive("PR-101", false);
+        DateTime tomorrow = Now.Date.AddDays(1);
+
+        _sim.ProgressCheckIns(AppData.DepartureOf("PR-101", tomorrow).AddMinutes(1));
+
+        Assert.IsGreaterThan(0.85, ShareCheckedIn("PR-101", tomorrow));
+    }
+
+    [TestMethod]
+    public void AFlightAddedLaterInTheDay_GetsItsDepartedLoadCaughtUp()
+    {
+        DateTime noon = Now.Date.AddHours(12);
+        _store.SetFlightActive("PR-101", false);   // no demo load yet for PR-101 (departs in the morning)
+        _sim.EnsureLoad(noon, horizonDays: 1);
+        _sim.ProgressCheckIns(noon);
+
+        _store.SetFlightActive("PR-101", true);    // reactivated at noon: today's load is generated for a flight that already left
+        _sim.EnsureLoad(noon, horizonDays: 1);
+        _sim.ProgressCheckIns(noon.AddMinutes(1));
+
+        Assert.IsGreaterThan(0.85, ShareCheckedIn("PR-101", Now.Date), "not a wall of no-shows");
+    }
+
+    [TestMethod]
+    public void ACheckInStepThatRacedAReset_DoesNotMoveTheWatermarkPastIt()
+    {
+        // The step read the watermark, then a reset cleared it, then the step saved: the reset's "look back" must survive.
+        _sim.EnsureLoad(Now, horizonDays: 1);
+        _sim.ProgressCheckIns(Now);
+        string read = _store.GetSetting(BookingStore.SettingDemoCheckInsThrough, "");
+        Assert.AreNotEqual("", read);
+
+        _store.DeleteSimulatedBookings();
+        _store.SaveSimulatedCheckIns(Array.Empty<CheckInRecord>(), expectedThrough: read, newThrough: Now.AddMinutes(1));
+
+        Assert.AreEqual("", _store.GetSetting(BookingStore.SettingDemoCheckInsThrough, ""));
+    }
+
     [TestMethod]
     public void ProgressCheckIns_StillCatchesUpAWeekAfterAGap()
     {

@@ -33,6 +33,10 @@ public sealed class AdminService
         return _store.FindByReference(reference);
     }
 
+    /// <summary>Why staff cannot cancel this booking, or null when they can.</summary>
+    public string? CancelRefusal(BookingRecord booking)
+        => booking.Status == AppData.StatusCanceled ? "This booking is already canceled." : null;
+
     /// <summary>The live trip status of each booking (by reference), with every check-in read in one query.</summary>
     public Dictionary<string, Controllers.TripStatusInfo> LoadTripStatuses(IReadOnlyList<BookingRecord> bookings, DateTime now)
     {

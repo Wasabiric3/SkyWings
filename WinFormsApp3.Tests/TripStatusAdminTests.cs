@@ -40,6 +40,17 @@ public sealed class TripStatusAdminTests
     }
 
     [TestMethod]
+    public void CancelRefusal_RecognisesAnAlreadyCanceledBooking()
+    {
+        BookingRecord booking = SaveReal("SKY-TRIPADMIN009", DateTime.Today.AddDays(10), "ECO2A");
+        Assert.IsNull(_admin.CancelRefusal(booking), "a confirmed booking can be cancelled");
+
+        _store.CancelBooking(booking.Reference, 0m);
+
+        Assert.AreEqual("This booking is already canceled.", _admin.CancelRefusal(_admin.FindBooking(booking.Reference)!));
+    }
+
+    [TestMethod]
     public void EveryTripLabel_IsDrawnAsAPill_IncludingReturnLegs()
     {
         foreach (string label in new[] { "Upcoming", "Check-in open", "Checked in", "Boarding", "In flight", "Completed", "No-show",

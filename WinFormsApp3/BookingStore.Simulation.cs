@@ -249,7 +249,14 @@ public sealed partial class BookingStore
     /// Saves demo check-ins in one transaction. Records for anything but a demo booking (<see cref="SimulatedPrefix"/>) are skipped,
     /// so the simulator can never check in a real traveller. Returns how many were written.
     /// </summary>
-    public int SaveSimulatedCheckIns(IReadOnlyList<CheckInRecord> checkIns)
+    public int SaveSimulatedCheckIns(IReadOnlyList<CheckInRecord> checkIns) => SaveSimulatedCheckIns(checkIns, null, null);
+
+    /// <summary>
+    /// Saves demo check-ins and, in the same transaction, moves the <see cref="SettingDemoCheckInsThrough"/> watermark to
+    /// <paramref name="newThrough"/> — but only if it still holds <paramref name="expectedThrough"/> ("" = not set), the value the
+    /// caller read. A reset or a newly generated departed flight that moved it in the meantime is therefore never overwritten.
+    /// </summary>
+    public int SaveSimulatedCheckIns(IReadOnlyList<CheckInRecord> checkIns, string? expectedThrough, DateTime? newThrough)
     {
         lock (_lock)
         {
@@ -258,6 +265,14 @@ public sealed partial class BookingStore
                 using var con = OpenConnection();
                 using var tx = con.BeginTransaction();
                 int saved = 0;
+                if (newThrough is { } through)
+                {
+                    using var read = Cmd(con, "SELECT setting_value FROM app_settings WHERE setting_key = @k", tx, ("@k", SettingDemoCheckInsThrough));
+                    if ((read.ExecuteScalar() as string ?? "") == (expectedThrough ?? ""))
+                        Exec(con, tx, "INSERT INTO app_settings (setting_key, setting_value) VALUES (@k, @v) " +
+                                      "ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value",
+                            ("@k", SettingDemoCheckInsThrough), ("@v", through.ToString("o", CultureInfo.InvariantCulture)));
+                }
                 foreach (CheckInRecord c in checkIns)
                 {
                     if (!c.BookingReference.StartsWith(SimulatedPrefix, StringComparison.Ordinal)) continue;

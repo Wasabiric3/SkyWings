@@ -87,6 +87,7 @@ public sealed class SimulationService
         List<Flight> flights = AllFlights();
         var aircraft = new Dictionary<string, Aircraft>();
         int generated = 0;
+        DateTime? earliestDeparture = null;
         Dictionary<string, HashSet<string>> realSeats = _store.LoadRealTakenSeatsByFlightDate(now.Date, now.Date.AddDays(Math.Max(0, horizon - 1)));
         for (int d = 0; d < horizon; d++)
         {
@@ -95,6 +96,8 @@ public sealed class SimulationService
             foreach (Flight flight in flights)
             {
                 if (existing.Contains(BookingStore.SimulatedKey(flight.FlightNo, date))) continue;
+                DateTime departure = AppData.DepartureOf(flight.FlightNo, date);
+                if (earliestDeparture is null || departure < earliestDeparture) earliestDeparture = departure;
                 if (!aircraft.TryGetValue(flight.FlightNo, out Aircraft? plane)) aircraft[flight.FlightNo] = plane = _store.LoadAircraft(flight.FlightNo);
                 batch.AddRange(GenerateLoad(flight, plane, date, now,
                     realSeats.GetValueOrDefault(BookingStore.SimulatedKey(flight.FlightNo, date)) ?? new HashSet<string>()));
@@ -103,7 +106,19 @@ public sealed class SimulationService
             // Small transactions: the store has one lock, and the board must not wait long for it while this runs in the background.
             foreach (BookingRecord[] chunk in batch.Chunk(400)) _store.SaveSimulatedBookings(chunk);
         }
+        if (earliestDeparture is { } earliest) LookBackTo(earliest);
         return generated;
+    }
+
+    /// <summary>
+    /// A load was just generated for a flight leaving at <paramref name="departure"/> (e.g. a flight added or reactivated after it
+    /// left today): if the check-in watermark is already past it, move it back so the next step checks those travellers in.
+    /// </summary>
+    private void LookBackTo(DateTime departure)
+    {
+        if (DateTime.TryParse(_store.GetSetting(BookingStore.SettingDemoCheckInsThrough, ""), CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind, out DateTime through) && through >= departure)
+            _store.SetSetting(BookingStore.SettingDemoCheckInsThrough, departure.AddMinutes(-1).ToString("o", CultureInfo.InvariantCulture));
     }
 
     private List<BookingRecord> GenerateLoad(Flight flight, Aircraft aircraft, DateTime date, DateTime now, HashSet<string> realTaken)
@@ -372,18 +387,21 @@ public sealed class SimulationService
     public int ProgressCheckIns(DateTime now)
     {
         DateTime after = now.AddDays(-CheckInLookbackDays);
-        if (DateTime.TryParse(_store.GetSetting(BookingStore.SettingDemoCheckInsThrough, ""), CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out DateTime through) && through <= now && through > after)
+        string read = _store.GetSetting(BookingStore.SettingDemoCheckInsThrough, "");
+        if (DateTime.TryParse(read, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime through)
+            && through <= now && through > after)
             after = through;
         DateTime until = now.AddHours(AppData.CheckInWindowHours);
 
+        // Every flight that has demo bookings, active or not: a deactivated flight still flies with the bookings it has.
         var flights = new List<(string FlightNo, DateTime Date)>();
-        foreach (Flight flight in AllFlights())
-            for (DateTime date = after.Date; date <= until.Date; date = date.AddDays(1))
-            {
-                DateTime departure = AppData.DepartureOf(flight.FlightNo, date);
-                if (departure > after && departure <= until) flights.Add((flight.FlightNo, date));
-            }
+        foreach (string key in _store.LoadSimulatedFlightDates())
+        {
+            string[] parts = key.Split('|');
+            DateTime date = DateTime.ParseExact(parts[1], "yyyyMMdd", CultureInfo.InvariantCulture);
+            DateTime departure = AppData.DepartureOf(parts[0], date);
+            if (departure > after && departure <= until) flights.Add((parts[0], date));
+        }
 
         var due = new List<CheckInRecord>();
         foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(flights))
@@ -392,8 +410,9 @@ public sealed class SimulationService
             if (PlannedCheckIn(c.Reference, c.PassengerName, departure) is { } at && at <= now)
                 due.Add(new CheckInRecord(c.Reference, c.PassengerName, c.FlightNo, c.FlightDate, c.SeatCode, at));
         }
-        int saved = due.Count == 0 ? 0 : _store.SaveSimulatedCheckIns(due);
-        _store.SetSetting(BookingStore.SettingDemoCheckInsThrough, now.ToString("o", CultureInfo.InvariantCulture));
+        // Saved together with the watermark, which only moves if nothing (a reset, a newly generated departed flight) changed it
+        // since it was read above.
+        int saved = _store.SaveSimulatedCheckIns(due, read, now);
         return saved;
     }
 
