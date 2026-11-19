@@ -168,6 +168,9 @@ public partial class HomeForm : GlassForm
         links.Controls.Add(Link("Check-in", ShowCheckIn));
         links.Controls.Add(Link("Waitlist", ShowWaitlist));
         links.Controls.Add(Link("Manage booking", ShowBookingLookupMessage));
+        // Each button sizes itself to its text (the sign-out one includes the staff name), so a fixed width would cut off the
+        // leftmost link. Make the menu exactly as wide as its buttons.
+        links.Width = links.Padding.Horizontal + links.Controls.Cast<Control>().Sum(c => c.Width + c.Margin.Horizontal);
 
         header.Controls.Add(links);
         header.Controls.Add(tag);
