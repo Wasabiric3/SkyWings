@@ -137,14 +137,30 @@ public sealed class SimulationCheckInTests
     }
 
     [TestMethod]
-    public void ProgressCheckIns_ForAllFlights_FinishesInReasonableTime()
+    public void ProgressCheckIns_TheMinuteByMinuteStep_IsQuickAfterCatchingUp()
     {
+        // It runs every minute while holding the store's lock, so it must not rescan a whole week each time.
         _sim.EnsureLoad(Now, horizonDays: 7);
+        _sim.ProgressCheckIns(Now.AddDays(6));   // the one-off catch-up after a long gap
 
         var clock = Stopwatch.StartNew();
-        _sim.ProgressCheckIns(Now.AddDays(6));
+        _sim.ProgressCheckIns(Now.AddDays(6).AddMinutes(1));
         clock.Stop();
 
-        Assert.IsLessThan(5000L, clock.ElapsedMilliseconds, $"{clock.ElapsedMilliseconds} ms");
+        Assert.IsLessThan(1000L, clock.ElapsedMilliseconds, $"{clock.ElapsedMilliseconds} ms");
+    }
+
+    [TestMethod]
+    public void ProgressCheckIns_StillCatchesUpAWeekAfterAGap()
+    {
+        _sim.EnsureLoad(Now, horizonDays: 2);
+        _sim.ProgressCheckIns(Now);   // the last run before the app was closed
+
+        _sim.ProgressCheckIns(Now.AddDays(6));
+
+        DateTime tomorrow = Now.Date.AddDays(1);
+        int waiting = _store.LoadSimulatedCheckInCandidates(tomorrow, tomorrow).Select(c => c.Reference).Distinct().Count();
+        int checkedIn = AllCheckIns().Where(c => c.FlightDate.Date == tomorrow).Select(c => c.BookingReference).Distinct().Count();
+        Assert.IsGreaterThan(0.85, checkedIn / (double)(checkedIn + waiting), "tomorrow's flights were caught up after the gap");
     }
 }

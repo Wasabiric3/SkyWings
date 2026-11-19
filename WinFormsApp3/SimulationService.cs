@@ -363,20 +363,29 @@ public sealed class SimulationService
     }
 
     /// <summary>
-    /// Checks in every demo traveller whose planned moment has passed, for flights from a week ago up to 24 hours ahead.
-    /// The check-in is stamped with the planned moment, so catching up after a gap still looks natural. Returns how many were added.
+    /// Checks in every demo traveller whose planned moment has passed, for flights up to 24 hours ahead. The first run (or one after
+    /// a long gap) looks back a week; later runs look back only a day from the previous run, because this runs every minute while
+    /// holding the store's lock. Each check-in is stamped with its planned moment, so catching up still looks natural.
+    /// Returns how many were added.
     /// </summary>
     public int ProgressCheckIns(DateTime now)
     {
+        DateTime from = now.Date.AddDays(-CheckInLookbackDays);
+        if (DateTime.TryParse(_store.GetSetting(BookingStore.SettingDemoCheckInsThrough, ""), CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind, out DateTime through) && through <= now && through.Date.AddDays(-1) > from)
+            from = through.Date.AddDays(-1);
+
         var due = new List<CheckInRecord>();
-        foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(now.Date.AddDays(-CheckInLookbackDays), now.Date.AddDays(1)))
+        foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(from, now.Date.AddDays(1)))
         {
             DateTime departure = AppData.DepartureOf(c.FlightNo, c.FlightDate);
             if (departure > now.AddHours(AppData.CheckInWindowHours)) continue;
             if (PlannedCheckIn(c.Reference, c.PassengerName, departure) is { } at && at <= now)
                 due.Add(new CheckInRecord(c.Reference, c.PassengerName, c.FlightNo, c.FlightDate, c.SeatCode, at));
         }
-        return due.Count == 0 ? 0 : _store.SaveSimulatedCheckIns(due);
+        int saved = due.Count == 0 ? 0 : _store.SaveSimulatedCheckIns(due);
+        _store.SetSetting(BookingStore.SettingDemoCheckInsThrough, now.ToString("o", CultureInfo.InvariantCulture));
+        return saved;
     }
 
     /// <summary>Removes all demo bookings and holds and generates them again. Real bookings are never touched.</summary>

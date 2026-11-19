@@ -15,6 +15,8 @@ public sealed partial class BookingStore
     public const string SettingDemoInReports = "demo.in_reports";
     /// <summary>Which version of the load algorithm made the current demo bookings; a newer one regenerates them once.</summary>
     public const string SettingDemoLoadVersion = "demo.load_version";
+    /// <summary>When demo check-ins were last processed (round-trip "o" format); later runs only look back a day from it.</summary>
+    public const string SettingDemoCheckInsThrough = "demo.checkins_through";
 
     // ------------------------------------------------------------------ settings
 
