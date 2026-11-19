@@ -66,14 +66,14 @@ public sealed class CheckInControllerTests
     }
 
     [TestMethod]
-    public void Load_BeforeWindow_ShowsWhenItOpens()
+    public void Load_DaysBeforeDeparture_IsAlreadyOpen()
     {
         _controller.Find("SKY-CHK000001");
 
-        CheckInView view = _controller.Load(false, Departure.AddHours(-AppData.CheckInWindowHours - 1));
+        CheckInView view = _controller.Load(false, Departure.AddDays(-10));
 
-        Assert.AreEqual(CheckInBannerKind.NotYetOpen, view.Banner);
-        Assert.IsFalse(view.Open);
+        Assert.AreEqual(CheckInBannerKind.Open, view.Banner);
+        Assert.IsTrue(view.Open);
     }
 
     [TestMethod]
@@ -164,11 +164,11 @@ public sealed class CheckInControllerTests
     }
 
     [TestMethod]
-    public void CheckIn_BeforeWindow_ReportsNotOpen()
+    public void CheckIn_AfterDeparture_ReportsNotOpen()
     {
         _controller.Find("SKY-CHK000001");
 
-        CheckInSummary summary = _controller.CheckIn(new[] { "Maria Santos" }, false, Departure.AddHours(-100));
+        CheckInSummary summary = _controller.CheckIn(new[] { "Maria Santos" }, false, Departure.AddMinutes(5));
 
         Assert.IsEmpty(summary.Done);
         StringAssert.Contains(summary.Problems.Single(), "not open");

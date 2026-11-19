@@ -13,6 +13,7 @@
 
   <ItemGroup>
 	<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+	<PackageReference Include="QRCoder" Version="1.8.1" />
 	<!--
 	  Keep this explicit reference. Microsoft.Data.Sqlite 9.0.0 pulls in e_sqlite3 2.1.10, which bundles a SQLite
 	  with a known high-severity flaw (CVE-2025-6965, fixed in SQLite 3.50.2). This newer stable build replaces it.

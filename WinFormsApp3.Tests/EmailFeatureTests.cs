@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using SkyWings;
+using SkyWings.Controllers;
 using SkyWings.Email;
 
 namespace SkyWings.Tests;
@@ -87,6 +88,32 @@ public sealed class EmailFeatureTests
         Assert.AreEqual("hello", QrPayload.Normalize(" hello "));
     }
 
+    // ---- the real QR renderer and the full send path (no fake QR) ----
+
+    [TestMethod]
+    [DoNotParallelize]   // GDI+ and the shared logo bitmap are not thread-safe
+    public void QrCodeRenderer_ProducesARealPng()
+    {
+        byte[] png = new QrCodeRenderer().RenderPng(QrPayload.Build("SKY-AB12CD34EF56"));
+
+        CollectionAssert.AreEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png.Take(8).ToArray());
+        Assert.IsTrue(png.Length > 200);
+    }
+
+    [TestMethod]
+    [DoNotParallelize]   // draws the receipt and tickets with the shared logo bitmap (GDI+ is not thread-safe)
+    public async Task RealQr_ReceiptAndBoardingPassEmailsBothSend()
+    {
+        BookingRecord booking = SaveBooking();
+        List<CheckInRecord> records = CheckInOne(booking.Reference);
+        var sender = new RecordingSender();
+        var service = new BookingEmailService(_store, sender, new QrCodeRenderer());
+
+        Assert.IsTrue((await service.SendReceiptAsync(booking, "maria@example.com")).Delivered);
+        Assert.IsTrue((await service.SendBoardingPassAsync(booking, "maria@example.com", records)).Delivered);
+        Assert.HasCount(2, sender.Sent);
+    }
+
     // ---- boarding pass email after check-in ----
 
     private List<CheckInRecord> CheckInOne(string reference)
@@ -97,6 +124,24 @@ public sealed class EmailFeatureTests
     }
 
     [TestMethod]
+    [DoNotParallelize]   // shares the SQLite pool cleanup with the drawing tests
+    public async Task EmailBoardingPassButton_ExplainsWhenTheBookingHasNoAddress()
+    {
+        BookingRecord booking = SaveBooking();
+        CheckInOne(booking.Reference);
+        var controller = new CheckInController(_store);
+        Assert.IsTrue(controller.Find(booking.Reference).Found);
+
+        EmailSendResult? result = await controller.SendBoardingPassAsync(null, returnLeg: false);
+
+        Assert.IsNotNull(result);
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual("Skipped", result.Channel);
+        StringAssert.Contains(result.Detail, "no email address");
+    }
+
+    [TestMethod]
+    [DoNotParallelize]   // draws the ticket with the shared logo bitmap (GDI+ is not thread-safe)
     public async Task BoardingPassEmail_SendsOnePdfAndTheQr()
     {
         BookingRecord booking = SaveBooking();
@@ -117,6 +162,7 @@ public sealed class EmailFeatureTests
     }
 
     [TestMethod]
+    [DoNotParallelize]   // shares the SQLite pool cleanup with the drawing tests
     public async Task BoardingPassEmail_SkipsBadUnsubscribedAndEmptyCases()
     {
         BookingRecord booking = SaveBooking();
@@ -132,6 +178,7 @@ public sealed class EmailFeatureTests
     }
 
     [TestMethod]
+    [DoNotParallelize]   // draws the ticket with the shared logo bitmap (GDI+ is not thread-safe)
     public async Task BoardingPassEmail_ServerFailureReturnsFailedAndDoesNotThrow()
     {
         BookingRecord booking = SaveBooking();
@@ -210,6 +257,27 @@ public sealed class EmailFeatureTests
         Assert.IsFalse(message.HtmlBody.Contains("PSP-0000001") || message.TextBody.Contains("PSP-0000001"), "ID numbers must not be emailed");
     }
 
+
+    [TestMethod]
+    public void Emails_HaveAnUnsubscribeButton_WhenASenderAddressIsConfigured()
+    {
+        BookingRecord booking = SaveBooking();
+        var attachments = new List<EmailAttachment> { new("pass.pdf", new byte[] { 1 }, "application/pdf", "boarding pass") };
+
+        foreach (EmailMessage message in new[]
+        {
+            BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1 }, "desk@example.com"),
+            BookingEmailBuilder.BuildBoardingPass(booking, "maria@example.com", new byte[] { 1 }, "desk@example.com", attachments)
+        })
+        {
+            StringAssert.Contains(message.HtmlBody, ">Unsubscribe</a>");
+            StringAssert.Contains(message.HtmlBody, "mailto:desk@example.com?subject=Unsubscribe%20SKY-AB12CD34EF56");
+            StringAssert.Contains(message.TextBody, "To unsubscribe, email desk@example.com");
+        }
+
+        EmailMessage noMailbox = BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1 });
+        Assert.IsFalse(noMailbox.HtmlBody.Contains(">Unsubscribe</a>"));
+    }
     [TestMethod]
     public async Task Service_SendsToSubscribedAddress_AndWritesAnAuditEntryWithoutTheAddress()
     {

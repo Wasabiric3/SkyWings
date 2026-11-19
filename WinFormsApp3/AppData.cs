@@ -74,8 +74,17 @@ public static class AppData
     public const string PolicyCheckin = "Check-in window (e.g., 24hrs before departure)";
     public const string PolicyRefund = "Refund/cancellation policies";
     public const int BookingCutoffHours = 2;
-    /// <summary>Online check-in opens this many hours before departure and closes at departure.</summary>
+    /// <summary>
+    /// The 24-hour mark before departure. It still drives the "check-in open" flight status label and the demo simulator;
+    /// the check-in screen itself no longer waits for it (see <see cref="CheckInOpensAt"/>).
+    /// </summary>
     public const int CheckInWindowHours = 24;
+
+    /// <summary>
+    /// When online check-in opens for a flight leaving at <paramref name="departure"/>: straight away, so a booking can be checked in
+    /// (and its boarding pass emailed) any time before departure. Check-in still closes at departure.
+    /// </summary>
+    public static DateTime CheckInOpensAt(DateTime departure) => DateTime.MinValue;
     public const int SeatHoldMinutes = 10;
 
     /// <summary>When bookings for a flight on a date close: <see cref="BookingCutoffHours"/> before its scheduled departure.</summary>

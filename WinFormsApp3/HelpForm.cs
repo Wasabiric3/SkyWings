@@ -51,9 +51,10 @@ internal static class HelpContent
             "Staff can change a flight's aircraft in the flight editor; the change is refused if a booked seat would no longer exist."),
 
         new("Check in and boarding pass",
-            $"Online check-in opens {AppData.CheckInWindowHours} hours before departure and closes at departure.\n\n" +
+            "Online check-in opens as soon as the booking is made and closes at departure.\n\n" +
             "Choose \"Check-in\", enter the booking reference, then print or save the boarding pass.\n\n" +
             "If an email address was given for the booking, the boarding pass is also emailed as a PDF with a QR code. " +
+            "Use \"Email boarding pass\" to send it again, for example for a traveller who checked in earlier. " +
             "Without mail settings it is saved as a file in the outbox folder instead."),
 
         new("Trip status",
@@ -104,7 +105,7 @@ internal static class HelpContent
             new("Taxes and discounts", "Peak season surcharge", $"{AppData.PeakSeasonRate:P0}"),
             new("Timing", "Seat hold while booking", $"{AppData.SeatHoldMinutes} minutes"),
             new("Timing", "Bookings close", $"{AppData.BookingCutoffHours} hours before departure (the same day is fine until then)"),
-            new("Timing", "Online check-in", $"Opens {AppData.CheckInWindowHours} hours before departure, closes at departure"),
+            new("Timing", "Online check-in", "Opens as soon as the booking is made, closes at departure"),
             new("Limits", "Travellers per booking", $"{BookingRules.MaxPassengersPerBooking}"),
         };
 

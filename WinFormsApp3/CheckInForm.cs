@@ -20,6 +20,7 @@ public sealed class CheckInForm : GlassForm
     private readonly Panel _travellers = new() { Dock = DockStyle.Fill, AutoScroll = true };
     private readonly GlassButton _checkIn = new() { Text = "Check in selected" };
     private readonly GlassButton _passes = new() { Text = "Boarding passes", Style = GlassButtonStyle.Secondary };
+    private readonly GlassButton _emailPasses = new() { Text = "Email boarding pass", Style = GlassButtonStyle.Secondary };
     private readonly List<CheckBox> _boxes = new();
     private readonly CheckInController _controller;
     private bool _loading;
@@ -54,7 +55,7 @@ public sealed class CheckInForm : GlassForm
         var heading = new Label { Text = "Online check-in", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleCenter };
         var hint = new Label
         {
-            Text = $"Check-in opens {AppData.CheckInWindowHours} hours before departure. Enter your booking reference.",
+            Text = "Check-in is open from the moment you book until departure. Enter your booking reference.",
             Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.TopCenter
         };
         _find.Height = D(44);
@@ -90,12 +91,15 @@ public sealed class CheckInForm : GlassForm
 
         _checkIn.Click += (_, _) => CheckInSelected();
         _passes.Click += (_, _) => ShowPasses(null);
+        _emailPasses.Click += (_, _) => EmailPasses();
         var another = new GlassButton { Text = "Look up another", Style = GlassButtonStyle.Ghost };
         another.Click += (_, _) => ShowLookup();
         var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = D(56), WrapContents = false, Padding = new Padding(0, D(10), 0, 0) };
+        // Five buttons: let the row wrap onto a second line on a small window or a large display scale instead of clipping.
+        var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Padding = new Padding(0, D(10), 0, 0) };
         footer.Controls.Add(_checkIn);
         footer.Controls.Add(_passes);
+        footer.Controls.Add(_emailPasses);
         footer.Controls.Add(another);
         footer.Controls.Add(close);
         CancelButton = close;
@@ -200,6 +204,7 @@ public sealed class CheckInForm : GlassForm
         foreach (var label in rows.OfType<Label>()) { label.ForeColor = Theme.Accent; label.Font = Theme.Body; }
 
         _passes.Enabled = anyCheckedIn;
+        _emailPasses.Enabled = anyCheckedIn;
         UpdateButtons(open);
     }
 
@@ -220,16 +225,32 @@ public sealed class CheckInForm : GlassForm
         // The check-in is saved. Send the email in the background so the passes appear at once; a failure only shows a note.
         Task<SkyWings.Email.EmailSendResult?> sending = SendPassEmailAsync(summary.Done.ToList(), returnLeg);
         ShowPasses(summary.Done.ToList());
-        SkyWings.Email.EmailSendResult? sent = await sending;
-        if (IsDisposed || sent is null) return;
-        MessageBox.Show(this,
-            sent.Delivered
-                ? (sent.Channel == "SMTP" ? "The boarding pass was emailed to the address on the booking." : "The boarding pass email was saved as a file:\n" + sent.Detail)
-                : "No boarding pass email was sent. " + sent.Detail,
-            "Email boarding pass", MessageBoxButtons.OK, sent.Delivered ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        ShowEmailResult(await sending);
     }
 
-    private async Task<SkyWings.Email.EmailSendResult?> SendPassEmailAsync(IReadOnlyCollection<string> names, bool returnLeg)
+    /// <summary>Emails the passes of everyone checked in on this leg, including travellers who checked in earlier.</summary>
+    private async void EmailPasses()
+    {
+        _emailPasses.Enabled = false;
+        try { ShowEmailResult(await SendPassEmailAsync(null, ReturnLeg)); }
+        finally { if (!IsDisposed) _emailPasses.Enabled = true; }
+    }
+
+    private void ShowEmailResult(SkyWings.Email.EmailSendResult? sent)
+    {
+        if (IsDisposed) return;
+        string message = sent switch
+        {
+            null => "No boarding pass email was sent. Something went wrong; see the log.",
+            { Delivered: true, Channel: "SMTP" } => "The boarding pass was emailed to the address on the booking.",
+            { Delivered: true } => "The boarding pass email was saved as a file:\n" + sent.Detail,
+            _ => "No boarding pass email was sent. " + sent.Detail
+        };
+        MessageBox.Show(this, message, "Email boarding pass", MessageBoxButtons.OK,
+            sent is { Delivered: true } ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    private async Task<SkyWings.Email.EmailSendResult?> SendPassEmailAsync(IReadOnlyCollection<string>? names, bool returnLeg)
     {
         try { return await _controller.SendBoardingPassAsync(names, returnLeg); }
         catch (Exception ex) { AppLogger.Error("CheckIn", ex); return null; }

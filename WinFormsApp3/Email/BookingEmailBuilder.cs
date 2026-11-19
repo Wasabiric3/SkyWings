@@ -31,6 +31,7 @@ public static class BookingEmailBuilder
         html.Append($"<div style=\"text-align:center;margin:20px 0\"><img src=\"cid:{QrContentId}\" width=\"180\" height=\"180\" alt=\"QR code for booking {Enc(booking.Reference)}\"/>");
         html.Append("<div style=\"font-size:12px;color:#687e74;margin-top:6px\">Show this code at check-in. It contains your booking reference.</div></div>");
         html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
         html.Append("</div></body></html>");
 
         var text = new StringBuilder();
@@ -40,6 +41,7 @@ public static class BookingEmailBuilder
         foreach ((string label, string value) in rows) text.AppendLine($"{label}: {value}");
         text.AppendLine().AppendLine("Show your booking reference (the QR code in the HTML version) at check-in.");
         text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
 
         return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(),
             new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox,
@@ -62,6 +64,7 @@ public static class BookingEmailBuilder
         html.Append($"<div style=\"text-align:center;margin:20px 0\"><img src=\"cid:{QrContentId}\" width=\"180\" height=\"180\" alt=\"QR code for booking {Enc(booking.Reference)}\"/>");
         html.Append("<div style=\"font-size:12px;color:#687e74;margin-top:6px\">Show this code or the attached boarding pass at the airport.</div></div>");
         html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
         html.Append("</div></body></html>");
 
         var text = new StringBuilder();
@@ -69,6 +72,7 @@ public static class BookingEmailBuilder
         text.AppendLine("Attached (PDF): " + attached + ".").AppendLine();
         text.AppendLine("Booking reference: " + booking.Reference);
         text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
 
         return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(),
             new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox, attachments);
@@ -96,15 +100,37 @@ public static class BookingEmailBuilder
         html.Append($"<div style=\"font-size:13px;color:#687e74\">YOUR WAITLIST CODE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(entry.BookingReference)}</div>");
         html.Append($"<p>{Enc(how)}</p>");
         if (unsubscribeMailbox is not null) html.Append($"<div style=\"font-size:12px;color:#687e74\">Questions: {Enc(unsubscribeMailbox)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, entry.BookingReference));
         html.Append("</div></body></html>");
 
         var text = new StringBuilder();
         text.AppendLine("SkyWings - your waitlist spot has come up").AppendLine();
         text.AppendLine($"Hello {entry.PassengerName}, {seats} in {entry.ClassName} on {flight} are held for you until {until}.");
         text.AppendLine("Waitlist code: " + entry.BookingReference).AppendLine().AppendLine(how);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, entry.BookingReference));
 
         return new EmailMessage(entry.Email, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
     }
+
+
+    /// <summary>
+    /// The "Unsubscribe" button. SkyWings has no website, so the button is a mailto: link that opens a ready-written email to the SkyWings
+    /// address; staff then stop the emails from Manage booking. Empty when no sender address is configured (outbox only).
+    /// </summary>
+    private static string UnsubscribeButtonHtml(string? mailbox, string reference)
+    {
+        if (string.IsNullOrWhiteSpace(mailbox)) return "";
+        string link = UnsubscribeLink(mailbox, reference);
+        return "<div style=\"text-align:center;margin:14px 0 0\"><a href=\"" + Enc(link) + "\" style=\"display:inline-block;padding:9px 22px;" +
+               "border:1px solid #3f6556;border-radius:8px;color:#3f6556;font-size:13px;font-weight:600;text-decoration:none\">Unsubscribe</a></div>";
+    }
+
+    private static string UnsubscribeTextLine(string? mailbox, string reference)
+        => string.IsNullOrWhiteSpace(mailbox) ? "" : $"{Environment.NewLine}To unsubscribe, email {mailbox} with the subject \"Unsubscribe {reference}\".{Environment.NewLine}";
+
+    internal static string UnsubscribeLink(string mailbox, string reference)
+        => $"mailto:{mailbox}?subject={Uri.EscapeDataString("Unsubscribe " + reference)}" +
+           $"&body={Uri.EscapeDataString("Please stop sending SkyWings emails to this address. Booking reference: " + reference)}";
 
     private static string Enc(string value) => WebUtility.HtmlEncode(value);
 }

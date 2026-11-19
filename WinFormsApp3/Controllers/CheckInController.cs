@@ -70,7 +70,7 @@ public sealed class CheckInController
         BookingRecord booking = Current ?? throw new InvalidOperationException("No booking is open.");
         var (flightNo, date) = Leg(returnLeg);
         DateTime departure = AppData.DepartureOf(flightNo, date);
-        DateTime opens = departure.AddHours(-AppData.CheckInWindowHours);
+        DateTime opens = AppData.CheckInOpensAt(departure);
         bool open = _store.IsCheckInOpen(booking.Reference, flightNo, date, now);
         List<CheckInRecord> records = _store.LoadCheckIns(booking.Reference);
 
@@ -78,7 +78,7 @@ public sealed class CheckInController
             ? (CheckInBannerKind.Canceled, "This booking is canceled, so it can't be checked in.")
             : now < opens
                 ? (CheckInBannerKind.NotYetOpen,
-                    $"Check-in opens {opens:MMM d, h:mm tt}, {AppData.CheckInWindowHours} hours before departure.")
+                    $"Check-in opens {opens:MMM d, h:mm tt}.")
                 : now < departure
                     ? (CheckInBannerKind.Open, $"Check-in is open until departure at {departure:h:mm tt}.")
                     : FlightStatusEngine.Evaluate(flightNo, date, now) switch
@@ -128,16 +128,22 @@ public sealed class CheckInController
     }
 
     /// <summary>
-    /// Emails the boarding passes of the named travellers to the booking's address. Returns null when there is no booking or no address.
+    /// Emails the boarding passes of the named travellers (null = everyone checked in on this leg) to the booking's address.
+    /// Returns null only when no booking is open; a missing address or a lookup problem comes back as a result with a reason, so the screen can show it.
     /// An email problem never affects the check-in, which is already saved.
     /// </summary>
-    public async Task<SkyWings.Email.EmailSendResult?> SendBoardingPassAsync(IReadOnlyCollection<string> names, bool returnLeg)
+    public async Task<SkyWings.Email.EmailSendResult?> SendBoardingPassAsync(IReadOnlyCollection<string>? names, bool returnLeg)
     {
         if (Current is null) return null;
         string? email;
         try { email = _store.LoadBookingContact(Current.Reference); }
-        catch (Exception ex) { AppLogger.Error("CheckIn", ex); return null; }
-        if (string.IsNullOrEmpty(email)) return null;
+        catch (Exception ex)
+        {
+            AppLogger.Error("CheckIn", ex);
+            return new SkyWings.Email.EmailSendResult(false, "Failed", "The email address on the booking could not be read.");
+        }
+        if (string.IsNullOrWhiteSpace(email))
+            return new SkyWings.Email.EmailSendResult(false, "Skipped", "There is no email address on this booking.");
         List<CheckInRecord> records = PassRecords(returnLeg, names);
         return await SkyWings.Email.EmailServices.Create(_store).SendBoardingPassAsync(Current, email, records);
     }

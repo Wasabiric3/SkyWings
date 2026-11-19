@@ -27,7 +27,7 @@ public static class PolicyInfo
             }),
             new PolicySection("Check-in", new[]
             {
-                ("Online check-in opens", $"{AppData.CheckInWindowHours} hours before departure"),
+                ("Online check-in opens", "As soon as the booking is made"),
                 ("Online check-in closes", "At departure"),
                 ("Boarding pass", "Print or save it after you check in"),
             }),

@@ -35,7 +35,7 @@ public sealed class PolicyInfoTests
         StringAssert.Contains(text, $"{AppData.RefundRate(DateTime.Today.AddDays(7)):P0} of the total");
         StringAssert.Contains(text, $"{AppData.RefundRate(DateTime.Today.AddDays(1)):P0} of the total");
         StringAssert.Contains(text, $"{AppData.RefundRate(DateTime.Today):P0} of the total");
-        StringAssert.Contains(text, $"{AppData.CheckInWindowHours} hours before departure");
+        StringAssert.Contains(text, "As soon as the booking is made");   // check-in opens straight away
         StringAssert.Contains(text, $"{AppData.SeatHoldMinutes} minutes");
     }
 

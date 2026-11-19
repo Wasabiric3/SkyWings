@@ -157,7 +157,7 @@ public sealed partial class BookingStore
             if (!legMatch) return false;
             TimeOnly departureTime = AppData.FlightScheduledTimes.GetValueOrDefault(flightNo, new TimeOnly(8, 0));
             DateTime departure = flightDate.Date.Add(departureTime.ToTimeSpan());
-            return now >= departure.AddHours(-AppData.CheckInWindowHours) && now < departure;
+            return now >= AppData.CheckInOpensAt(departure) && now < departure;
         }
     }
 

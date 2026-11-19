@@ -323,14 +323,13 @@ public sealed class BookingStoreTests
     }
 
     [TestMethod]
-    public void CheckIn_IsAllowedOnlyInsideTheTwentyFourHourWindow()
+    public void CheckIn_IsOpenFromBookingUntilDeparture()
     {
         DateTime flightDate = DateTime.Today.AddDays(30);
         SaveRoundTrip("SKY-CHK00001", flightDate, flightDate.AddDays(5), "ECO5A", "ECO6A");
         DateTime departure = AppData.DepartureOf("PR-101", flightDate);
 
-        Assert.AreEqual(CheckInOutcome.NotOpen, _store.CheckIn("SKY-CHK00001", "Maria Santos", false, departure.AddHours(-25)));
-        Assert.AreEqual(CheckInOutcome.CheckedIn, _store.CheckIn("SKY-CHK00001", "Maria Santos", false, departure.AddHours(-23)));
+        Assert.AreEqual(CheckInOutcome.CheckedIn, _store.CheckIn("SKY-CHK00001", "Maria Santos", false, departure.AddDays(-20)));
         Assert.AreEqual(CheckInOutcome.AlreadyCheckedIn, _store.CheckIn("SKY-CHK00001", "Maria Santos", false, departure.AddHours(-2)));
         Assert.AreEqual(CheckInOutcome.NotOpen, _store.CheckIn("SKY-CHK00001", "Maria Santos", false, departure.AddMinutes(1)));
     }

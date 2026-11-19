@@ -48,7 +48,7 @@ Tests use a temporary data folder, so they never touch real data.
 
 If a customer gives an email address while booking, SkyWings sends a receipt with a QR code (the booking reference). Staff can send the receipt again, to the address saved on the booking, with **Send this receipt** in **Manage booking**. The email carries the same one-page A4 receipt as **Print receipt**, as a PDF attachment. Check-in and Manage booking also accept a scanned QR code in the reference box.
 
-When travellers are checked in, SkyWings also emails their boarding pass (a PDF, with the same QR code) to the address on the booking. It follows the same rules as receipts: no address or an unsubscribed address means no email, demo bookings never send, and a mail problem never undoes the check-in.
+When travellers are checked in, SkyWings also emails their boarding pass (a PDF, with the same QR code) to the address on the booking. It follows the same rules as receipts: no address or an unsubscribed address means no email, demo bookings never send, and a mail problem never undoes the check-in. On the check-in screen, **Email boarding pass** sends the passes again for everyone checked in on that flight, and shows a message when the booking has no email address.
 
 - With no mail settings, each email is saved as an `.html` file in `%LocalAppData%\SkyWings\outbox`. Open it in a browser.
 - To send real emails, add these keys to `db.properties` (next to the exe or in the data folder). For Gmail use an app password, not your normal password.
@@ -64,7 +64,7 @@ smtp.from=your.address@gmail.com
 
 - If the mail server cannot be reached, the email is saved to the outbox instead, so nothing is lost.
 - `db.properties` holds a password in plain text. Do not commit it or share screenshots of it.
-- There is no unsubscribe link, because SkyWings has no public website. The receipt email tells customers to contact staff to stop receipt emails.
+- Every email has an **Unsubscribe** button. SkyWings has no public website, so the button opens a ready-written email to the `smtp.from` address (subject "Unsubscribe <reference>"); staff then stop the emails from Manage booking. Without mail settings (outbox only) the button is left out and the email tells customers to contact staff.
 
 ## Simulated traffic (developer note)
 
