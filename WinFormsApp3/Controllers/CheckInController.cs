@@ -127,6 +127,21 @@ public sealed class CheckInController
         return new CheckInSummary(done, problems);
     }
 
+    /// <summary>
+    /// Emails the boarding passes of the named travellers to the booking's address. Returns null when there is no booking or no address.
+    /// An email problem never affects the check-in, which is already saved.
+    /// </summary>
+    public async Task<SkyWings.Email.EmailSendResult?> SendBoardingPassAsync(IReadOnlyCollection<string> names, bool returnLeg)
+    {
+        if (Current is null) return null;
+        string? email;
+        try { email = _store.LoadBookingContact(Current.Reference); }
+        catch (Exception ex) { AppLogger.Error("CheckIn", ex); return null; }
+        if (string.IsNullOrEmpty(email)) return null;
+        List<CheckInRecord> records = PassRecords(returnLeg, names);
+        return await SkyWings.Email.EmailServices.Create(_store).SendBoardingPassAsync(Current, email, records);
+    }
+
     /// <summary>Check-in records on this leg for boarding passes (all travellers, or only those in <paramref name="only"/>).</summary>
     public List<CheckInRecord> PassRecords(bool returnLeg, IReadOnlyCollection<string>? only)
     {

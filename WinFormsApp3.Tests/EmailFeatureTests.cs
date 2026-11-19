@@ -87,6 +87,63 @@ public sealed class EmailFeatureTests
         Assert.AreEqual("hello", QrPayload.Normalize(" hello "));
     }
 
+    // ---- boarding pass email after check-in ----
+
+    private List<CheckInRecord> CheckInOne(string reference)
+    {
+        DateTime departure = AppData.DepartureOf("PR-101", DateTime.Today.AddDays(30));
+        Assert.AreEqual(CheckInOutcome.CheckedIn, _store.CheckIn(reference, "Maria <Santos>", false, departure.AddHours(-3)));
+        return _store.LoadCheckIns(reference);
+    }
+
+    [TestMethod]
+    public async Task BoardingPassEmail_SendsOnePdfAndTheQr()
+    {
+        BookingRecord booking = SaveBooking();
+        List<CheckInRecord> records = CheckInOne(booking.Reference);
+        var sender = new RecordingSender();
+        var service = new BookingEmailService(_store, sender, new FakeQr());
+
+        EmailSendResult result = await service.SendBoardingPassAsync(booking, "maria@example.com", records);
+
+        Assert.IsTrue(result.Delivered);
+        EmailMessage message = sender.Sent.Single();
+        StringAssert.Contains(message.Subject, "boarding pass");
+        Assert.AreEqual(1, message.InlineImages.Count);
+        EmailAttachment pdf = message.Attachments!.Single();
+        Assert.AreEqual("application/pdf", pdf.MediaType);
+        Assert.IsTrue(pdf.Bytes.Length > 100);
+        Assert.IsFalse(message.HtmlBody.Contains("Maria <Santos>"));   // names are HTML-encoded, never raw
+    }
+
+    [TestMethod]
+    public async Task BoardingPassEmail_SkipsBadUnsubscribedAndEmptyCases()
+    {
+        BookingRecord booking = SaveBooking();
+        List<CheckInRecord> records = CheckInOne(booking.Reference);
+        var sender = new RecordingSender();
+        var service = new BookingEmailService(_store, sender, new FakeQr());
+
+        Assert.AreEqual("Skipped", (await service.SendBoardingPassAsync(booking, "not an email", records)).Channel);
+        Assert.AreEqual("Skipped", (await service.SendBoardingPassAsync(booking, "maria@example.com", Array.Empty<CheckInRecord>())).Channel);
+        _store.SetEmailSubscribed("maria@example.com", false);
+        Assert.AreEqual("Skipped", (await service.SendBoardingPassAsync(booking, "maria@example.com", records)).Channel);
+        Assert.IsEmpty(sender.Sent);
+    }
+
+    [TestMethod]
+    public async Task BoardingPassEmail_ServerFailureReturnsFailedAndDoesNotThrow()
+    {
+        BookingRecord booking = SaveBooking();
+        List<CheckInRecord> records = CheckInOne(booking.Reference);
+        var service = new BookingEmailService(_store, new FailingSender(), new FakeQr());
+
+        EmailSendResult result = await service.SendBoardingPassAsync(booking, "maria@example.com", records);
+
+        Assert.IsFalse(result.Delivered);
+        Assert.AreEqual("Failed", result.Channel);
+    }
+
     // ---- address validation ----
 
     [TestMethod]

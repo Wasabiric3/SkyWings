@@ -52,7 +52,9 @@ internal static class HelpContent
 
         new("Check in and boarding pass",
             $"Online check-in opens {AppData.CheckInWindowHours} hours before departure and closes at departure.\n\n" +
-            "Choose \"Check-in\", enter the booking reference, then print or save the boarding pass."),
+            "Choose \"Check-in\", enter the booking reference, then print or save the boarding pass.\n\n" +
+            "If an email address was given for the booking, the boarding pass is also emailed as a PDF with a QR code. " +
+            "Without mail settings it is saved as a file in the outbox folder instead."),
 
         new("Trip status",
             "Every booking shows where its trip is right now, following the flight's own times (delays included):\n" +

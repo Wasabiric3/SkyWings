@@ -205,16 +205,34 @@ public sealed class CheckInForm : GlassForm
 
     private void UpdateButtons(bool open) => _checkIn.Enabled = open && _boxes.Any(b => b.Checked);
 
-    private void CheckInSelected()
+    private async void CheckInSelected()
     {
         if (_controller.Current is null) return;
+        bool returnLeg = ReturnLeg;
         CheckInSummary summary = _controller.CheckIn(
-            _boxes.Where(b => b.Checked).Select(b => (string)b.Tag!).ToList(), ReturnLeg, DateTime.Now);
+            _boxes.Where(b => b.Checked).Select(b => (string)b.Tag!).ToList(), returnLeg, DateTime.Now);
 
         RebuildTravellers();
         if (summary.Problems.Count > 0)
             MessageBox.Show(this, string.Join(Environment.NewLine, summary.Problems), "Check-in", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        if (summary.Done.Count > 0) ShowPasses(summary.Done.ToList());
+        if (summary.Done.Count == 0) return;
+
+        // The check-in is saved. Send the email in the background so the passes appear at once; a failure only shows a note.
+        Task<SkyWings.Email.EmailSendResult?> sending = SendPassEmailAsync(summary.Done.ToList(), returnLeg);
+        ShowPasses(summary.Done.ToList());
+        SkyWings.Email.EmailSendResult? sent = await sending;
+        if (IsDisposed || sent is null) return;
+        MessageBox.Show(this,
+            sent.Delivered
+                ? (sent.Channel == "SMTP" ? "The boarding pass was emailed to the address on the booking." : "The boarding pass email was saved as a file:\n" + sent.Detail)
+                : "No boarding pass email was sent. " + sent.Detail,
+            "Email boarding pass", MessageBoxButtons.OK, sent.Delivered ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    private async Task<SkyWings.Email.EmailSendResult?> SendPassEmailAsync(IReadOnlyCollection<string> names, bool returnLeg)
+    {
+        try { return await _controller.SendBoardingPassAsync(names, returnLeg); }
+        catch (Exception ex) { AppLogger.Error("CheckIn", ex); return null; }
     }
 
     /// <summary>Shows boarding passes for the checked-in travellers on this leg (all, or only <paramref name="only"/>).</summary>

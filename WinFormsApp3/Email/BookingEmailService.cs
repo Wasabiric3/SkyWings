@@ -79,6 +79,45 @@ public sealed class BookingEmailService
             return new EmailSendResult(false, "Failed", "The receipt email could not be sent or saved.");
         }
     }
+
+    /// <summary>
+    /// Emails the boarding pass PDF for the given check-ins. Same rules as the receipt: invalid or unsubscribed addresses are skipped,
+    /// demo bookings never send, and no problem here can affect the check-in itself.
+    /// </summary>
+    public async Task<EmailSendResult> SendBoardingPassAsync(BookingRecord booking, string toEmail, IReadOnlyList<CheckInRecord> records)
+    {
+        try
+        {
+            if (!BookingRules.IsValidEmail(toEmail))
+                return new EmailSendResult(false, "Skipped", "The email address is not valid.");
+            if (!_store.IsEmailSubscribed(toEmail))
+                return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
+            if (_store.IsSimulatedBooking(booking.Reference))
+                return new EmailSendResult(false, "Skipped", "Demo bookings do not send email.");
+            if (records.Count == 0)
+                return new EmailSendResult(false, "Skipped", "No one has checked in yet.");
+
+            var passes = records
+                .OrderBy(r => r.CheckedInAt)
+                .Select(r => BoardingPassData.From(booking, IsReturnLeg(booking, r), r))
+                .ToList();
+            var attachments = new List<EmailAttachment>
+            {
+                new($"SkyWings-boarding-pass-{booking.Reference}.pdf", BoardingPassPdf.Create(passes, _qr),
+                    "application/pdf", passes.Count == 1 ? "boarding pass" : "boarding passes")
+            };
+            byte[] png = _qr.RenderPng(QrPayload.Build(booking.Reference));
+            EmailSendResult result = await _sender.SendAsync(
+                BookingEmailBuilder.BuildBoardingPass(booking, toEmail.Trim(), png, _unsubscribeMailbox, attachments)).ConfigureAwait(false);
+            _store.WriteAudit("system", "SYSTEM", "EMAIL_BOARDING_PASS", booking.Reference, result.Channel);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return new EmailSendResult(false, "Failed", "The boarding pass email could not be sent or saved.");
+        }
+    }
 }
 
 /// <summary>Sends the waitlist offer email. Same rules as receipts: unsubscribed addresses are skipped, failures never propagate.</summary>

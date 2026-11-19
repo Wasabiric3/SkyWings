@@ -48,6 +48,8 @@ Tests use a temporary data folder, so they never touch real data.
 
 If a customer gives an email address while booking, SkyWings sends a receipt with a QR code (the booking reference). Staff can send the receipt again, to the address saved on the booking, with **Send this receipt** in **Manage booking**. The email carries the same one-page A4 receipt as **Print receipt**, as a PDF attachment. Check-in and Manage booking also accept a scanned QR code in the reference box.
 
+When travellers are checked in, SkyWings also emails their boarding pass (a PDF, with the same QR code) to the address on the booking. It follows the same rules as receipts: no address or an unsubscribed address means no email, demo bookings never send, and a mail problem never undoes the check-in.
+
 - With no mail settings, each email is saved as an `.html` file in `%LocalAppData%\SkyWings\outbox`. Open it in a browser.
 - To send real emails, add these keys to `db.properties` (next to the exe or in the data folder). For Gmail use an app password, not your normal password.
 

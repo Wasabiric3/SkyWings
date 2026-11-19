@@ -46,6 +46,34 @@ public static class BookingEmailBuilder
             attachments is { Count: > 0 } ? attachments : null);
     }
 
+    /// <summary>The boarding pass email sent after check-in. Carries the pass PDF(s) and the booking QR code.</summary>
+    public static EmailMessage BuildBoardingPass(BookingRecord booking, string toEmail, byte[] qrPng, string? unsubscribeMailbox,
+        IReadOnlyList<EmailAttachment> attachments)
+    {
+        string subject = $"SkyWings boarding pass {booking.Reference}: {booking.Origin} to {booking.Destination}";
+        string attached = AttachmentNames(attachments);
+
+        var html = new StringBuilder();
+        html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
+        html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
+        html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
+        html.Append($"<div style=\"color:#687e74;margin-bottom:18px\">You are checked in. Attached (PDF): {Enc(attached)}.</div>");
+        html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
+        html.Append($"<div style=\"text-align:center;margin:20px 0\"><img src=\"cid:{QrContentId}\" width=\"180\" height=\"180\" alt=\"QR code for booking {Enc(booking.Reference)}\"/>");
+        html.Append("<div style=\"font-size:12px;color:#687e74;margin-top:6px\">Show this code or the attached boarding pass at the airport.</div></div>");
+        html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append("</div></body></html>");
+
+        var text = new StringBuilder();
+        text.AppendLine("SkyWings - you are checked in").AppendLine();
+        text.AppendLine("Attached (PDF): " + attached + ".").AppendLine();
+        text.AppendLine("Booking reference: " + booking.Reference);
+        text.AppendLine().AppendLine(UnsubscribeText);
+
+        return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(),
+            new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox, attachments);
+    }
+
     private static string AttachmentNames(IReadOnlyList<EmailAttachment> attachments)
         => string.Join(", ", attachments.Select(a => a.Label ?? a.FileName));
 
