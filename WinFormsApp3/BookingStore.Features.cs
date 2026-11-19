@@ -188,6 +188,35 @@ public sealed partial class BookingStore
         }
     }
 
+    /// <summary>Every check-in, grouped by booking reference, in one query (for showing many bookings' trip status at once).</summary>
+    public Dictionary<string, List<CheckInRecord>> LoadCheckInsByBooking()
+    {
+        lock (_lock)
+        {
+            var result = new Dictionary<string, List<CheckInRecord>>(StringComparer.Ordinal);
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = Cmd(con, "SELECT * FROM check_ins");
+                using var rs = cmd.ExecuteReader();
+                while (rs.Read())
+                {
+                    var record = new CheckInRecord(Str(rs, "booking_ref"), Str(rs, "passenger_name"), Str(rs, "flight_no"),
+                        Dt(rs, "flight_date"), Str(rs, "seat_code"), Dt(rs, "checked_in_at"));
+                    if (!result.TryGetValue(record.BookingReference, out List<CheckInRecord>? list))
+                        result[record.BookingReference] = list = new List<CheckInRecord>();
+                    list.Add(record);
+                }
+            }
+            catch (SqliteException e)
+            {
+                LogError(e);
+                throw new IOException("Error loading check-ins: " + e.Message, e);
+            }
+            return result;
+        }
+    }
+
     public bool ValidatePromoCode(string code, DateTime date, decimal subtotal, out decimal discount)
     {
         discount = 0;

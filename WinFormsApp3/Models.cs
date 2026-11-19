@@ -44,6 +44,9 @@ public sealed record CheckInRecord(
     string BookingReference, string PassengerName, string FlightNo, DateTime FlightDate,
     string SeatCode, DateTime CheckedInAt);
 
+/// <summary>A demo traveller who has not checked in yet for their flight (used by the simulator).</summary>
+public sealed record SimCheckInCandidate(string Reference, string FlightNo, DateTime FlightDate, string PassengerName, string SeatCode);
+
 public sealed class ValidationResult
 {
     public bool Valid { get; }

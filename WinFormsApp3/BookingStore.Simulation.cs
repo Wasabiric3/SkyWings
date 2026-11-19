@@ -168,6 +168,7 @@ public sealed partial class BookingStore
                 string scope = flightNo is null ? "" : " AND flight_no = @no";
                 (string, object?)[] args = flightNo is null ? Array.Empty<(string, object?)>() : new (string, object?)[] { ("@no", flightNo) };
                 string refs = $"SELECT reference FROM bookings WHERE is_simulated = 1{scope}";
+                Exec(con, tx, $"DELETE FROM check_ins WHERE booking_ref IN ({refs})", args);
                 Exec(con, tx, $"DELETE FROM passengers WHERE booking_ref IN ({refs})", args);
                 Exec(con, tx, $"DELETE FROM booking_legs WHERE booking_ref IN ({refs})", args);
                 int removed = Exec(con, tx, $"DELETE FROM bookings WHERE is_simulated = 1{scope}", args);
@@ -178,6 +179,74 @@ public sealed partial class BookingStore
             catch (SqliteException e)
             {
                 throw new IOException("Error removing simulated bookings: " + e.Message, e);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ demo check-ins
+
+    /// <summary>
+    /// Demo travellers (confirmed <c>is_simulated = 1</c> bookings flying between the two dates, inclusive) who have a seat and have
+    /// not checked in yet. One row per traveller.
+    /// </summary>
+    public List<SimCheckInCandidate> LoadSimulatedCheckInCandidates(DateTime fromDate, DateTime toDate)
+    {
+        lock (_lock)
+        {
+            var result = new List<SimCheckInCandidate>();
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = Cmd(con,
+                    "SELECT b.reference, b.flight_no, b.flight_date, p.name, p.seat_code FROM bookings b" +
+                    " JOIN passengers p ON p.booking_ref = b.reference" +
+                    " LEFT JOIN check_ins c ON c.booking_ref = b.reference AND c.passenger_name = p.name" +
+                    "   AND c.flight_no = b.flight_no AND c.flight_date = b.flight_date" +
+                    " WHERE b.is_simulated = 1 AND b.status = @confirmed AND b.flight_date >= @from AND b.flight_date <= @to" +
+                    "   AND p.seat_code <> '' AND c.id IS NULL",
+                    null, ("@confirmed", AppData.StatusConfirmed), ("@from", fromDate.Date), ("@to", toDate.Date));
+                using var rs = cmd.ExecuteReader();
+                while (rs.Read())
+                    result.Add(new SimCheckInCandidate(Str(rs, "reference"), Str(rs, "flight_no"), Dt(rs, "flight_date"),
+                        Str(rs, "name"), Str(rs, "seat_code")));
+            }
+            catch (SqliteException e)
+            {
+                LogError(e);
+                throw new IOException("Error loading demo check-in candidates: " + e.Message, e);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Saves demo check-ins in one transaction. Records for anything but a demo booking (<see cref="SimulatedPrefix"/>) are skipped,
+    /// so the simulator can never check in a real traveller. Returns how many were written.
+    /// </summary>
+    public int SaveSimulatedCheckIns(IReadOnlyList<CheckInRecord> checkIns)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                using var con = OpenConnection();
+                using var tx = con.BeginTransaction();
+                int saved = 0;
+                foreach (CheckInRecord c in checkIns)
+                {
+                    if (!c.BookingReference.StartsWith(SimulatedPrefix, StringComparison.Ordinal)) continue;
+                    saved += Exec(con, tx,
+                        "INSERT OR IGNORE INTO check_ins (booking_ref,passenger_name,flight_no,flight_date,seat_code,checked_in_at) " +
+                        "VALUES (@ref,@name,@flight,@date,@seat,@at)",
+                        ("@ref", c.BookingReference), ("@name", c.PassengerName), ("@flight", c.FlightNo),
+                        ("@date", c.FlightDate.Date), ("@seat", c.SeatCode), ("@at", c.CheckedInAt));
+                }
+                tx.Commit();
+                return saved;
+            }
+            catch (SqliteException e)
+            {
+                throw new IOException("Error saving demo check-ins: " + e.Message, e);
             }
         }
     }
