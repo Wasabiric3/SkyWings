@@ -67,3 +67,9 @@ smtp.from=your.address@gmail.com
 ## Demo data
 
 The store seeds sample flights and bookings (`BookingStore.Seed.cs`). Review this before using the app with real customers.
+
+With **Demo activity** on (the default, in the staff window), every flight is 60–90% booked with simulated `SIM-` bookings, and demo travellers check in by themselves during the 24-hour check-in window; about 8% of demo bookings never check in and end as no-shows. Demo bookings stay out of reports unless **Include demo bookings in reports** is ticked.
+
+## Trip status
+
+Each booking shows where its trip is right now, worked out from the flight's times (delays included) and its check-ins: **Upcoming → Check-in open → Checked in → Boarding → In flight → Completed**, or **No-show** (the flight left and nobody on the booking checked in), or **Canceled**. Return trips show the return leg as "Return · …" once the outbound has landed. The status appears in the staff Bookings tab (with filters), the booking detail, Manage booking and Check-in. Nothing extra is stored: the status is always current.

@@ -55,6 +55,16 @@ internal static class HelpContent
             $"Online check-in opens {AppData.CheckInWindowHours} hours before departure and closes at departure.\n\n" +
             "Choose \"Check-in\", enter the booking reference, then print or save the boarding pass."),
 
+        new("Trip status",
+            "Every booking shows where its trip is right now, following the flight's own times (delays included):\n" +
+            "Upcoming → Check-in open → Checked in → Boarding → In flight → Completed.\n\n" +
+            "A booking becomes a No-show when the flight leaves and nobody on it checked in. A cancelled booking shows Canceled. " +
+            "On a return trip the outbound flight decides until it lands; then the return flight does (\"Return · In flight\"), " +
+            "and the trip is Completed once the return lands.\n\n" +
+            $"In this demo, demo travellers check in by themselves during the {AppData.CheckInWindowHours}-hour window, " +
+            "most of them in the last 12 hours; about 8% of demo bookings never check in and end as no-shows. " +
+            "Staff can filter the Bookings tab by Upcoming, In progress, Completed, No-show or Canceled."),
+
         new("Senior and PWD discounts",
             $"Senior citizens (age {AppData.SeniorMinimumAge} and above) and persons with disability get {AppData.DiscountRate:P0} off, " +
             $"and the {AppData.TaxRate:P0} VAT does not apply to them. Tick the discount for the traveller on the Passengers step and enter their ID number."),

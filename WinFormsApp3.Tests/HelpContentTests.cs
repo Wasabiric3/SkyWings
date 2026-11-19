@@ -20,6 +20,15 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
+    public void TripStatusTopic_NamesEveryStatus()
+    {
+        var topic = HelpContent.Topics().Single(t => t.Title == "Trip status");
+        foreach (string label in new[] { "Upcoming", "Check-in open", "Checked in", "Boarding", "In flight", "Completed", "No-show", "Canceled" })
+            StringAssert.Contains(topic.Body, label);
+        StringAssert.Contains(topic.Body, "demo travellers check in");
+    }
+
+    [TestMethod]
     public void RefundRowsMatchTheRefundRules()
     {
         var refunds = HelpContent.PolicyRows().Where(r => r.Area == "Refunds").ToList();
