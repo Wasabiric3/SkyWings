@@ -190,10 +190,19 @@ public sealed partial class BookingStore
 
     /// <summary>
     /// Every check-in, grouped by booking reference, in one query (for showing many bookings' trip status at once).
-    /// With <paramref name="includeSimulated"/> false, demo (<c>SIM-</c>) check-ins are left out, which keeps the read small
-    /// when the staff screens hide demo bookings.
+    /// With <paramref name="includeSimulated"/> false, simulated bookings' check-ins are left out.
     /// </summary>
     public Dictionary<string, List<CheckInRecord>> LoadCheckInsByBooking(bool includeSimulated = true)
+        => LoadCheckInsGrouped(includeSimulated
+            ? "SELECT * FROM check_ins"
+            : "SELECT * FROM check_ins WHERE booking_ref IN (SELECT reference FROM bookings WHERE is_simulated = 0)");
+
+    /// <summary>The check-ins (both legs) of the bookings whose outbound flight is on <paramref name="flightDate"/>, by reference.</summary>
+    public Dictionary<string, List<CheckInRecord>> LoadCheckInsForDate(DateTime flightDate)
+        => LoadCheckInsGrouped("SELECT * FROM check_ins WHERE booking_ref IN (SELECT reference FROM bookings WHERE flight_date = @d)",
+            ("@d", flightDate.Date));
+
+    private Dictionary<string, List<CheckInRecord>> LoadCheckInsGrouped(string sql, params (string, object?)[] args)
     {
         lock (_lock)
         {
@@ -201,9 +210,7 @@ public sealed partial class BookingStore
             try
             {
                 using var con = OpenConnection();
-                using var cmd = includeSimulated
-                    ? Cmd(con, "SELECT * FROM check_ins")
-                    : Cmd(con, "SELECT * FROM check_ins WHERE booking_ref IN (SELECT reference FROM bookings WHERE is_simulated = 0)");
+                using var cmd = Cmd(con, sql, null, args);
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                 {

@@ -40,6 +40,35 @@ public sealed class TripStatusAdminTests
     }
 
     [TestMethod]
+    public void AsReference_AcceptsLowercaseAndSpaces_RejectsOtherText()
+    {
+        Assert.AreEqual("SKY-3CAD9C0FFEE1", AdminService.AsReference(" sky-3cad9c0ffee1  "));
+        Assert.IsNull(AdminService.AsReference("PR-101"));
+        Assert.IsNull(AdminService.AsReference("Maria"));
+        Assert.IsNull(AdminService.AsReference("SKY-3CAD9"));
+    }
+
+    [TestMethod]
+    public void LoadTripStatusesForDate_MatchesLoadTripStatuses()
+    {
+        DateTime lastWeek = DateTime.Today.AddDays(-7);
+        SaveReal("SKY-TRIPADMIN011", lastWeek, "ECO3A");
+        SaveReal("SKY-TRIPADMIN012", lastWeek, "ECO3B");
+        Assert.IsTrue(_store.CheckInPassenger("SKY-TRIPADMIN011", "Real Person", "PR-101", lastWeek, "ECO3A",
+            AppData.DepartureOf("PR-101", lastWeek).AddHours(-3)));
+        DateTime now = DateTime.Now;
+
+        List<BookingRecord> day = _admin.LoadBookingsForDate(lastWeek);
+        Dictionary<string, TripStatusInfo> byDate = _admin.LoadTripStatusesForDate(day, lastWeek, now);
+        Dictionary<string, TripStatusInfo> all = _admin.LoadTripStatuses(day, now);
+
+        Assert.HasCount(2, day);
+        foreach (BookingRecord b in day) Assert.AreEqual(all[b.Reference], byDate[b.Reference], b.Reference);
+        Assert.AreEqual(TripPhase.Completed, byDate["SKY-TRIPADMIN011"].Phase);
+        Assert.AreEqual(TripPhase.NoShow, byDate["SKY-TRIPADMIN012"].Phase);
+    }
+
+    [TestMethod]
     public void LoadTripStatus_ForOneBooking_ReadsItsOwnCheckIns()
     {
         DateTime lastWeek = DateTime.Today.AddDays(-7);

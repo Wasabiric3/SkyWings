@@ -180,6 +180,60 @@ public sealed class BookingStoreTests
     }
 
     [TestMethod]
+    public void LoadBookingsForDate_ReturnsOnlyThatDate_WithPassengersAndReturnLegs()
+    {
+        DateTime day = DateTime.Today.AddDays(20);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-DATE00000001", 4_000m, day, seat: "ECO7A"), false, 4_000m, "Credit Card", "**** 4521", "TXN-D1", DateTime.Now);
+        SaveRoundTrip("SKY-DATE00000002", day, day.AddDays(4), "ECO7B", "ECO8B");
+        _store.SaveConfirmedBooking(MakeBooking("SKY-DATE00000003", 4_000m, day.AddDays(1), seat: "ECO7C"), false, 4_000m, "Credit Card", "**** 4521", "TXN-D3", DateTime.Now);
+
+        List<BookingRecord> list = _store.LoadBookingsForDate(day);
+
+        CollectionAssert.AreEquivalent(new[] { "SKY-DATE00000001", "SKY-DATE00000002" }, list.Select(b => b.Reference).ToArray());
+        BookingRecord roundTrip = list.Single(b => b.Reference == "SKY-DATE00000002");
+        Assert.AreEqual("PR-501", roundTrip.ReturnFlightNo);
+        Assert.AreEqual(day.AddDays(4), roundTrip.ReturnFlightDateValue);
+        Assert.AreEqual("Extra baggage (+PHP 1,500)", roundTrip.BaggageOption);
+        Assert.HasCount(1, roundTrip.Passengers);
+        Assert.AreEqual("ECO8B", roundTrip.Passengers[0].ReturnSeatCode);
+        Assert.AreEqual("ECO7A", list.Single(b => b.Reference == "SKY-DATE00000001").Passengers[0].SeatCode);
+    }
+
+    [TestMethod]
+    public void LoadBookingsForDate_EmptyDate_ReturnsEmpty()
+        => Assert.IsEmpty(_store.LoadBookingsForDate(DateTime.Today.AddDays(200)));
+
+    [TestMethod]
+    public void LoadCheckInsForDate_ReturnsCheckInsOfThatDatesBookings()
+    {
+        DateTime day = DateTime.Today.AddDays(1);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-DATE00000004", 4_000m, day, seat: "ECO7D"), false, 4_000m, "Credit Card", "**** 4521", "TXN-D4", DateTime.Now);
+        _store.SaveConfirmedBooking(MakeBooking("SKY-DATE00000005", 4_000m, day.AddDays(1), seat: "ECO7E"), false, 4_000m, "Credit Card", "**** 4521", "TXN-D5", DateTime.Now);
+        DateTime departure = AppData.DepartureOf("PR-101", day);
+        Assert.IsTrue(_store.CheckInPassenger("SKY-DATE00000004", "Maria Santos", "PR-101", day, "ECO7D", departure.AddHours(-2)));
+        Assert.IsTrue(_store.CheckInPassenger("SKY-DATE00000005", "Maria Santos", "PR-101", day.AddDays(1), "ECO7E", departure.AddDays(1).AddHours(-2)));
+
+        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsForDate(day);
+
+        CollectionAssert.AreEqual(new[] { "SKY-DATE00000004" }, checkIns.Keys.ToArray());
+    }
+
+    [TestMethod]
+    [DoNotParallelize]   // wall-clock bound, measured alone
+    public void LoadBookingsForDate_FullSimulatedDay_IsQuick()
+    {
+        DateTime now = DateTime.Today.AddHours(6);
+        new SimulationService(_store).EnsureLoad(now, horizonDays: 1);
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        List<BookingRecord> day = _store.LoadBookingsForDate(now.Date);
+        clock.Stop();
+
+        Assert.IsGreaterThan(5000, day.Count, "a full simulated day");
+        Assert.IsLessThan(1500L, clock.ElapsedMilliseconds, $"{clock.ElapsedMilliseconds} ms for {day.Count} bookings");
+    }
+
+    [TestMethod]
     public void LoadedBooking_KeepsReturnLegAndExtras()
     {
         SaveRoundTrip("SKY-RT000001", DateTime.Today.AddDays(30), DateTime.Today.AddDays(35), "ECO5A", "ECO6A");

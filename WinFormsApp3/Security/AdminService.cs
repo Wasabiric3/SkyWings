@@ -33,6 +33,33 @@ public sealed class AdminService
         return _store.FindByReference(reference);
     }
 
+    /// <summary>The bookings whose outbound flight is on <paramref name="date"/> (what the Bookings tab shows).</summary>
+    public List<BookingRecord> LoadBookingsForDate(DateTime date)
+    {
+        Session.Require(Permission.ViewBookings);
+        return _store.LoadBookingsForDate(date);
+    }
+
+    /// <summary>The trip status of a date's bookings, reading only that date's check-ins.</summary>
+    public Dictionary<string, Controllers.TripStatusInfo> LoadTripStatusesForDate(IReadOnlyList<BookingRecord> bookings, DateTime date, DateTime now)
+    {
+        Session.Require(Permission.ViewBookings);
+        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsForDate(date);
+        var none = new List<CheckInRecord>();
+        return bookings.ToDictionary(b => b.Reference,
+            b => Controllers.TripStatus.Of(b, checkIns.GetValueOrDefault(b.Reference) ?? none, now), StringComparer.Ordinal);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex ReferencePattern =
+        new("^SKY-[0-9A-F]{12}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The search text as a booking reference ("SKY-" + 12 hex, any case, spaces ignored), or null when it is not one.</summary>
+    internal static string? AsReference(string search)
+    {
+        string text = search.Trim().ToUpperInvariant();
+        return ReferencePattern.IsMatch(text) ? text : null;
+    }
+
     /// <summary>Why staff cannot cancel this booking, or null when they can.</summary>
     public string? CancelRefusal(BookingRecord booking)
         => booking.Status == AppData.StatusCanceled ? "This booking is already canceled." : null;

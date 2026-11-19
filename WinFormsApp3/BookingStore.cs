@@ -248,50 +248,99 @@ public sealed partial class BookingStore
             Money(rs, "refund_amount"));
     }
 
+    /// <summary>A booking's return leg (booking_legs, leg_order 2).</summary>
+    private sealed record ReturnLeg(string FlightNo, string Origin, string Destination, DateTime FlightDate, bool Domestic);
+
+    /// <summary>A booking's extras (booking_options).</summary>
+    private sealed record BookingOptions(string Baggage, string Meal, string Promo, string Profile);
+
+    private const string ReturnLegColumns = "booking_ref, flight_no, origin, destination, flight_date, domestic";
+    private const string OptionColumns = "booking_ref, baggage_option, meal_option, promo_code, profile_ref";
+
+    private static ReturnLeg ReadReturnLeg(SqliteDataReader rs)
+        => new(Str(rs, "flight_no"), Str(rs, "origin"), Str(rs, "destination"), Dt(rs, "flight_date"), Int(rs, "domestic") == 1);
+
+    private static BookingOptions ReadOptions(SqliteDataReader rs)
+        => new(Str(rs, "baggage_option"), Str(rs, "meal_option"), Str(rs, "promo_code"), Str(rs, "profile_ref"));
+
+    /// <summary>A booking from its rows. Return leg and extras live in their own tables; older (seeded) bookings have no rows there.</summary>
+    private static BookingRecord AssembleBooking(BookingHeader h, IReadOnlyList<PassengerRecord> passengers, ReturnLeg? leg, BookingOptions? options)
+        => new(h.Reference, h.BookedAt, h.FlightNo, h.Origin, h.Destination, h.FlightDate, h.Domestic,
+            h.ClassName, h.PaymentMethod, h.MaskedAccount, h.TotalAmount, h.RealtimeEst,
+            passengers, h.Status, h.PaymentStatus, h.PaymentTxnRef, h.PaymentConfirmedAt, h.RefundAmount)
+        {
+            ReturnFlightNo = leg?.FlightNo, ReturnOrigin = leg?.Origin, ReturnDestination = leg?.Destination,
+            ReturnDomestic = leg?.Domestic ?? false, ReturnFlightDateValue = leg?.FlightDate,
+            BaggageOption = options?.Baggage ?? "Standard", MealOption = options?.Meal ?? "Standard meal",
+            PromoCode = options?.Promo ?? "", ProfileReference = options?.Profile ?? ""
+        };
+
     // SQLite commands cannot run while a reader is open on the same connection,
     // so headers are read first and passengers are loaded afterwards.
     private BookingRecord BuildBookingRecord(SqliteConnection con, BookingHeader h)
     {
         var passengers = LoadPassengers(con, h.Reference);
 
-        // Return leg and extras live in their own tables; older (seeded) bookings simply have no rows there.
-        string? returnNo = null, returnOrigin = null, returnDestination = null;
-        bool returnDomestic = false;
-        DateTime? returnDate = null;
-        using (var cmd = Cmd(con,
-            "SELECT flight_no, origin, destination, flight_date, domestic FROM booking_legs WHERE booking_ref = @ref AND leg_order = 2",
+        ReturnLeg? leg = null;
+        using (var cmd = Cmd(con, $"SELECT {ReturnLegColumns} FROM booking_legs WHERE booking_ref = @ref AND leg_order = 2",
             null, ("@ref", h.Reference)))
         using (var rs = cmd.ExecuteReader())
-            if (rs.Read())
-            {
-                returnNo = Str(rs, "flight_no");
-                returnOrigin = Str(rs, "origin");
-                returnDestination = Str(rs, "destination");
-                returnDate = Dt(rs, "flight_date");
-                returnDomestic = Int(rs, "domestic") == 1;
-            }
+            if (rs.Read()) leg = ReadReturnLeg(rs);
 
-        string baggage = "Standard", meal = "Standard meal", promo = "", profile = "";
-        using (var cmd = Cmd(con,
-            "SELECT baggage_option, meal_option, promo_code, profile_ref FROM booking_options WHERE booking_ref = @ref",
-            null, ("@ref", h.Reference)))
+        BookingOptions? options = null;
+        using (var cmd = Cmd(con, $"SELECT {OptionColumns} FROM booking_options WHERE booking_ref = @ref", null, ("@ref", h.Reference)))
         using (var rs = cmd.ExecuteReader())
-            if (rs.Read())
-            {
-                baggage = Str(rs, "baggage_option");
-                meal = Str(rs, "meal_option");
-                promo = Str(rs, "promo_code");
-                profile = Str(rs, "profile_ref");
-            }
+            if (rs.Read()) options = ReadOptions(rs);
 
-        return new BookingRecord(h.Reference, h.BookedAt, h.FlightNo, h.Origin, h.Destination, h.FlightDate, h.Domestic,
-            h.ClassName, h.PaymentMethod, h.MaskedAccount, h.TotalAmount, h.RealtimeEst,
-            passengers, h.Status, h.PaymentStatus, h.PaymentTxnRef, h.PaymentConfirmedAt, h.RefundAmount)
+        return AssembleBooking(h, passengers, leg, options);
+    }
+
+    /// <summary>
+    /// The bookings whose (outbound) flight is on <paramref name="flightDate"/>, newest first — simulated ones included, as on a live
+    /// operations desk. Built from one query per table for the whole date (not one per booking): a busy day is thousands of bookings.
+    /// </summary>
+    public List<BookingRecord> LoadBookingsForDate(DateTime flightDate)
+    {
+        lock (_lock)
         {
-            ReturnFlightNo = returnNo, ReturnOrigin = returnOrigin, ReturnDestination = returnDestination,
-            ReturnDomestic = returnDomestic, ReturnFlightDateValue = returnDate,
-            BaggageOption = baggage, MealOption = meal, PromoCode = promo, ProfileReference = profile
-        };
+            try
+            {
+                using var con = OpenConnection();
+                const string ofDate = "booking_ref IN (SELECT reference FROM bookings WHERE flight_date = @d)";
+                (string, object?) d = ("@d", flightDate.Date);
+
+                var headers = new List<BookingHeader>();
+                using (var cmd = Cmd(con, "SELECT * FROM bookings WHERE flight_date = @d ORDER BY booked_at DESC", null, d))
+                using (var rs = cmd.ExecuteReader())
+                    while (rs.Read()) headers.Add(ReadHeader(rs));
+                if (headers.Count == 0) return new List<BookingRecord>();
+
+                var passengers = new Dictionary<string, List<PassengerRecord>>(StringComparer.Ordinal);
+                using (var cmd = Cmd(con, $"SELECT * FROM passengers WHERE {ofDate} ORDER BY id", null, d))
+                using (var rs = cmd.ExecuteReader())
+                    while (rs.Read())
+                    {
+                        string reference = Str(rs, "booking_ref");
+                        if (!passengers.TryGetValue(reference, out List<PassengerRecord>? list)) passengers[reference] = list = new List<PassengerRecord>();
+                        list.Add(ReadPassenger(rs));
+                    }
+
+                var legs = new Dictionary<string, ReturnLeg>(StringComparer.Ordinal);
+                using (var cmd = Cmd(con, $"SELECT {ReturnLegColumns} FROM booking_legs WHERE leg_order = 2 AND {ofDate}", null, d))
+                using (var rs = cmd.ExecuteReader())
+                    while (rs.Read()) legs[Str(rs, "booking_ref")] = ReadReturnLeg(rs);
+
+                var options = new Dictionary<string, BookingOptions>(StringComparer.Ordinal);
+                using (var cmd = Cmd(con, $"SELECT {OptionColumns} FROM booking_options WHERE {ofDate}", null, d))
+                using (var rs = cmd.ExecuteReader())
+                    while (rs.Read()) options[Str(rs, "booking_ref")] = ReadOptions(rs);
+
+                return headers.Select(h => AssembleBooking(h,
+                    passengers.GetValueOrDefault(h.Reference) ?? new List<PassengerRecord>(),
+                    legs.GetValueOrDefault(h.Reference), options.GetValueOrDefault(h.Reference))).ToList();
+            }
+            catch (Exception e) { LogError(e); throw; }
+        }
     }
 
     public List<BookingRecord> LoadBookings()
@@ -318,19 +367,21 @@ public sealed partial class BookingStore
         var list = new List<PassengerRecord>();
         using var cmd = Cmd(con, "SELECT * FROM passengers WHERE booking_ref = @ref", null, ("@ref", bookingRef));
         using var rs = cmd.ExecuteReader();
-        while (rs.Read())
-        {
-            string addonsStr = Str(rs, "addons");
-            var addons = addonsStr.Length == 0 ? new List<string>() : new List<string>(addonsStr.Split(','));
-            string seat = Str(rs, "seat_code");
-            SeatAssignment? sa = seat.Length == 0 ? null : new SeatAssignment("", seat);
-            list.Add(new PassengerRecord(
-                Str(rs, "name"), Str(rs, "address"), Str(rs, "contact"), Int(rs, "age"),
-                Str(rs, "birthday"), Str(rs, "id_number"),
-                Int(rs, "senior") == 1, Int(rs, "pwd") == 1,
-                sa, addons, Money(rs, "total_amount"), Str(rs, "return_seat_code")));
-        }
+        while (rs.Read()) list.Add(ReadPassenger(rs));
         return list;
+    }
+
+    private static PassengerRecord ReadPassenger(SqliteDataReader rs)
+    {
+        string addonsStr = Str(rs, "addons");
+        var addons = addonsStr.Length == 0 ? new List<string>() : new List<string>(addonsStr.Split(','));
+        string seat = Str(rs, "seat_code");
+        SeatAssignment? sa = seat.Length == 0 ? null : new SeatAssignment("", seat);
+        return new PassengerRecord(
+            Str(rs, "name"), Str(rs, "address"), Str(rs, "contact"), Int(rs, "age"),
+            Str(rs, "birthday"), Str(rs, "id_number"),
+            Int(rs, "senior") == 1, Int(rs, "pwd") == 1,
+            sa, addons, Money(rs, "total_amount"), Str(rs, "return_seat_code"));
     }
 
     public void UpsertBooking(BookingRecord booking)

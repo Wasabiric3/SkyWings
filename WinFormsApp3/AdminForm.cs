@@ -26,7 +26,7 @@ public sealed class AdminForm : GlassForm
     private readonly TextBox _bookingSearch = new() { PlaceholderText = "Search reference, flight or passenger" };
     private readonly ComboBox _bookingStatus = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     // ShowCheckBox pickers start checked, which would silently filter to today's date; start unchecked.
-    private readonly DateTimePicker _bookingDate = new() { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Checked = false };
+    private readonly DateTimePicker _bookingDate = new() { Format = DateTimePickerFormat.Short, Value = DateTime.Today };   // the flight date shown
     private readonly Label _bookingCount = new() { AutoSize = true };
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 250 };
     private List<BookingRecord> _allBookings = new();
@@ -80,7 +80,6 @@ public sealed class AdminForm : GlassForm
         AddSection("Reports", Permission.ViewReports, BuildReportsPage, LoadReport);
         AddSection("Staff", Permission.ManageStaff, BuildStaffPage, LoadStaff);
         AddSection("Audit", Permission.ViewAudit, BuildAuditPage, LoadAudit);
-        AddSection("Demo", Permission.ManageFlights, BuildDemoPage, LoadDemo);
 
         Controls.Add(_host);
         Controls.Add(BuildHeader(nav));
@@ -357,7 +356,7 @@ public sealed class AdminForm : GlassForm
 
         _bookingSearch.TextChanged += (_, _) => { _searchTimer.Stop(); _searchTimer.Start(); };
         _bookingStatus.SelectedIndexChanged += (_, _) => ApplyBookingFilter();
-        _bookingDate.ValueChanged += (_, _) => ApplyBookingFilter();
+        _bookingDate.ValueChanged += (_, _) => LoadBookingsFromStore();
 
         toolbar.Controls.Add(_bookingSearch);
         toolbar.Controls.Add(_bookingStatus);
@@ -401,13 +400,17 @@ public sealed class AdminForm : GlassForm
         }
     }
 
-    /// <summary>Reads bookings from the database once; filtering then works on this copy.</summary>
+    /// <summary>
+    /// Reads the chosen flight date's bookings (a busy day is thousands; all dates together would be far too many to load) and
+    /// where each trip is right now. Filtering then works on this copy.
+    /// </summary>
     private void LoadBookingsFromStore()
     {
+        DateTime date = _bookingDate.Value.Date;
         if (Try("Unable to load bookings", () =>
             {
-                _allBookings = _service.LoadBookings();
-                _allTrips = _service.LoadTripStatuses(_allBookings, DateTime.Now);   // where each trip is right now
+                _allBookings = _service.LoadBookingsForDate(date);
+                _allTrips = _service.LoadTripStatusesForDate(_allBookings, date, DateTime.Now);
             }))
             ApplyBookingFilter();
     }
@@ -415,24 +418,43 @@ public sealed class AdminForm : GlassForm
     private TripStatusInfo TripOf(BookingRecord b)
         => _allTrips.TryGetValue(b.Reference, out TripStatusInfo? trip) ? trip : TripStatus.Of(b, Array.Empty<CheckInRecord>(), DateTime.Now);
 
+    private static BookingAdminRow ToRow(BookingRecord b, TripStatusInfo trip)
+        => new(b.Reference, b.BookedAtValue.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), b.FlightNo,
+            $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count, b.TotalAmount, trip.Label, b.PaymentStatus, b.RefundAmount);
+
     private void ApplyBookingFilter()
     {
         string search = _bookingSearch.Text.Trim();
+
+        // A full booking reference finds that booking on any date.
+        if (AdminService.AsReference(search) is { } reference)
+        {
+            BookingRecord? found = null;
+            TripStatusInfo? trip = null;
+            if (!Try("Unable to look up the booking", () =>
+                {
+                    found = _service.FindBooking(reference);
+                    if (found is not null) trip = _service.LoadTripStatus(found, DateTime.Now);
+                })) return;
+            _bookings.DataSource = found is null ? new List<BookingAdminRow>() : new List<BookingAdminRow> { ToRow(found, trip!) };
+            _bookingCount.Text = found is null ? $"No booking {reference}" : "1 booking found";
+            return;
+        }
+
         string status = _bookingStatus.SelectedItem?.ToString() ?? "All";
-        DateTime? date = _bookingDate.Checked ? _bookingDate.Value.Date : null;
         var rows = _allBookings
             .Where(b => TripStatus.Matches(TripOf(b).Phase, status))
-            .Where(b => date == null || b.FlightDateValue == date.Value)
             .Where(b => search.Length == 0 ||
                         b.Reference.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                         b.FlightNo.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                         b.Passengers.Any(p => p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .Select(b => new BookingAdminRow(b.Reference, b.BookedAtValue.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), b.FlightNo,
-                $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count,
-                b.TotalAmount, TripOf(b).Label, b.PaymentStatus, b.RefundAmount))
+            .Select(b => ToRow(b, TripOf(b)))
             .ToList();
         _bookings.DataSource = rows;
-        _bookingCount.Text = $"{rows.Count} of {_allBookings.Count}";
+        string day = _bookingDate.Value.ToString("MMM d", CultureInfo.InvariantCulture);
+        _bookingCount.Text = rows.Count == _allBookings.Count
+            ? $"{rows.Count:N0} bookings on {day}"
+            : $"{rows.Count:N0} of {_allBookings.Count:N0} bookings on {day}";
     }
 
     private BookingAdminRow? SelectedBooking() => _bookings.CurrentRow?.DataBoundItem as BookingAdminRow;
@@ -645,69 +667,6 @@ public sealed class AdminForm : GlassForm
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         Try("Unable to remove the waitlist entry", () => _service.RemoveWaitlistEntry(row.Code));
         LoadWaitlist();
-    }
-
-    // ------------------------------------------------------------------ demo activity
-
-    private readonly CheckBox _demoOn = new() { Text = "Demo activity (simulated bookings, seat holds and cancellations)", AutoSize = true, Margin = new Padding(0, 8, 24, 0) };
-    private readonly CheckBox _demoInReports = new() { Text = "Include demo bookings in reports", AutoSize = true, Margin = new Padding(0, 8, 24, 0) };
-    private readonly Label _demoInfo = new() { Dock = DockStyle.Fill, AutoSize = false };
-    private bool _loadingDemo;
-
-    private Panel BuildDemoPage()
-    {
-        var toolbar = Toolbar();
-        toolbar.Controls.Add(_demoOn);
-        toolbar.Controls.Add(_demoInReports);
-        toolbar.Controls.Add(ToolButton("Reset demo data", async (_, _) => await ResetDemo(), GlassButtonStyle.Danger));
-        toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadDemo(), GlassButtonStyle.Ghost));
-        _demoOn.CheckedChanged += async (_, _) => await DemoSwitchChanged();
-        _demoInReports.CheckedChanged += (_, _) =>
-        {
-            if (_loadingDemo) return;
-            Try("Unable to save the setting", () => _service.SetIncludeDemoInReports(_demoInReports.Checked));
-            LoadDemo();
-        };
-        _demoInfo.Font = Theme.Body;
-        _demoInfo.ForeColor = Theme.TextPrimary;
-        return Section(toolbar, _demoInfo);
-    }
-
-    private void LoadDemo()
-    {
-        DemoStatus? status = null;
-        if (!Try("Unable to load the demo settings", () => status = _service.LoadDemoStatus()) || status is null) return;
-        _loadingDemo = true;
-        _demoOn.Checked = status.Enabled;
-        _demoInReports.Checked = status.IncludeInReports;
-        _loadingDemo = false;
-        _demoInfo.Text =
-            "SkyWings is a demonstration system. Demo activity is on by default: flights are pre-filled with simulated bookings (each " +
-            "cabin 60–90% full, some bookings cancelled and freed, an occasional premium cabin sold out) and, while the home screen is open, seat holds appear and expire and bookings " +
-            "are made and cancelled once a minute. Demo travellers check in by themselves during the 24-hour window; about 8% of demo " +
-            "bookings never check in and end as no-shows. A cancelled demo seat is offered to real waitlisted travellers, like any cancellation." +
-            Environment.NewLine + Environment.NewLine +
-            "Demo bookings are tagged (references start with SIM-) and are left out of reports, revenue and the Bookings tab unless you tick " +
-            "\"Include demo bookings in reports\". Real bookings are never changed. \"Reset demo data\" deletes only demo bookings and creates them again." +
-            Environment.NewLine + Environment.NewLine +
-            $"Demo activity is {(status.Enabled ? "ON" : "OFF")}.  Demo bookings stored: {status.DemoBookings:N0}.";
-    }
-
-    private async Task DemoSwitchChanged()
-    {
-        if (_loadingDemo) return;
-        bool on = _demoOn.Checked;
-        if (!Try("Unable to save the setting", () => _service.SetDemoActivity(on))) { LoadDemo(); return; }
-        if (on) await TryAsync("Unable to start the demo activity", () => _service.RunDemoNow());   // fill the flights right away
-        LoadDemo();
-    }
-
-    private async Task ResetDemo()
-    {
-        if (MessageBox.Show(this, "Delete all demo bookings and create them again? Real bookings are not touched.", "Reset demo data",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        await TryAsync("Unable to reset the demo data", () => _service.ResetDemoData());
-        LoadDemo();
     }
 
     // ------------------------------------------------------------------ audit
