@@ -1,4 +1,5 @@
 using System.Globalization;
+using SkyWings.Controllers;
 using SkyWings.UI;
 
 namespace SkyWings;
@@ -29,6 +30,7 @@ public sealed class AdminForm : GlassForm
     private readonly Label _bookingCount = new() { AutoSize = true };
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 250 };
     private List<BookingRecord> _allBookings = new();
+    private Dictionary<string, TripStatusInfo> _allTrips = new();
 
     // reports
     private readonly DataGridView _routeGrid = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
@@ -345,9 +347,9 @@ public sealed class AdminForm : GlassForm
         var toolbar = Toolbar();
         _bookingSearch.Width = D(200);
         _bookingSearch.Margin = new Padding(0, D(5), D(8), 0);
-        _bookingStatus.Items.AddRange(new object[] { "All", AppData.StatusConfirmed, AppData.StatusCanceled });
+        _bookingStatus.Items.AddRange(TripStatus.Filters.Cast<object>().ToArray());
         _bookingStatus.SelectedIndex = 0;
-        _bookingStatus.Width = D(116);
+        _bookingStatus.Width = D(130);
         _bookingStatus.Margin = new Padding(0, D(5), D(8), 0);
         _bookingDate.Width = D(128);
         _bookingDate.Margin = new Padding(0, D(5), D(8), 0);
@@ -397,8 +399,16 @@ public sealed class AdminForm : GlassForm
     /// <summary>Reads bookings from the database once; filtering then works on this copy.</summary>
     private void LoadBookingsFromStore()
     {
-        if (Try("Unable to load bookings", () => _allBookings = _service.LoadBookings())) ApplyBookingFilter();
+        if (Try("Unable to load bookings", () =>
+            {
+                _allBookings = _service.LoadBookings();
+                _allTrips = _service.LoadTripStatuses(_allBookings, DateTime.Now);   // where each trip is right now
+            }))
+            ApplyBookingFilter();
     }
+
+    private TripStatusInfo TripOf(BookingRecord b)
+        => _allTrips.TryGetValue(b.Reference, out TripStatusInfo? trip) ? trip : TripStatus.Of(b, Array.Empty<CheckInRecord>(), DateTime.Now);
 
     private void ApplyBookingFilter()
     {
@@ -406,7 +416,7 @@ public sealed class AdminForm : GlassForm
         string status = _bookingStatus.SelectedItem?.ToString() ?? "All";
         DateTime? date = _bookingDate.Checked ? _bookingDate.Value.Date : null;
         var rows = _allBookings
-            .Where(b => status == "All" || b.Status == status)
+            .Where(b => TripStatus.Matches(TripOf(b).Phase, status))
             .Where(b => date == null || b.FlightDateValue == date.Value)
             .Where(b => search.Length == 0 ||
                         b.Reference.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -414,7 +424,7 @@ public sealed class AdminForm : GlassForm
                         b.Passengers.Any(p => p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
             .Select(b => new BookingAdminRow(b.Reference, b.BookedAtValue.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), b.FlightNo,
                 $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count,
-                b.TotalAmount, b.Status, b.PaymentStatus, b.RefundAmount))
+                b.TotalAmount, TripOf(b).Label, b.PaymentStatus, b.RefundAmount))
             .ToList();
         _bookings.DataSource = rows;
         _bookingCount.Text = $"{rows.Count} of {_allBookings.Count}";
@@ -428,7 +438,9 @@ public sealed class AdminForm : GlassForm
         BookingRecord? booking = null;
         if (!Try("Unable to load the booking", () => booking = _service.FindBooking(row.Reference))) return;
         if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
-        using var details = new BookingDetailForm(booking);
+        TripStatusInfo? trip = null;
+        if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatuses(new[] { booking }, DateTime.Now)[booking.Reference])) return;
+        using var details = new BookingDetailForm(booking, trip!);
         details.ShowDialog(this);
     }
 

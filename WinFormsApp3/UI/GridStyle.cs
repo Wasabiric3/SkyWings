@@ -73,15 +73,28 @@ internal static class GridStyle
     private static readonly (Color Back, Color Fore) PillDelayed = (Color.FromArgb(0xFC, 0xE4, 0xD8), Color.FromArgb(0xA8, 0x5A, 0x37));
     private static readonly (Color Back, Color Fore) PillPending = (Color.FromArgb(0xFA, 0xEB, 0xD0), Color.FromArgb(0x8E, 0x63, 0x38));
 
-    /// <summary>Pill colours from the brand kit (Status_*.svg) for a status value, or null when the value is not a pill status.</summary>
-    internal static (Color Back, Color Fore)? StatusStyle(string text) => text.ToUpperInvariant() switch
+    private static readonly (Color Back, Color Fore) PillUnderway = (Color.FromArgb(0xDC, 0xE7, 0xF3), Color.FromArgb(0x3C, 0x6E, 0xAA));
+    private static readonly (Color Back, Color Fore) PillNeutral = (Color.FromArgb(0xEC, 0xEF, 0xED), Color.FromArgb(0x5F, 0x6B, 0x65));
+
+    /// <summary>
+    /// Pill colours from the brand kit (Status_*.svg) for a status value, or null when the value is not a pill status.
+    /// Trip statuses (Upcoming … Completed, No-show) are included; a return-leg label ("Return · In flight") looks like its phase.
+    /// </summary>
+    internal static (Color Back, Color Fore)? StatusStyle(string text)
     {
-        "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" or "SUCCESS" => PillGood,
-        "CANCELED" or "CANCELLED" or "INACTIVE" or "CLOSED" => PillBad,
-        "DELAYED" => PillDelayed,
-        "REFUNDED" or "PENDING" => PillPending,
-        _ => null
-    };
+        string key = text.ToUpperInvariant();
+        if (key.StartsWith("RETURN · ", StringComparison.Ordinal)) key = key["RETURN · ".Length..];
+        return key switch
+        {
+            "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" or "SUCCESS" or "COMPLETED" => PillGood,
+            "CANCELED" or "CANCELLED" or "INACTIVE" or "CLOSED" => PillBad,
+            "DELAYED" or "NO-SHOW" => PillDelayed,
+            "REFUNDED" or "PENDING" => PillPending,
+            "CHECK-IN OPEN" or "CHECKED IN" or "BOARDING" or "IN FLIGHT" => PillUnderway,
+            "UPCOMING" => PillNeutral,
+            _ => null
+        };
+    }
 
     /// <summary>Draws status values as small tinted pills instead of bare coloured text.</summary>
     private static void OnCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)

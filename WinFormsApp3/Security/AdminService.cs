@@ -33,6 +33,16 @@ public sealed class AdminService
         return _store.FindByReference(reference);
     }
 
+    /// <summary>The live trip status of each booking (by reference), with every check-in read in one query.</summary>
+    public Dictionary<string, Controllers.TripStatusInfo> LoadTripStatuses(IReadOnlyList<BookingRecord> bookings, DateTime now)
+    {
+        Session.Require(Permission.ViewBookings);
+        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsByBooking();
+        var none = new List<CheckInRecord>();
+        return bookings.ToDictionary(b => b.Reference,
+            b => Controllers.TripStatus.Of(b, checkIns.GetValueOrDefault(b.Reference) ?? none, now), StringComparer.Ordinal);
+    }
+
     /// <summary>Cancels a confirmed booking with the given refund. False when it was no longer confirmed.</summary>
     public bool CancelBooking(string reference, decimal refund)
     {

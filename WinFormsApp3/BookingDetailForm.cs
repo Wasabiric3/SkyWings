@@ -1,3 +1,4 @@
+using SkyWings.Controllers;
 using SkyWings.UI;
 
 namespace SkyWings;
@@ -5,7 +6,8 @@ namespace SkyWings;
 /// <summary>Read-only booking details for staff, shown as a boarding-pass style card.</summary>
 public sealed class BookingDetailForm : GlassForm
 {
-    public BookingDetailForm(BookingRecord booking)
+    /// <param name="trip">Where the trip is right now (Upcoming … Completed, No-show, Canceled), shown as the status pill.</param>
+    public BookingDetailForm(BookingRecord booking, TripStatusInfo trip)
     {
         Text = $"Booking {booking.Reference}";
         StartPosition = FormStartPosition.CenterParent;
@@ -25,17 +27,12 @@ public sealed class BookingDetailForm : GlassForm
         footer.Controls.Add(close);
 
         // Header: reference, route and a status pill so the state is visible before reading the details.
-        Color statusColor = booking.Status.ToUpperInvariant() switch
-        {
-            "CONFIRMED" => Theme.Accent,
-            "CANCELED" => Theme.DangerRed,
-            "REFUNDED" => Theme.Warning,
-            _ => Theme.TextSecondary
-        };
+        Color statusColor = TripColors.For(trip.Phase);
         var header = new Panel { Dock = DockStyle.Top, Height = D(58) };
         var status = new Label
         {
-            Text = booking.Status.ToUpperInvariant(), AutoSize = false, Width = D(120), Dock = DockStyle.Right,
+            // Wide enough for the longest label, "RETURN · CHECK-IN OPEN".
+            Text = trip.Label.ToUpperInvariant(), AutoSize = false, Width = D(190), Dock = DockStyle.Right,
             TextAlign = ContentAlignment.MiddleCenter, Font = new Font(Theme.Small, FontStyle.Bold),
             ForeColor = statusColor, BackColor = Color.FromArgb(32, statusColor)
         };
