@@ -32,6 +32,19 @@ public sealed class SimulationService
 
     private static readonly string[] PaymentMethods = { "Credit Card", "Debit Card", "GCash" };
 
+    // Made-up but plausible Philippine addresses for simulated travellers.
+    private static readonly string[] Streets =
+    {
+        "Rizal Street", "Mabini Street", "Bonifacio Avenue", "Luna Street", "Del Pilar Street", "Quezon Avenue", "Aguinaldo Highway",
+        "Magsaysay Boulevard", "Osmeña Street", "Burgos Street", "Jacinto Street", "Roxas Avenue"
+    };
+
+    private static readonly string[] Cities =
+    {
+        "Quezon City", "Makati City", "Pasig City", "Taguig City", "Manila", "Cebu City", "Davao City", "Iloilo City",
+        "Bacolod City", "Cagayan de Oro", "Baguio City", "Antipolo City"
+    };
+
     private readonly BookingStore _store;
     private readonly SimulationOptions _options;
 
@@ -49,7 +62,7 @@ public sealed class SimulationService
     internal const double MinLoad = 0.60, MaxLoad = 0.90;
 
     /// <summary>Bumped whenever the load formula changes, so demo bookings made by the old one are regenerated once.</summary>
-    public const string LoadVersion = "2";
+    public const string LoadVersion = "3";
 
     /// <summary>
     /// How full a flight tends to be, before randomness: about 85% on the day, easing to about 66% two weeks out, domestic a
@@ -210,8 +223,12 @@ public sealed class SimulationService
     private BookingRecord MakeBooking(Flight flight, DateTime date, CabinLayout cabin, List<Seat> seats, DateTime now, JavaRandom rng,
         int counter, bool cancelled, string? referenceSalt = null)
     {
-        string reference = "SIM-" +   // Task 2 gives these real-looking SKY- references
+        // Same shape as a booking made at the desk ("SKY-" + 12 hex); the is_simulated column is what marks it as simulated.
+        string reference = "SKY-" +
             ((ulong)FlightStatusEngine.StableSeed($"{flight.FlightNo}|{date:yyyyMMdd}|{referenceSalt}|{counter}")).ToString("X16", CultureInfo.InvariantCulture)[..12];
+        // Contact details come from their own generator (seeded by the reference), so the seat pattern and loads stay exactly as
+        // the main generator makes them.
+        var details = new JavaRandom(FlightStatusEngine.StableSeed("details|" + reference));
         int classIndex = Math.Max(0, Array.IndexOf(AppData.ClassNames, cabin.ClassName));
         decimal fare = AppData.Round2(flight.BasePrice * AppData.ClassMultipliers[classIndex] * 1.12m);
         var passengers = new List<PassengerRecord>();
@@ -220,10 +237,14 @@ public sealed class SimulationService
             string name = $"{FirstNames[rng.NextInt(FirstNames.Length)]} {LastNames[rng.NextInt(LastNames.Length)]}";
             string code = cabin.Code(seat.Row + 1, cabin.Letters[seat.Col]);
             int age = 18 + rng.NextInt(52);
-            passengers.Add(new PassengerRecord(name, "Demo data", "09170000000", age,
-                now.Date.AddYears(-age).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "DEMO", false, false,
+            string address = $"{1 + details.NextInt(250)} {Streets[details.NextInt(Streets.Length)]}, {Cities[details.NextInt(Cities.Length)]}";
+            string phone = "09" + (100_000_000 + details.NextInt(900_000_000)).ToString(CultureInfo.InvariantCulture);
+            string passport = "P" + (1_000_000 + details.NextInt(9_000_000)).ToString(CultureInfo.InvariantCulture) + (char)('A' + details.NextInt(26));
+            passengers.Add(new PassengerRecord(name, address, phone, age,
+                now.Date.AddYears(-age).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), passport, false, false,
                 new SeatAssignment(name, code), Array.Empty<string>(), fare));
         }
+        string paymentRef = "TXN-" + ((ulong)FlightStatusEngine.StableSeed("txn|" + reference)).ToString("X16", CultureInfo.InvariantCulture)[..10];
         decimal total = fare * seats.Count;
         decimal refund = cancelled ? AppData.Round2(total * 0.5m) : 0m;
         DateTime bookedAt = now.AddDays(-(1 + rng.NextInt(30))).AddMinutes(-rng.NextInt(1440));
@@ -231,7 +252,7 @@ public sealed class SimulationService
         return new BookingRecord(reference, bookedAt, flight.FlightNo, flight.Origin, flight.Destination, date.Date, flight.Domestic,
             cabin.ClassName, method, "**** " + (1000 + rng.NextInt(9000)), total, "Scheduled", passengers,
             cancelled ? AppData.StatusCanceled : AppData.StatusConfirmed,
-            cancelled ? "REFUNDED" : AppData.PaymentPaid, "SIM-TXN", bookedAt, refund);
+            cancelled ? "REFUNDED" : AppData.PaymentPaid, paymentRef, bookedAt, refund);
     }
 
     // ------------------------------------------------------------------ live changes
@@ -341,8 +362,11 @@ public sealed class SimulationService
         if (!_store.DemoActivityEnabled) return null;
         if (_store.GetSetting(BookingStore.SettingDemoLoadVersion, "1") != LoadVersion)
         {
-            // Loads made by an older formula would keep showing for two weeks: replace them now, once.
+            // Loads made by an older version (an older formula, or SIM- references and placeholder passenger details) would keep
+            // showing for two weeks: replace them now, once. Since version 3 simulated traffic counts in reports like any other,
+            // and there is no screen to change that, so it is switched on here too.
             _store.DeleteSimulatedBookings();
+            _store.SetSetting(BookingStore.SettingDemoInReports, "1");
             _store.SetSetting(BookingStore.SettingDemoLoadVersion, LoadVersion);
         }
         int loads = EnsureLoad(now);

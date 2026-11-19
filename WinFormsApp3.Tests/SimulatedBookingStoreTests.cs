@@ -77,8 +77,9 @@ public sealed class SimulatedBookingStoreTests
     }
 
     [TestMethod]
-    public void SimulatedBookings_StayOutOfReports_ByDefault()
+    public void SimulatedBookings_StayOutOfReports_WhenSwitchedOff()
     {
+        _store.SetSetting(BookingStore.SettingDemoInReports, "0");   // on by default; the switch still works
         SaveReal("SKY-REAL00000001", "ECO1A");
         _store.SaveSimulatedBooking(Booking("SIM-000000000002", "ECO5B"));
         _store.SaveSimulatedBooking(Booking("SIM-000000000003", "ECO5C", AppData.StatusCanceled));
@@ -160,10 +161,10 @@ public sealed class SimulatedBookingStoreTests
     }
 
     [TestMethod]
-    public void Settings_DemoOnAndReportsOffByDefault_AndRoundTrip()
+    public void Settings_DemoAndReportsOnByDefault_AndRoundTrip()
     {
         Assert.IsTrue(_store.DemoActivityEnabled, "a fresh install shows realistic flight loads");
-        Assert.IsFalse(_store.IncludeSimulatedInReports);
+        Assert.IsTrue(_store.IncludeSimulatedInReports, "simulated traffic counts like any other");
         Assert.AreEqual("x", _store.GetSetting("nothing.here", "x"));
 
         _store.SetSetting(BookingStore.SettingDemoActivity, "1");

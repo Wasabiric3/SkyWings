@@ -59,8 +59,8 @@ public sealed partial class BookingStore
     /// </summary>
     public bool DemoActivityEnabled => GetSetting(SettingDemoActivity, "1") == "1";
 
-    /// <summary>Whether staff reports include simulated bookings. Off by default so real numbers stay clean.</summary>
-    public bool IncludeSimulatedInReports => GetSetting(SettingDemoInReports, "0") == "1";
+    /// <summary>Whether staff screens and reports include simulated bookings. On: simulated traffic counts like any other.</summary>
+    public bool IncludeSimulatedInReports => GetSetting(SettingDemoInReports, "1") == "1";
 
     /// <summary>" WHERE is_simulated = 0" for a query without a WHERE, or "" when reports include demo bookings.</summary>
     private string ReportWhere(string alias = "") => IncludeSimulatedInReports ? "" : $" WHERE {alias}is_simulated = 0";

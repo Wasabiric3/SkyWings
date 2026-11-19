@@ -34,11 +34,11 @@ public sealed class DemoAdminTests
     }
 
     [TestMethod]
-    public void TheDemoIsOnByDefault_ButKeptOutOfReports()
+    public void TheSimulationIsOnByDefault_AndCountsInReports()
     {
         DemoStatus status = _admin.LoadDemoStatus();
         Assert.IsTrue(status.Enabled);
-        Assert.IsFalse(status.IncludeInReports);
+        Assert.IsTrue(status.IncludeInReports);
         Assert.AreEqual(0, status.DemoBookings);
     }
 
@@ -118,10 +118,10 @@ public sealed class DemoAdminTests
         AdminService agent = ServiceFor(StaffRole.Agent, "agent7");
         Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.LoadDemoStatus());
         Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.SetDemoActivity(false));
-        Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.SetIncludeDemoInReports(true));
+        Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.SetIncludeDemoInReports(false));
         Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.ResetDemoData());
         Assert.ThrowsExactly<UnauthorizedAccessException>(() => agent.RunDemoNow());
         Assert.IsTrue(_store.DemoActivityEnabled, "the agent's attempt to switch it off changed nothing");
-        Assert.IsFalse(_store.IncludeSimulatedInReports);
+        Assert.IsTrue(_store.IncludeSimulatedInReports, "the agent could not switch it off");
     }
 }

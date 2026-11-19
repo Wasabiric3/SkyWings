@@ -216,8 +216,8 @@ public sealed class SimulationServiceTests
         _sim.EnsureLoad(Now, horizonDays: 2);
 
         Assert.IsNotNull(_store.FindByReference("SKY-REAL0000SIM1"));
-        Assert.AreEqual(1, _store.LoadReportStats()!.TotalBookings, "demo bookings stay out of reports");
-        Assert.AreEqual(1, _store.LoadBookings().Count);
+        Assert.IsGreaterThan(1, _store.LoadReportStats()!.TotalBookings, "simulated bookings count in reports");
+        Assert.IsTrue(_store.LoadBookings().Any(b => b.Reference == "SKY-REAL0000SIM1"));
         int seatedOnReal = CountSeatedPassengers("PR-101", Now.Date.AddDays(1));
         Assert.AreEqual(_store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)).Count, seatedOnReal, "no demo passenger took the real passenger's seat");
     }
@@ -336,6 +336,60 @@ public sealed class SimulationServiceTests
         Assert.IsTrue(_sim.CancelSimulatedBooking(demoRef));
 
         Assert.AreEqual(BookingStore.WaitlistOffered, _store.FindWaitlistEntry(entry.BookingReference)!.Status);
+    }
+
+    [TestMethod]
+    public void GeneratedBookings_LookLikeRealOnes()
+    {
+        _sim.EnsureLoad(Now, horizonDays: 1);
+
+        List<BookingRecord> bookings = _store.LoadBookings();
+
+        Assert.IsNotEmpty(bookings);
+        var reference = new System.Text.RegularExpressions.Regex("^SKY-[0-9A-F]{12}$");
+        var phone = new System.Text.RegularExpressions.Regex(@"^09\d{9}$");
+        var id = new System.Text.RegularExpressions.Regex("^P[0-9]{7}[A-Z]$");
+        foreach (BookingRecord b in bookings)
+        {
+            Assert.IsTrue(reference.IsMatch(b.Reference), b.Reference);
+            StringAssert.StartsWith(b.PaymentTransactionRef, "TXN-");
+            foreach (PassengerRecord p in b.Passengers)
+            {
+                Assert.AreNotEqual("Demo data", p.Address);
+                StringAssert.Contains(p.Address, ", ");
+                Assert.IsTrue(phone.IsMatch(p.Contact), p.Contact);
+                Assert.IsTrue(id.IsMatch(p.IdNumber), p.IdNumber);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void Reports_CountSimulatedBookings_ByDefault()
+    {
+        BookingRecord real = RealBooking("SKY-REALREPORT01", "PR-101", Now.Date.AddDays(1), "ECO4B");
+        _store.SaveConfirmedBooking(real, false, real.TotalAmount, "Credit Card", "**** 4521", real.PaymentTransactionRef, DateTime.Now);
+        _sim.EnsureLoad(Now, horizonDays: 1);
+
+        Assert.IsTrue(_store.IncludeSimulatedInReports);
+        Assert.IsGreaterThan(1, _store.LoadReportStats()!.TotalBookings);
+    }
+
+    [TestMethod]
+    public void RunIfEnabled_Version3_RegeneratesOldSimBookings_AndIncludesThemInReports()
+    {
+        var p = new PassengerRecord("Old Sim", "Demo data", "09170000000", 30, "1996-01-01", "DEMO", false, false,
+            new SeatAssignment("Old Sim", "ECO30A"), Array.Empty<string>(), 4000m);
+        _store.SaveSimulatedBooking(new BookingRecord("SIM-0000000000F1", DateTime.Now, "PR-101", "Manila (MNL)", "Cebu (CEB)",
+            Now.Date.AddDays(1), true, "Economy", "GCash", "**** 1111", 4000m, "Scheduled", new[] { p }, AppData.StatusConfirmed,
+            AppData.PaymentPaid, "SIM-TXN", DateTime.Now, 0m));
+        _store.SetSetting(BookingStore.SettingDemoLoadVersion, "2");
+        _store.SetSetting(BookingStore.SettingDemoInReports, "0");
+
+        _sim.RunIfEnabled(Now);
+
+        Assert.IsNull(_store.FindByReference("SIM-0000000000F1"), "old-style simulated bookings are regenerated");
+        Assert.AreEqual("1", _store.GetSetting(BookingStore.SettingDemoInReports, ""));
+        Assert.AreEqual("3", _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
     }
 
     [TestMethod]
