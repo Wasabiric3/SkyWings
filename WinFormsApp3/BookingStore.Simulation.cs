@@ -175,6 +175,8 @@ public sealed partial class BookingStore
                 Exec(con, tx, $"DELETE FROM booking_legs WHERE booking_ref IN ({refs})", args);
                 int removed = Exec(con, tx, $"DELETE FROM bookings WHERE is_simulated = 1{scope}", args);
                 Exec(con, tx, $"UPDATE seat_holds SET status = 'RELEASED' WHERE owner LIKE 'SIM-%' AND status = 'ACTIVE'{scope}", args);
+                // Regenerated bookings may include flights that already left: the next check-in step must look back again.
+                Exec(con, tx, "DELETE FROM app_settings WHERE setting_key = @k", ("@k", SettingDemoCheckInsThrough));
                 tx.Commit();
                 return removed;
             }
@@ -192,6 +194,26 @@ public sealed partial class BookingStore
     /// not checked in yet. One row per traveller.
     /// </summary>
     public List<SimCheckInCandidate> LoadSimulatedCheckInCandidates(DateTime fromDate, DateTime toDate)
+        => LoadCandidates("b.flight_date >= @from AND b.flight_date <= @to", ("@from", fromDate.Date), ("@to", toDate.Date));
+
+    /// <summary>The same, but only for the given flights (flight number and date): what the per-minute simulator step needs.</summary>
+    public List<SimCheckInCandidate> LoadSimulatedCheckInCandidates(IReadOnlyCollection<(string FlightNo, DateTime Date)> flights)
+    {
+        if (flights.Count == 0) return new List<SimCheckInCandidate>();
+        var args = new List<(string, object?)>();
+        var terms = new List<string>();
+        int i = 0;
+        foreach (var (flightNo, date) in flights)
+        {
+            terms.Add($"(b.flight_no = @f{i} AND b.flight_date = @d{i})");
+            args.Add(($"@f{i}", flightNo));
+            args.Add(($"@d{i}", date.Date));
+            i++;
+        }
+        return LoadCandidates("(" + string.Join(" OR ", terms) + ")", args.ToArray());
+    }
+
+    private List<SimCheckInCandidate> LoadCandidates(string flightFilter, params (string, object?)[] args)
     {
         lock (_lock)
         {
@@ -204,9 +226,11 @@ public sealed partial class BookingStore
                     " JOIN passengers p ON p.booking_ref = b.reference" +
                     " LEFT JOIN check_ins c ON c.booking_ref = b.reference AND c.passenger_name = p.name" +
                     "   AND c.flight_no = b.flight_no AND c.flight_date = b.flight_date" +
-                    " WHERE b.is_simulated = 1 AND b.status = @confirmed AND b.flight_date >= @from AND b.flight_date <= @to" +
+                    // "+b.status": keeps SQLite off the status index, which would read every confirmed booking before
+                    // filtering; the flight/date filter then uses the flight indexes and reads only the flights asked for.
+                    " WHERE b.is_simulated = 1 AND +b.status = @confirmed AND " + flightFilter +
                     "   AND p.seat_code <> '' AND c.id IS NULL",
-                    null, ("@confirmed", AppData.StatusConfirmed), ("@from", fromDate.Date), ("@to", toDate.Date));
+                    null, args.Append(("@confirmed", (object?)AppData.StatusConfirmed)).ToArray());
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                     result.Add(new SimCheckInCandidate(Str(rs, "reference"), Str(rs, "flight_no"), Dt(rs, "flight_date"),

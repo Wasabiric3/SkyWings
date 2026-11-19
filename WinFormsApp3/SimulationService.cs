@@ -363,23 +363,32 @@ public sealed class SimulationService
     }
 
     /// <summary>
-    /// Checks in every demo traveller whose planned moment has passed, for flights up to 24 hours ahead. The first run (or one after
-    /// a long gap) looks back a week; later runs look back only a day from the previous run, because this runs every minute while
-    /// holding the store's lock. Each check-in is stamped with its planned moment, so catching up still looks natural.
+    /// Checks in every demo traveller whose planned moment has passed. A planned moment is always before its flight's departure,
+    /// so a traveller due since the previous run is on a flight departing after that run and at most 24 hours from now: only
+    /// those flights are scanned (this runs every minute while holding the store's lock). The first run, or one after a reset,
+    /// looks back a week. Each check-in is stamped with its planned moment, so catching up still looks natural.
     /// Returns how many were added.
     /// </summary>
     public int ProgressCheckIns(DateTime now)
     {
-        DateTime from = now.Date.AddDays(-CheckInLookbackDays);
+        DateTime after = now.AddDays(-CheckInLookbackDays);
         if (DateTime.TryParse(_store.GetSetting(BookingStore.SettingDemoCheckInsThrough, ""), CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out DateTime through) && through <= now && through.Date.AddDays(-1) > from)
-            from = through.Date.AddDays(-1);
+                DateTimeStyles.RoundtripKind, out DateTime through) && through <= now && through > after)
+            after = through;
+        DateTime until = now.AddHours(AppData.CheckInWindowHours);
+
+        var flights = new List<(string FlightNo, DateTime Date)>();
+        foreach (Flight flight in AllFlights())
+            for (DateTime date = after.Date; date <= until.Date; date = date.AddDays(1))
+            {
+                DateTime departure = AppData.DepartureOf(flight.FlightNo, date);
+                if (departure > after && departure <= until) flights.Add((flight.FlightNo, date));
+            }
 
         var due = new List<CheckInRecord>();
-        foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(from, now.Date.AddDays(1)))
+        foreach (SimCheckInCandidate c in _store.LoadSimulatedCheckInCandidates(flights))
         {
             DateTime departure = AppData.DepartureOf(c.FlightNo, c.FlightDate);
-            if (departure > now.AddHours(AppData.CheckInWindowHours)) continue;
             if (PlannedCheckIn(c.Reference, c.PassengerName, departure) is { } at && at <= now)
                 due.Add(new CheckInRecord(c.Reference, c.PassengerName, c.FlightNo, c.FlightDate, c.SeatCode, at));
         }

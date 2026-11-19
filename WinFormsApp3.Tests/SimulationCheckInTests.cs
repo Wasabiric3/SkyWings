@@ -137,9 +137,11 @@ public sealed class SimulationCheckInTests
     }
 
     [TestMethod]
+    [DoNotParallelize]   // a wall-clock bound means nothing while every other test competes for the CPU
     public void ProgressCheckIns_TheMinuteByMinuteStep_IsQuickAfterCatchingUp()
     {
-        // It runs every minute while holding the store's lock, so it must not rescan a whole week each time.
+        // It runs every minute while holding the store's lock, so it must read only the flights it needs (~60 ms here;
+        // a query plan that reads every confirmed booking first took 800-2,000 ms).
         _sim.EnsureLoad(Now, horizonDays: 7);
         _sim.ProgressCheckIns(Now.AddDays(6));   // the one-off catch-up after a long gap
 
@@ -147,7 +149,27 @@ public sealed class SimulationCheckInTests
         _sim.ProgressCheckIns(Now.AddDays(6).AddMinutes(1));
         clock.Stop();
 
-        Assert.IsLessThan(1000L, clock.ElapsedMilliseconds, $"{clock.ElapsedMilliseconds} ms");
+        Assert.IsLessThan(500L, clock.ElapsedMilliseconds, $"{clock.ElapsedMilliseconds} ms");
+    }
+
+    [TestMethod]
+    public void AfterAReset_TodaysDepartedFlightsAreCaughtUpAgain()
+    {
+        DateTime noon = Now.Date.AddHours(12);
+        _sim.EnsureLoad(noon, horizonDays: 1);
+        _sim.ProgressCheckIns(noon);
+
+        _sim.Reset(noon, horizonDays: 1);   // regenerates today's demo bookings, including flights that already left
+        _sim.ProgressCheckIns(noon.AddMinutes(1));
+
+        DateTime today = Now.Date;
+        var departed = _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false))
+            .Where(f => AppData.DepartureOf(f.FlightNo, today) < noon).Select(f => f.FlightNo).ToHashSet();
+        int waiting = _store.LoadSimulatedCheckInCandidates(today, today).Where(c => departed.Contains(c.FlightNo))
+            .Select(c => c.Reference).Distinct().Count();
+        int checkedIn = AllCheckIns().Where(c => c.FlightDate.Date == today && departed.Contains(c.FlightNo))
+            .Select(c => c.BookingReference).Distinct().Count();
+        Assert.IsGreaterThan(0.85, checkedIn / (double)(checkedIn + waiting), "not a wall of no-shows after a reset");
     }
 
     [TestMethod]
