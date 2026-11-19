@@ -231,6 +231,7 @@ public sealed class SimulationServiceTests
     }
 
     [TestMethod]
+    [DoNotParallelize]   // a wall-clock bound: measured alone, not while every other heavy simulator test competes for the CPU
     public void EnsureLoad_ForAllFlights_FinishesInReasonableTime()
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
