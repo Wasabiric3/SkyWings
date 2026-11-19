@@ -81,7 +81,9 @@ public sealed class CheckInController
                     $"Check-in opens {opens:MMM d, h:mm tt}, {AppData.CheckInWindowHours} hours before departure.")
                 : now < departure
                     ? (CheckInBannerKind.Open, $"Check-in is open until departure at {departure:h:mm tt}.")
-                    : (CheckInBannerKind.Closed, "Check-in has closed. This flight has already departed.");
+                    : FlightStatusEngine.Evaluate(flightNo, date, now) is { Kind: FlightStatusKind.Landed } flight
+                        ? (CheckInBannerKind.Closed, $"Check-in has closed. This flight landed at {flight.EstimatedArrival:h:mm tt}.")
+                        : (CheckInBannerKind.Closed, "Check-in has closed. This flight has already departed.");
 
         var travellers = booking.Passengers.Select(p => new TravellerCheckIn(
             p.Name,

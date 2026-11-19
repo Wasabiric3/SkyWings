@@ -1,6 +1,6 @@
 namespace SkyWings.Controllers;
 
-public enum BannerKind { Confirmed, Canceled, Departed }
+public enum BannerKind { Confirmed, Canceled, Departed, Completed, NoShow }
 
 /// <summary>How a booking is described at the top of the details page.</summary>
 public sealed record BookingBanner(BannerKind Kind, string Text, bool CanModify, string PolicyText);
@@ -82,7 +82,8 @@ public sealed class ManageBookingController
 
     // ------------------------------------------------------------------ banner and refund
 
-    public static BookingBanner DescribeBooking(BookingRecord booking)
+    /// <param name="trip">Where the trip is now; when given, a finished trip says it was completed (and where it landed) or a no-show.</param>
+    public static BookingBanner DescribeBooking(BookingRecord booking, TripStatusInfo? trip = null)
     {
         bool canModify = BookingSummary.CanModify(booking);
         string policy = canModify
@@ -97,11 +98,22 @@ public sealed class ManageBookingController
                     ? $"This booking was canceled. PHP {booking.RefundAmount:N2} is being refunded."
                     : "This booking was canceled.",
                 canModify, policy);
+        if (!canModify && trip is { Phase: TripPhase.Completed, LandedAt: { } landed })
+            return new BookingBanner(BannerKind.Completed,
+                $"This trip is completed. It landed in {trip.Destination} at {landed:h:mm tt} on {landed:MMM d}.", false, policy);
+        if (!canModify && trip is { Phase: TripPhase.NoShow })
+            return new BookingBanner(BannerKind.NoShow,
+                "No-show: nobody on this booking checked in, so the flight left without them.", false, policy);
         if (!canModify)
             return new BookingBanner(BannerKind.Departed,
                 "This flight has already departed, so the booking can no longer be changed.", false, policy);
         return new BookingBanner(BannerKind.Confirmed, "Confirmed. You can change seats or cancel below.", true, policy);
     }
+
+    /// <summary>Where the open booking's trip is at <paramref name="now"/>, or null when no booking is open.</summary>
+    /// <exception cref="IOException">The database could not be read.</exception>
+    public TripStatusInfo? CurrentTrip(DateTime now)
+        => Current is null ? null : TripStatus.Of(Current, _store.LoadCheckIns(Current.Reference), now);
 
     /// <summary>The refund the traveller would get today, or null when the booking cannot be changed.</summary>
     public CancelPreview? PreviewCancel()

@@ -96,6 +96,52 @@ public sealed class ManageBookingControllerTests
     }
 
     [TestMethod]
+    public void DescribeBooking_CompletedTrip_SaysWhereAndWhenItLanded()
+    {
+        BookingRecord booking = Save("SKY-MNG000101", DateTime.Today.AddDays(-3));
+        DateTime landed = new(2026, 11, 16, 10, 25, 0);
+        var trip = new TripStatusInfo(TripPhase.Completed, "Completed", false, landed, "Cebu (CEB)");
+
+        BookingBanner banner = ManageBookingController.DescribeBooking(booking, trip);
+
+        Assert.AreEqual(BannerKind.Completed, banner.Kind);
+        Assert.AreEqual("This trip is completed. It landed in Cebu (CEB) at 10:25 AM on Nov 16.", banner.Text);
+        Assert.IsFalse(banner.CanModify);
+    }
+
+    [TestMethod]
+    public void DescribeBooking_NoShow()
+    {
+        BookingRecord booking = Save("SKY-MNG000102", DateTime.Today.AddDays(-3));
+        var trip = new TripStatusInfo(TripPhase.NoShow, "No-show", false, null, "Cebu (CEB)");
+
+        BookingBanner banner = ManageBookingController.DescribeBooking(booking, trip);
+
+        Assert.AreEqual(BannerKind.NoShow, banner.Kind);
+        Assert.AreEqual("No-show: nobody on this booking checked in, so the flight left without them.", banner.Text);
+    }
+
+    [TestMethod]
+    public void DescribeBooking_WithoutTrip_KeepsOldBehaviour()
+    {
+        BookingRecord booking = Save("SKY-MNG000103", DateTime.Today.AddDays(-3));
+        Assert.AreEqual(BannerKind.Departed, ManageBookingController.DescribeBooking(booking).Kind);
+    }
+
+    [TestMethod]
+    public void CurrentTrip_UsesTheBookingsCheckIns()
+    {
+        Assert.IsNull(_controller.CurrentTrip(DateTime.Now), "no booking open");
+        DateTime date = DateTime.Today.AddDays(-3);
+        Save("SKY-MNG000104", date);
+        DateTime departure = AppData.DepartureOf("PR-101", date);
+        Assert.IsTrue(_store.CheckInPassenger("SKY-MNG000104", "Maria Santos", "PR-101", date, "ECO1A", departure.AddHours(-2)));
+        _controller.Find("SKY-MNG000104");
+
+        Assert.AreEqual(TripPhase.Completed, _controller.CurrentTrip(DateTime.Now)!.Phase);
+    }
+
+    [TestMethod]
     public void DescribeBooking_FutureConfirmed_CanModifyAndShowsRefundPolicy()
     {
         BookingRecord booking = Save("SKY-MNG000003", DateTime.Today.AddDays(30));

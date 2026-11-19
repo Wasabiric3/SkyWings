@@ -171,11 +171,15 @@ public sealed class ManageBookingForm : GlassForm
         _receiptHost.AutoScrollMinSize = new Size(0, _receipt.Height + D(8));
 
         _title.Text = $"Booking {booking.Reference}";
-        BookingBanner banner = ManageBookingController.DescribeBooking(booking);
+        TripStatusInfo? trip = null;
+        try { trip = _controller.CurrentTrip(DateTime.Now); }
+        catch (IOException ex) { AppLogger.Error("ManageBooking", ex); }   // without check-ins the banner falls back to "departed"
+        BookingBanner banner = ManageBookingController.DescribeBooking(booking, trip);
         Color bannerColor = banner.Kind switch
         {
             BannerKind.Canceled => Theme.DangerRed,
             BannerKind.Departed => Theme.TextSecondary,
+            BannerKind.NoShow => Theme.Warning,
             _ => Theme.Accent
         };
         _banner.ForeColor = bannerColor;

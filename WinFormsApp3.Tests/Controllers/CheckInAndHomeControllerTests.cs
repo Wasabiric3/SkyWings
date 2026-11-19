@@ -102,6 +102,20 @@ public sealed class CheckInControllerTests
     }
 
     [TestMethod]
+    public void CheckIn_ClosedBanner_SaysLandedAfterArrival()
+    {
+        _controller.Find("SKY-CHK000001");
+        DateTime arrival = FlightStatusEngine.Evaluate("PR-101", _flightDate, _flightDate).EstimatedArrival;
+
+        CheckInView beforeLanding = _controller.Load(false, arrival.AddMinutes(-5));
+        CheckInView afterLanding = _controller.Load(false, arrival.AddHours(1));
+
+        Assert.AreEqual(CheckInBannerKind.Closed, afterLanding.Banner);
+        Assert.AreEqual($"Check-in has closed. This flight landed at {arrival:h:mm tt}.", afterLanding.BannerText);
+        Assert.AreEqual("Check-in has closed. This flight has already departed.", beforeLanding.BannerText);
+    }
+
+    [TestMethod]
     public void CheckIn_SeatedTraveller_SucceedsAndShowsAsCheckedIn()
     {
         _controller.Find("SKY-CHK000001");
