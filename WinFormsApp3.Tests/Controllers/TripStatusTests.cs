@@ -153,6 +153,38 @@ public sealed class TripStatusTests
         Assert.AreNotEqual(TripPhase.NoShow, trip.Phase);
     }
 
+    private static DateTime DateWithDelayOfAtLeast(string flightNo, int minutes)
+    {
+        for (int d = 0; d < 400; d++)
+        {
+            DateTime date = Base.AddDays(d);
+            if (FlightStatusEngine.Evaluate(flightNo, date, date).DelayMinutes >= minutes) return date;
+        }
+        throw new AssertInconclusiveException("no such date");
+    }
+
+    [TestMethod]
+    public void DelayedFlight_CheckedInRightAfterTheWindowOpens_IsCheckedIn()
+    {
+        // Check-in opens 24 h before the *scheduled* departure; the delayed timeline would still say "Scheduled" then.
+        DateTime date = DateWithDelayOfAtLeast("PR-101", 30);
+        DateTime opens = AppData.DepartureOf("PR-101", date).AddHours(-AppData.CheckInWindowHours);
+        BookingRecord booking = Booking("PR-101", date);
+
+        Assert.AreEqual(TripPhase.CheckInOpen, At(booking, opens.AddMinutes(5)).Phase);
+        Assert.AreEqual(TripPhase.CheckedIn, At(booking, opens.AddMinutes(5), In(Ana, "PR-101", date)).Phase);
+        Assert.AreEqual(TripPhase.Upcoming, At(booking, opens.AddMinutes(-5)).Phase);
+    }
+
+    [TestMethod]
+    public void DelayedFlight_AfterTheScheduledDeparture_NobodyCheckedIn_IsNotCheckInOpen()
+    {
+        // Check-in closed at the scheduled departure, but the delayed flight is still on the ground.
+        DateTime date = DateWithDelayOfAtLeast("PR-101", 50);
+        TripStatusInfo trip = At(Booking("PR-101", date), AppData.DepartureOf("PR-101", date).AddMinutes(1));
+        Assert.AreEqual(TripPhase.Boarding, trip.Phase);
+    }
+
     [TestMethod]
     public void RoundTrip_OutboundLanded_ShowsReturnLegPrefixed()
     {

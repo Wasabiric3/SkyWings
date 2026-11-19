@@ -44,11 +44,17 @@ public static class TripStatus
     {
         FlightStatusInfo flight = FlightStatusEngine.Evaluate(flightNo, date, now);
         bool anyCheckedIn = checkIns.Any(c => c.FlightNo == flightNo && c.FlightDate.Date == date.Date);
+        // Online check-in runs from 24 h before the *scheduled* departure until the scheduled departure (BookingStore.IsCheckInOpen),
+        // even when the flight is delayed; the timeline itself follows the estimated (delayed) times.
+        DateTime scheduled = AppData.DepartureOf(flightNo, date);
         TripPhase phase = flight.Kind switch
         {
-            FlightStatusKind.Scheduled => TripPhase.Upcoming,
-            FlightStatusKind.CheckInOpen or FlightStatusKind.Delayed => anyCheckedIn ? TripPhase.CheckedIn : TripPhase.CheckInOpen,
-            FlightStatusKind.Boarding or FlightStatusKind.GateClosing => TripPhase.Boarding,   // check-in stays open until departure
+            FlightStatusKind.Scheduled or FlightStatusKind.CheckInOpen or FlightStatusKind.Delayed =>
+                anyCheckedIn ? TripPhase.CheckedIn
+                : now < scheduled.AddHours(-AppData.CheckInWindowHours) ? TripPhase.Upcoming
+                : now < scheduled ? TripPhase.CheckInOpen
+                : TripPhase.Boarding,   // check-in has closed; the delayed flight is still on the ground
+            FlightStatusKind.Boarding or FlightStatusKind.GateClosing => TripPhase.Boarding,
             FlightStatusKind.Departed or FlightStatusKind.InFlight => anyCheckedIn ? TripPhase.InFlight : TripPhase.NoShow,
             _ => anyCheckedIn ? TripPhase.Completed : TripPhase.NoShow
         };

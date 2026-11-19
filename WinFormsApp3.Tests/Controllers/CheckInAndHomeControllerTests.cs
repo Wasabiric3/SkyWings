@@ -102,6 +102,26 @@ public sealed class CheckInControllerTests
     }
 
     [TestMethod]
+    public void CheckIn_ClosedBanner_OnADelayedFlightStillOnTheGround_DoesNotSayDeparted()
+    {
+        DateTime date = Enumerable.Range(1, 400).Select(d => DateTime.Today.AddDays(d))
+            .First(d => FlightStatusEngine.Evaluate("PR-101", d, d).DelayMinutes >= 30);
+        var p = new PassengerRecord("Maria Santos", "1 St", "0917", 35, "1991-01-01", "PSP-1", false, false,
+            new SeatAssignment("Maria Santos", "ECO7A"), Array.Empty<string>(), 4000m);
+        var booking = new BookingRecord("SKY-CHKDELAY01", DateTime.Now, "PR-101", "Manila (MNL)", "Cebu (CEB)", date, true, "Economy",
+            "Credit Card", "**** 4521", 4000m, "Scheduled", new[] { p }, AppData.StatusConfirmed, "PAID", "TXN-D1", DateTime.Now, 0m);
+        _store.SaveConfirmedBooking(booking, false, 4000m, "Credit Card", "**** 4521", "TXN-D1", DateTime.Now);
+        _controller.Find("SKY-CHKDELAY01");
+        DateTime scheduled = AppData.DepartureOf("PR-101", date);
+
+        CheckInView view = _controller.Load(false, scheduled.AddMinutes(5));
+
+        Assert.AreEqual(CheckInBannerKind.Closed, view.Banner);
+        Assert.AreEqual($"Check-in closed at the scheduled departure time, {scheduled:h:mm tt}. The flight is delayed and has not left yet.",
+            view.BannerText);
+    }
+
+    [TestMethod]
     public void CheckIn_ClosedBanner_SaysLandedAfterArrival()
     {
         _controller.Find("SKY-CHK000001");
