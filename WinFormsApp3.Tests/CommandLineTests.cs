@@ -35,7 +35,7 @@ public sealed class CommandLineTests
             "Credit Card", "**** 4521", 4000m, "Scheduled", new[] { p }, AppData.StatusConfirmed, "PAID", "TXN-R1", DateTime.Now, 0m);
         _store.SaveConfirmedBooking(real, false, 4000m, "Credit Card", "**** 4521", "TXN-R1", DateTime.Now);
         Assert.IsTrue(_store.CheckInPassenger("SKY-REALRESET0001", "Ana Example", "PR-101", date, "ECO9G", AppData.DepartureOf("PR-101", date).AddHours(-2)));
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         string anySimulated = _store.LoadSimulatedCheckInCandidates(date, date)[0].Reference;
 
         string? message = CommandLine.Run(new[] { "--RESET-simulation" }, _store, Now);

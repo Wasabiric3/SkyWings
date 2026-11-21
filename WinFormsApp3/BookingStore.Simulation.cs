@@ -174,8 +174,12 @@ public sealed partial class BookingStore
                 Exec(con, tx, $"DELETE FROM booking_legs WHERE booking_ref IN ({refs})", args);
                 int removed = Exec(con, tx, $"DELETE FROM bookings WHERE is_simulated = 1{scope}", args);
                 Exec(con, tx, $"UPDATE seat_holds SET status = 'RELEASED' WHERE owner LIKE @holds AND status = 'ACTIVE'{scope}", args.Append(("@holds", (object?)(SimulatedHoldPrefix + "%"))).ToArray());
+                // Demo waitlist travellers go with the bookings they were waiting for; real waitlist entries are never touched.
+                Exec(con, tx, $"DELETE FROM waitlist_entries WHERE is_simulated = 1{scope}", args);
                 // Regenerated bookings may include flights that already left: the next check-in step must look back again.
                 Exec(con, tx, "DELETE FROM app_settings WHERE setting_key = @k", ("@k", SettingDemoCheckInsThrough));
+                // "This day reached its booking budget" markers: a day without bookings is no longer finished.
+                if (flightNo is null) Exec(con, tx, "DELETE FROM app_settings WHERE setting_key LIKE 'demo.loaded.%'");
                 tx.Commit();
                 return removed;
             }

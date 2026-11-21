@@ -18,7 +18,7 @@ public sealed class SimulationCheckInTests
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-simci-{Guid.NewGuid():N}.db");
         _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
         _store.SeedDefaultFlights();
-        _sim = new SimulationService(_store);
+        _sim = new SimulationService(_store, TestSim.FullLoad);
     }
 
     [TestCleanup]

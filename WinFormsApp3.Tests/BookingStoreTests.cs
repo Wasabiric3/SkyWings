@@ -239,7 +239,7 @@ public sealed class BookingStoreTests
     public void LoadBookingsForDate_FullSimulatedDay_IsQuick()
     {
         DateTime now = DateTime.Today.AddHours(6);
-        new SimulationService(_store).EnsureLoad(now, horizonDays: 1);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(now, horizonDays: 1);
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         List<BookingRecord> day = _store.LoadBookingsForDate(now.Date);

@@ -1,6 +1,95 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
 using SkyWings.UI;
 
 namespace SkyWings;
+
+/// <summary>
+/// Staff view of one waitlist entry: who it is, where they stand and the whole queue for that cabin. The code can be copied
+/// with one click, to paste into the Waitlist lookup on the home screen.
+/// </summary>
+public sealed class WaitlistEntryForm : GlassForm
+{
+    private readonly WaitlistEntry _entry;
+    private readonly GlassButton _copy = new() { Text = "Copy code" };
+
+    /// <param name="entry">The entry to show.</param>
+    /// <param name="cabinQueue">Every live entry of the same flight, date and cabin, in queue order (including <paramref name="entry"/>).</param>
+    public WaitlistEntryForm(WaitlistEntry entry, IReadOnlyList<WaitlistEntry> cabinQueue)
+    {
+        _entry = entry;
+        Text = "Waitlist entry · SkyWings";
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+        AutoScaleMode = AutoScaleMode.None;
+        int D(int px) => Gfx.S(this, px);
+        ClientSize = new Size(D(620), D(640));
+
+        var title = new Label
+        {
+            Text = $"{entry.FlightNo} · {entry.FlightDate:ddd, d MMM yyyy} · {entry.ClassName}", Font = Theme.Header,
+            AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft
+        };
+        var code = new TextBox { Text = entry.BookingReference, ReadOnly = true };
+        var codeRow = new FieldRow("WAITLIST CODE  (SELECT IT, OR USE COPY CODE)", code);
+
+        string status = entry.Status == BookingStore.WaitlistWaiting
+            ? $"Waiting · number {entry.Position} in line"
+            : entry.OfferExpiresAt is { } until
+                ? "Offered · seats are held until " + until.ToString("ddd, d MMM h:mm tt", CultureInfo.InvariantCulture)
+                : "Offered";
+        var details = new Label
+        {
+            Text = $"Traveller:  {entry.PassengerName}\nEmail:  {entry.Email}\nSeats wanted:  {entry.SeatsWanted}\n" +
+                   $"Joined:  {entry.AddedAt.ToString("ddd, d MMM h:mm tt", CultureInfo.InvariantCulture)}\nStatus:  {status}",
+            AutoSize = false, Height = D(120), ForeColor = Theme.TextPrimary
+        };
+
+        var queueTitle = new Label
+        {
+            Text = "QUEUE FOR THIS CABIN  (▶ = THIS ENTRY)", Font = new Font(Theme.Small, FontStyle.Bold),
+            ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(30), TextAlign = ContentAlignment.BottomLeft
+        };
+        var queue = new TextBox
+        {
+            Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = D(190), Font = Theme.Small,
+            Text = string.Join(Environment.NewLine, cabinQueue.Select(e =>
+                $"{(e.BookingReference == entry.BookingReference ? "▶" : "  ")} " +
+                $"{(e.Status == BookingStore.WaitlistWaiting ? "#" + e.Position.ToString(CultureInfo.InvariantCulture) : "Offered"),-8}" +
+                $"{e.PassengerName}  ×{e.SeatsWanted}   joined {e.AddedAt.ToString("h:mm tt", CultureInfo.InvariantCulture)}"))
+        };
+
+        _copy.Click += (_, _) => CopyCode();
+        var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
+        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
+        buttons.Controls.Add(close);
+        buttons.Controls.Add(_copy);
+
+        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
+        Layouts.Stack(card, title, codeRow, details, queueTitle, queue, buttons);
+        Controls.Add(card);
+        Padding = new Padding(D(10));
+        Theme.Apply(this);
+        AcceptButton = _copy;
+        CancelButton = close;
+    }
+
+    private void CopyCode()
+    {
+        try
+        {
+            Clipboard.SetText(_entry.BookingReference);
+            _copy.Text = "Copied ✓";
+        }
+        catch (ExternalException ex)   // another program is holding the clipboard
+        {
+            AppLogger.Error("Waitlist", ex);
+            MessageBox.Show(this, "The clipboard is busy. Try again, or select the code and press Ctrl+C.", "Copy code",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+}
 
 /// <summary>Adds a traveller to the waitlist of a sold-out cabin. The offer arrives by email when seats free up.</summary>
 public sealed class JoinWaitlistForm : GlassForm
@@ -109,7 +198,7 @@ public sealed class WaitlistStatusForm : GlassForm
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(560), D(440));
+        ClientSize = new Size(D(720), D(400));   // wide enough for all four buttons on one line (Look up, Leave, Book now, Close)
         _result.Height = D(90);
 
         _codeRow = new FieldRow("WAITLIST CODE", _code);
@@ -119,7 +208,7 @@ public sealed class WaitlistStatusForm : GlassForm
         _book.Click += (_, _) => { OfferToBook = _entry; DialogResult = DialogResult.OK; Close(); };
         _leave.Click += (_, _) => Leave();
         var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
+        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Padding = new Padding(0, D(10), 0, 0) };
         buttons.Controls.Add(close);
         buttons.Controls.Add(_book);
         buttons.Controls.Add(_leave);

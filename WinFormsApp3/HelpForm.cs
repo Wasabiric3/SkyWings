@@ -41,7 +41,7 @@ internal static class HelpContent
             $"When a booking is cancelled, the first traveller in line is emailed an offer and the seats are held for up to {AppData.WaitlistOfferHours} hours, or until bookings close for the flight if that comes first. " +
             "To use it, choose \"Waitlist\" on the home screen, enter the waitlist code, then \"Book now\". " +
             "If the offer is not used in time, the seats go to the next traveller.\n\n" +
-            "Staff can see and remove waitlist entries on the Waitlist tab of the staff window."),
+            "Staff can see and remove waitlist entries on the Waitlist tab of the staff window. It lists everyone waiting, with their place in the queue and when they joined, and anyone currently holding an offer."),
 
         new("Aircraft and seat maps",
             "Each flight has an aircraft that decides its cabins and seat map: " +

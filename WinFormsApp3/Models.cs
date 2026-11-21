@@ -38,7 +38,14 @@ public sealed record WaitlistEntry(
     public string ClassName { get; init; } = "Economy";
     public int SeatsWanted { get; init; } = 1;
     public DateTime? OfferExpiresAt { get; init; }
+    /// <summary>Made by the demo simulator: never audited or emailed.</summary>
+    public bool IsSimulated { get; init; }
+    /// <summary>When the current offer was made (null before an offer).</summary>
+    public DateTime? OfferedAt { get; init; }
 }
+
+/// <summary>The result of freeing seats for a waitlist: how many were freed and who (if anyone) was offered them.</summary>
+public sealed record WaitlistSeatRelease(int SeatsFreed, WaitlistEntry? OfferedTo);
 
 public sealed record CheckInRecord(
     string BookingReference, string PassengerName, string FlightNo, DateTime FlightDate,

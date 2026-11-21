@@ -26,10 +26,12 @@ public sealed partial class BookingStore
         EnsureColumn(con, "ALTER TABLE waitlist_entries ADD COLUMN class_name VARCHAR(20) NOT NULL DEFAULT 'Economy'");
         EnsureColumn(con, "ALTER TABLE waitlist_entries ADD COLUMN seats_wanted INTEGER NOT NULL DEFAULT 1");
         EnsureColumn(con, "ALTER TABLE waitlist_entries ADD COLUMN offer_expires_at DATETIME NULL");
+        EnsureColumn(con, "ALTER TABLE waitlist_entries ADD COLUMN is_simulated INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(con, "ALTER TABLE waitlist_entries ADD COLUMN offered_at DATETIME NULL");
     }
 
     private const string WaitlistColumns =
-        "id,booking_ref,flight_no,flight_date,added_at,status,passenger_name,email,class_name,seats_wanted,offer_expires_at";
+        "id,booking_ref,flight_no,flight_date,added_at,status,passenger_name,email,class_name,seats_wanted,offer_expires_at,is_simulated,offered_at";
 
     private static WaitlistEntry ReadWaitlist(SqliteDataReader rs, long position)
     {
@@ -42,8 +44,73 @@ public sealed partial class BookingStore
             ClassName = Str(rs, "class_name"),
             SeatsWanted = Int(rs, "seats_wanted"),
             OfferExpiresAt = rs.IsDBNull(exp) ? null : rs.GetDateTime(exp),
-            Id = Long(rs, "id")
+            Id = Long(rs, "id"),
+            IsSimulated = Int(rs, "is_simulated") == 1,
+            OfferedAt = rs.IsDBNull(rs.GetOrdinal("offered_at")) ? null : rs.GetDateTime(rs.GetOrdinal("offered_at"))
         };
+    }
+
+    /// <summary>
+    /// Adds a demo traveller to a cabin's queue (<c>is_simulated = 1</c>). Unlike <see cref="JoinWaitlist"/> it does not check for
+    /// room: the simulator only calls it for cabins it has just found sold out. Returns false if the entry could not be added.
+    /// </summary>
+    public bool AddSimulatedWaitlistEntry(string flightNo, DateTime flightDate, string className, string passengerName,
+        string email, int seatsWanted, DateTime addedAt)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                using var con = OpenConnection();
+                string code = "WL-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+                return Exec(con,
+                    "INSERT OR IGNORE INTO waitlist_entries (booking_ref,flight_no,flight_date,added_at,status,passenger_name,email,class_name,seats_wanted,is_simulated) " +
+                    "VALUES (@ref,@f,@d,@at,'WAITING',@name,@e,@c,@n,1)",
+                    ("@ref", code), ("@f", flightNo), ("@d", flightDate.Date), ("@at", addedAt),
+                    ("@name", passengerName.Trim()), ("@e", email.Trim()), ("@c", className), ("@n", Math.Max(1, seatsWanted))) > 0;
+            }
+            catch (SqliteException e)
+            {
+                LogError(e);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Every simulated entry that currently holds an offer, oldest offer first.</summary>
+    public List<WaitlistEntry> LoadSimulatedOffers()
+    {
+        lock (_lock)
+        {
+            var list = new List<WaitlistEntry>();
+            using var con = OpenConnection();
+            using var cmd = Cmd(con,
+                $"SELECT {WaitlistColumns} FROM waitlist_entries WHERE is_simulated=1 AND status='OFFERED' ORDER BY offered_at, id");
+            using var rs = cmd.ExecuteReader();
+            while (rs.Read()) list.Add(ReadWaitlist(rs, 0));
+            return list;
+        }
+    }
+
+    /// <summary>How many simulated entries one cabin has, in any of the given statuses (all statuses when none are given).</summary>
+    public int CountSimulatedWaitlist(string flightNo, DateTime flightDate, string className, params string[] statuses)
+    {
+        lock (_lock)
+        {
+            using var con = OpenConnection();
+            var args = new List<(string, object?)> { ("@f", flightNo), ("@d", flightDate.Date), ("@c", className) };
+            string filter = "";
+            if (statuses.Length > 0)
+            {
+                var names = new List<string>();
+                for (int i = 0; i < statuses.Length; i++) { names.Add("@s" + i); args.Add(("@s" + i, statuses[i])); }
+                filter = " AND status IN (" + string.Join(",", names) + ")";
+            }
+            using var cmd = Cmd(con,
+                "SELECT COUNT(*) FROM waitlist_entries WHERE is_simulated=1 AND flight_no=@f AND flight_date=@d AND class_name=@c" + filter,
+                null, args.ToArray());
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
     }
 
     /// <summary>
@@ -206,8 +273,8 @@ public sealed partial class BookingStore
                                            ReservedByOffers(con, flightNo, flightDate, cls, null, now));
                     if (seats > left) { free[cls] = left; continue; }
                     free[cls] = left - seats;
-                    Exec(con, "UPDATE waitlist_entries SET status='OFFERED', offer_expires_at=@exp WHERE id=@id AND status='WAITING'",
-                        ("@exp", offerDeadline), ("@id", id));
+                    Exec(con, "UPDATE waitlist_entries SET status='OFFERED', offer_expires_at=@exp, offered_at=@now WHERE id=@id AND status='WAITING'",
+                        ("@exp", offerDeadline), ("@now", now), ("@id", id));
                     using var read = Cmd(con, $"SELECT {WaitlistColumns} FROM waitlist_entries WHERE id=@id", null, ("@id", id));
                     using var r = read.ExecuteReader();
                     if (r.Read()) offered.Add(ReadWaitlist(r, 0));
@@ -221,6 +288,7 @@ public sealed partial class BookingStore
 
         foreach (WaitlistEntry entry in offered)
         {
+            if (entry.IsSimulated) continue;   // demo travellers: no audit row and, above all, no email
             try { WriteAudit("system", "", "WAITLIST_OFFERED", entry.BookingReference, $"{entry.FlightNo} {entry.FlightDate:yyyy-MM-dd} {entry.ClassName} x{entry.SeatsWanted}"); }
             catch (Exception ex) { LogError(ex); }
             try { WaitlistOfferMade?.Invoke(entry); }

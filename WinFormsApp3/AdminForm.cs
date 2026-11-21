@@ -632,32 +632,124 @@ public sealed class AdminForm : GlassForm
 
     // ------------------------------------------------------------------ waitlist
 
-    private sealed record WaitlistRow(string Flight, string Date, string Cabin, string Traveller, string Seats, string Status, string Offer, string Code);
+    private sealed record WaitlistRow(string Flight, string Date, string Cabin, string Traveller, string Seats, string Joined, string Status, string Offer, string Code);
 
     private readonly DataGridView _waitlist = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
+
+    private List<WaitlistEntry> _waitlistEntries = new();
+
+    private readonly Label _waitlistInfo = new()
+    {
+        Dock = DockStyle.Top, AutoSize = false, Font = Theme.Small, ForeColor = Theme.TextSecondary, TextAlign = ContentAlignment.MiddleLeft
+    };
 
     private Panel BuildWaitlistPage()
     {
         var toolbar = Toolbar();
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadWaitlist(), GlassButtonStyle.Ghost));
+        toolbar.Controls.Add(ToolButton("Details", (_, _) => ShowWaitlistDetails(), GlassButtonStyle.Secondary));
+        toolbar.Controls.Add(ToolButton("Copy code", (_, _) => CopyWaitlistCode(), GlassButtonStyle.Secondary));
         if (Session.Has(Permission.CancelBookings))
+        {
+            toolbar.Controls.Add(ToolButton("Free a seat", (_, _) => FreeSeatForSelected()));
             toolbar.Controls.Add(ToolButton("Remove selected", (_, _) => RemoveSelectedWaitlist(), GlassButtonStyle.Danger));
+        }
         GridStyle.Apply(_waitlist);
+        _waitlist.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowWaitlistDetails(); };
         _waitlist.DefaultCellStyle.Font = Theme.Small;
         _waitlist.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-        return Section(toolbar, _waitlist);
+        _waitlistInfo.Height = D(58);
+
+        // Same layout as Section, with an explanation under the toolbar: this tab is easy to misread when it is shown to someone new.
+        var page = new Panel { Dock = DockStyle.Fill, Visible = false };
+        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 12 };
+        card.Controls.Add(_waitlist);
+        card.Controls.Add(_waitlistInfo);
+        card.Controls.Add(toolbar);
+        page.Controls.Add(card);
+        return page;
     }
 
     private void LoadWaitlist()
     {
         List<WaitlistEntry> entries = new();
         if (!Try("Unable to load the waitlist", () => entries = _service.LoadWaitlist())) return;
+        _waitlistEntries = entries;
         _waitlist.DataSource = entries.Select(e => new WaitlistRow(
             e.FlightNo, e.FlightDate.ToString("ddd, d MMM yyyy", CultureInfo.InvariantCulture), e.ClassName, e.PassengerName,
             e.SeatsWanted.ToString(CultureInfo.InvariantCulture),
+            e.AddedAt.ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture),
             e.Status == BookingStore.WaitlistWaiting ? $"Waiting · #{e.Position}" : "Offered",
             e.OfferExpiresAt is { } until ? "until " + until.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture) : "",
             e.BookingReference)).ToList();
+
+        int offered = entries.Count(e => e.Status == BookingStore.WaitlistOffered);
+        int cabins = entries.Select(e => (e.FlightNo, e.FlightDate, e.ClassName)).Distinct().Count();
+        _waitlistInfo.Text =
+            "When a cabin is sold out, travellers join its waitlist (first come, first served). When seats free up, the first entry " +
+            $"whose party fits is offered them for {AppData.WaitlistOfferHours} hours; if the offer lapses, the next in line gets it." +
+            Environment.NewLine +
+            $"Now: {entries.Count - offered} waiting · {offered} offered · {cabins} sold-out cabin(s).";
+    }
+
+    private WaitlistEntry? SelectedWaitlistEntry()
+        => _waitlist.CurrentRow?.DataBoundItem is WaitlistRow row
+            ? _waitlistEntries.FirstOrDefault(e => e.BookingReference == row.Code)
+            : null;
+
+    private void ShowWaitlistDetails()
+    {
+        if (SelectedWaitlistEntry() is not { } entry) { ShowInfo("Select a waitlist entry first."); return; }
+        List<WaitlistEntry> queue = _waitlistEntries
+            .Where(e => e.FlightNo == entry.FlightNo && e.FlightDate == entry.FlightDate && e.ClassName == entry.ClassName).ToList();
+        using var details = new WaitlistEntryForm(entry, queue);
+        details.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Frees seats in the selected entry's cabin so the waitlist offers them to the first traveller in line. Shows who got the offer
+    /// and selects that row, so the whole step can be followed on screen.
+    /// </summary>
+    private void FreeSeatForSelected()
+    {
+        if (SelectedWaitlistEntry() is not { } entry) { ShowInfo("Select a waitlist entry first. Seats are freed in that entry's cabin."); return; }
+        WaitlistSeatRelease? result = null;
+        if (!Try("Unable to free a seat", () => result = _service.ReleaseSeatForWaitlist(entry.FlightNo, entry.FlightDate, entry.ClassName))) return;
+        LoadWaitlist();
+
+        string cabin = $"{entry.FlightNo} · {entry.FlightDate:ddd, d MMM} · {entry.ClassName}";
+        if (result is null)
+        {
+            ShowInfo($"No seat could be freed on {cabin}: there is no booking in that cabin that can be cancelled here.");
+            return;
+        }
+        if (result.OfferedTo is not { } offered)
+        {
+            ShowInfo($"{result.SeatsFreed} seat(s) were freed on {cabin}, but nobody was offered them. Offers stop when bookings close " +
+                     $"({AppData.BookingCutoffHours} hours before departure), or nobody waiting fits the seats freed.");
+            return;
+        }
+        foreach (DataGridViewRow row in _waitlist.Rows)
+            if (row.DataBoundItem is WaitlistRow r && r.Code == offered.BookingReference)
+            {
+                _waitlist.ClearSelection();
+                row.Selected = true;
+                _waitlist.CurrentCell = row.Cells[0];
+                break;
+            }
+        ShowInfo($"{result.SeatsFreed} seat(s) were freed on {cabin}.\n\n{offered.PassengerName} ({offered.BookingReference}) was offered " +
+                 $"{offered.SeatsWanted} seat(s), held until {offered.OfferExpiresAt:ddd, d MMM h:mm tt}.");
+    }
+
+    private void CopyWaitlistCode()
+    {
+        if (SelectedWaitlistEntry() is not { } entry) { ShowInfo("Select a waitlist entry first."); return; }
+        try { Clipboard.SetText(entry.BookingReference); ShowInfo($"Copied {entry.BookingReference}. Paste it into the Waitlist lookup on the home screen."); }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            AppLogger.Error("Waitlist", ex);
+            ShowInfo("The clipboard is busy. Try again.");
+        }
     }
 
     private void RemoveSelectedWaitlist()

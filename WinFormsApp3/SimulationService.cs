@@ -5,10 +5,12 @@ namespace SkyWings;
 
 /// <summary>Tuning for the demo simulator. The defaults suit a demo; tests use extreme values to force each behaviour.</summary>
 public sealed record SimulationOptions(
-    double BookingChance = 0.35, double CancelChance = 0.20, int MaxHolds = 3, int HoldCap = 30, int HorizonDays = 14);
+    double BookingChance = 0.35, double CancelChance = 0.20, int MaxHolds = 3, int HoldCap = 30, int HorizonDays = 14,
+    int DailyBookingBudget = 500, double WaitlistJoinChance = 0.08, double WaitlistFreeChance = 0.04);
 
 /// <summary>What one simulation step did (for tests and the staff screen).</summary>
-public sealed record SimulationTick(int HoldsAdded, int BookingsAdded, int BookingsCancelled, int LoadsGenerated, int CheckInsAdded = 0);
+public sealed record SimulationTick(int HoldsAdded, int BookingsAdded, int BookingsCancelled, int LoadsGenerated, int CheckInsAdded = 0,
+    int WaitlistJoined = 0, int WaitlistSeatsFreed = 0, int WaitlistResolved = 0);
 
 /// <summary>
 /// Makes the demo look like a live operations system. <see cref="EnsureLoad"/> pre-fills every flight over the next days with
@@ -62,7 +64,27 @@ public sealed class SimulationService
     internal const double MinLoad = 0.60, MaxLoad = 0.90;
 
     /// <summary>Bumped whenever the load formula changes, so demo bookings made by the old one are regenerated once.</summary>
-    public const string LoadVersion = "3";
+    public const string LoadVersion = "5";
+
+    /// <summary>Per day, at most this many flights that have a sold-out premium cabin are generated first, so the waitlist always has something to show.</summary>
+    private const int WaitlistShowcaseFlightsPerDay = 2;
+
+    /// <summary>Setting key prefix marking a day whose load reached the daily booking budget (so it is not topped up again).</summary>
+    private const string LoadedDayKeyPrefix = "demo.loaded.";
+
+    private static string LoadedDayKey(DateTime date) => LoadedDayKeyPrefix + date.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+
+    /// <summary>About one flight in twelve has a premium cabin that is completely sold out. Stable for a flight and date.</summary>
+    internal static bool IsSoldOutDay(string flightNo, DateTime date)
+        => FlightStatusEngine.StableSeed($"sim|{flightNo}|{date:yyyyMMdd}") % 12 == 0;
+
+    /// <summary>About one flight in thirty is completely sold out in Economy (a busy flight, which is what real waitlists are mostly for).</summary>
+    internal static bool IsEconomySoldOutDay(string flightNo, DateTime date)
+        => FlightStatusEngine.StableSeed($"sim-eco|{flightNo}|{date:yyyyMMdd}") % 30 == 0;
+
+    /// <summary>The cabin that sells out on a sold-out day: Business, or First Class where there is no Business; null if neither.</summary>
+    internal static string? SoldOutCabinName(Aircraft aircraft)
+        => aircraft.Cabin("Business") is not null ? "Business" : aircraft.Cabin("First Class") is not null ? "First Class" : null;
 
     /// <summary>
     /// How full a flight tends to be, before randomness: about 85% on the day, easing to about 66% two weeks out, domestic a
@@ -102,20 +124,34 @@ public sealed class SimulationService
         int generated = 0;
         DateTime? earliestDeparture = null;
         Dictionary<string, HashSet<string>> realSeats = _store.LoadRealTakenSeatsByFlightDate(now.Date, now.Date.AddDays(Math.Max(0, horizon - 1)));
+        bool capped = _options.DailyBookingBudget < int.MaxValue;
         for (int d = 0; d < horizon; d++)
         {
             DateTime date = now.Date.AddDays(d);
+            // A day that already reached its budget is finished: it must not be topped up with more flights every minute.
+            if (capped && _store.GetSetting(LoadedDayKey(date), "") == "1") continue;
             var batch = new List<BookingRecord>();
-            foreach (Flight flight in flights)
+
+            // Which flights get a load today: the waitlist showcase flights first, then the rest in a stable per-day order.
+            List<Flight> ranked = flights.Where(f => !existing.Contains(BookingStore.SimulatedKey(f.FlightNo, date)))
+                .OrderBy(f => FlightStatusEngine.StableSeed($"pick|{f.FlightNo}|{date:yyyyMMdd}")).ToList();
+            List<Flight> showcase = ranked.Where(f => IsSoldOutDay(f.FlightNo, date)).Take(WaitlistShowcaseFlightsPerDay)
+                .Concat(ranked.Where(f => IsEconomySoldOutDay(f.FlightNo, date)).Take(1)).Distinct().ToList();
+            int booked = 0;
+            bool reachedBudget = false;
+            foreach (Flight flight in showcase.Concat(ranked.Except(showcase)))
             {
-                if (existing.Contains(BookingStore.SimulatedKey(flight.FlightNo, date))) continue;
+                if (booked >= _options.DailyBookingBudget) { reachedBudget = true; break; }
                 DateTime departure = AppData.DepartureOf(flight.FlightNo, date);
                 if (earliestDeparture is null || departure < earliestDeparture) earliestDeparture = departure;
                 if (!aircraft.TryGetValue(flight.FlightNo, out Aircraft? plane)) aircraft[flight.FlightNo] = plane = _store.LoadAircraft(flight.FlightNo);
-                batch.AddRange(GenerateLoad(flight, plane, date, now,
-                    realSeats.GetValueOrDefault(BookingStore.SimulatedKey(flight.FlightNo, date)) ?? new HashSet<string>()));
+                List<BookingRecord> load = GenerateLoad(flight, plane, date, now,
+                    realSeats.GetValueOrDefault(BookingStore.SimulatedKey(flight.FlightNo, date)) ?? new HashSet<string>());
+                batch.AddRange(load);
+                booked += load.Count(b => b.Status == AppData.StatusConfirmed);
                 generated++;
             }
+            if (capped && (reachedBudget || booked >= _options.DailyBookingBudget)) _store.SetSetting(LoadedDayKey(date), "1");
             // Small transactions: the store has one lock, and the board must not wait long for it while this runs in the background.
             foreach (BookingRecord[] chunk in batch.Chunk(400)) _store.SaveSimulatedBookings(chunk);
         }
@@ -142,8 +178,9 @@ public sealed class SimulationService
         double load = BaseLoad(daysOut, flight.Domestic) + (rng.NextDouble() - 0.5) * 0.12;   // each flight its own ±6%
         // About one flight in twelve has a premium cabin that is completely sold out (the waitlist needs something to show).
         // Economy never sells out here, so the board's load stays in the 60–90% range.
-        bool soldOutDay = seed % 12 == 0;
-        string? soldOutCabin = aircraft.Cabin("Business") is not null ? "Business" : aircraft.Cabin("First Class") is not null ? "First Class" : null;
+        bool soldOutDay = IsSoldOutDay(flight.FlightNo, date);
+        string? soldOutCabin = SoldOutCabinName(aircraft);
+        bool economyDay = IsEconomySoldOutDay(flight.FlightNo, date);
 
         var result = new List<BookingRecord>();
         int counter = 0;
@@ -151,7 +188,7 @@ public sealed class SimulationService
         {
             List<Seat> free = AllSeats(cabin).Where(s => !realTaken.Contains(SeatLayout.Normalize(cabin.Code(s.Row + 1, cabin.Letters[s.Col])))).ToList();
             Shuffle(free, rng);
-            bool soldOut = soldOutDay && cabin.ClassName == soldOutCabin;
+            bool soldOut = (soldOutDay && cabin.ClassName == soldOutCabin) || (economyDay && cabin.ClassName == "Economy");
             double occupancy = load * CabinFactor(cabin.ClassName) + (rng.NextDouble() - 0.5) * 0.06;
             // Seats real bookings already took count towards the load.
             int realInCabin = cabin.Seats - free.Count;
@@ -221,7 +258,7 @@ public sealed class SimulationService
     }
 
     private BookingRecord MakeBooking(Flight flight, DateTime date, CabinLayout cabin, List<Seat> seats, DateTime now, JavaRandom rng,
-        int counter, bool cancelled, string? referenceSalt = null)
+        int counter, bool cancelled, string? referenceSalt = null, DateTime? bookedAtOverride = null, string? leadName = null)
     {
         // Same shape as a booking made at the desk ("SKY-" + 12 hex); the is_simulated column is what marks it as simulated.
         string reference = "SKY-" +
@@ -235,6 +272,7 @@ public sealed class SimulationService
         foreach (Seat seat in seats)
         {
             string name = $"{FirstNames[rng.NextInt(FirstNames.Length)]} {LastNames[rng.NextInt(LastNames.Length)]}";
+            if (leadName is not null && passengers.Count == 0) name = leadName;   // a waitlisted traveller books under their own name
             string code = cabin.Code(seat.Row + 1, cabin.Letters[seat.Col]);
             int age = 18 + rng.NextInt(52);
             string address = $"{1 + details.NextInt(250)} {Streets[details.NextInt(Streets.Length)]}, {Cities[details.NextInt(Cities.Length)]}";
@@ -248,6 +286,7 @@ public sealed class SimulationService
         decimal total = fare * seats.Count;
         decimal refund = cancelled ? AppData.Round2(total * 0.5m) : 0m;
         DateTime bookedAt = now.AddDays(-(1 + rng.NextInt(30))).AddMinutes(-rng.NextInt(1440));
+        if (bookedAtOverride is { } at) bookedAt = at;
         string method = PaymentMethods[rng.NextInt(PaymentMethods.Length)];
         return new BookingRecord(reference, bookedAt, flight.FlightNo, flight.Origin, flight.Destination, date.Date, flight.Domestic,
             cabin.ClassName, method, "**** " + (1000 + rng.NextInt(9000)), total, "Scheduled", passengers,
@@ -279,7 +318,193 @@ public sealed class SimulationService
 
         int cancelled = 0;
         if (rng.NextDouble() < _options.CancelChance && TryCancelOne(now, rng)) cancelled++;
-        return new SimulationTick(holds, booked, cancelled, 0);
+
+        int joined = 0, freed = 0;
+        if (rng.NextDouble() < _options.WaitlistJoinChance && TryJoinWaitlist(now, rng, upcoming)) joined++;
+        if (rng.NextDouble() < _options.WaitlistFreeChance && TryFreeWaitlistSeat(now, rng, upcoming)) freed++;
+        return new SimulationTick(holds, booked, cancelled, 0, 0, joined, freed);
+    }
+
+    // ------------------------------------------------------------------ waitlist demand
+
+    /// <summary>At most this many simulated travellers wait for one cabin (Economy has more seats, so a longer queue).</summary>
+    private static int MaxSimulatedWaiting(string cabin) => cabin == "Economy" ? 12 : 8;
+
+    /// <summary>The cabins the simulator sells out completely on a flight and date: the premium cabin on some days, Economy on others.</summary>
+    private static IEnumerable<string> SoldOutCabinNames(string flightNo, DateTime date, Aircraft aircraft)
+    {
+        if (IsSoldOutDay(flightNo, date) && SoldOutCabinName(aircraft) is { } premium) yield return premium;
+        if (IsEconomySoldOutDay(flightNo, date) && aircraft.Cabin("Economy") is not null) yield return "Economy";
+    }
+
+    /// <summary>
+    /// The cabins that are sold out right now on a showcase flight within a week, as (flight, date, cabin). Only the sold-out days
+    /// are looked at, so this stays a handful of cheap checks even though it runs every minute.
+    /// </summary>
+    private List<(string FlightNo, DateTime Date, string Cabin)> SoldOutCabins(DateTime now, List<(string FlightNo, DateTime Date)> upcoming)
+    {
+        var result = new List<(string, DateTime, string)>();
+        foreach (var (flightNo, date) in upcoming)
+        {
+            if (!IsSoldOutDay(flightNo, date) && !IsEconomySoldOutDay(flightNo, date)) continue;
+            if (AppData.DepartureOf(flightNo, date) <= now.AddHours(AppData.BookingCutoffHours)) continue;   // nobody can book any more
+            foreach (string cabin in SoldOutCabinNames(flightNo, date, _store.LoadAircraft(flightNo)))
+                if (_store.CabinSeatsLeft(flightNo, date, cabin) == 0) result.Add((flightNo, date, cabin));
+        }
+        return result;
+    }
+
+    private static readonly string[] WaitlistFirstNames =
+    {
+        "Maria", "Jose", "Ana", "Juan", "Rosa", "Carlo", "Lea", "Miguel", "Grace", "Paolo", "Bea", "Rafael", "Clara", "Noel", "Tina",
+        "Ramon", "Joy", "Eric", "Nina", "Victor", "Alma", "Dante", "Mara", "Luis", "Kristine", "Jericho", "Angelica", "Mark", "Jasmine",
+        "Francis", "Camille", "Renato", "Liza", "Arnel", "Patricia", "Joel", "Danica", "Ferdinand", "Maricel", "Vince", "Trisha",
+        "Gabriel", "Celine", "Emmanuel", "Hazel", "Rowena", "Julius", "Sheila", "Benjie", "Lorna"
+    };
+
+    private static readonly string[] WaitlistLastNames =
+    {
+        "Santos", "Reyes", "Cruz", "Bautista", "Ocampo", "Garcia", "Mendoza", "Torres", "Flores", "Ramos", "Aquino", "Castillo",
+        "Villanueva", "Navarro", "Salazar", "Dela Cruz", "Fernandez", "Domingo", "Pascual", "Santiago", "Lim", "Tan", "Go", "Uy",
+        "Manalo", "Soriano", "Estrada", "Valdez", "Magno", "Lacson", "Evangelista", "Gonzales", "Cabrera", "Alcantara", "Velasco",
+        "Policarpio", "Macaraeg", "De Guzman", "Panganiban", "Tolentino", "Rivera", "Agbayani", "Zamora", "Sarmiento", "Bernardo"
+    };
+
+    private (string Name, string Email) MadeUpTraveller(JavaRandom rng)
+    {
+        string first = WaitlistFirstNames[rng.NextInt(WaitlistFirstNames.Length)], last = WaitlistLastNames[rng.NextInt(WaitlistLastNames.Length)];
+        string local = (first + "." + last).Replace(" ", "").ToLowerInvariant() + (10 + rng.NextInt(90)).ToString(CultureInfo.InvariantCulture);
+        return ($"{first} {last}", local + "@example.com");   // example.com: a reserved address that nothing is ever sent to
+    }
+
+    /// <summary>
+    /// Gives every sold-out showcase cabin its first waiting travellers: 3–6 in a premium cabin, 6–10 in Economy, parties of 1–4. They
+    /// joined over the days before now, further back for flights further away and mostly closer to the flight, in join order. A
+    /// cabin is only seeded once. Returns how many entries were added. Never touches real entries.
+    /// </summary>
+    public int SeedWaitlist(DateTime now)
+    {
+        int added = 0;
+        foreach (var (flightNo, date, cabin) in SoldOutCabins(now, UpcomingLoads(now, 7)))
+        {
+            if (_store.CountSimulatedWaitlist(flightNo, date, cabin) > 0) continue;
+            var rng = new JavaRandom(FlightStatusEngine.StableSeed($"wl|{flightNo}|{date:yyyyMMdd}|{cabin}"));
+            int count = cabin == "Economy" ? 6 + rng.NextInt(5) : 3 + rng.NextInt(4);
+
+            // How far back people could have joined: up to 60% of the time left to departure, between 3 hours and 5 days.
+            double hoursOut = (AppData.DepartureOf(flightNo, date) - now).TotalHours;
+            int windowMinutes = (int)Math.Clamp(hoursOut * 60 * 0.6, 180, 5 * 24 * 60);
+            // u*u bunches joins towards the present (more people join as the flight gets close), but some are days old.
+            List<DateTime> joined = Enumerable.Range(0, count)
+                .Select(_ => { double u = rng.NextDouble(); return now.AddMinutes(-(10 + (int)(windowMinutes * u * u))); })
+                .OrderBy(t => t).ToList();   // the earliest joiner is first in line
+            foreach (DateTime joinedAt in joined)
+            {
+                (string name, string email) = MadeUpTraveller(rng);
+                if (_store.AddSimulatedWaitlistEntry(flightNo, date, cabin, name, email, PartySize(rng), joinedAt)) added++;
+            }
+        }
+        return added;
+    }
+
+    /// <summary>A new traveller joins the queue of a sold-out cabin (capped), so the Waitlist tab keeps changing.</summary>
+    private bool TryJoinWaitlist(DateTime now, JavaRandom rng, List<(string FlightNo, DateTime Date)> upcoming)
+    {
+        var cabins = SoldOutCabins(now, upcoming)
+            .Where(c => _store.CountSimulatedWaitlist(c.FlightNo, c.Date, c.Cabin, BookingStore.WaitlistWaiting) is > 0
+                        && _store.CountSimulatedWaitlist(c.FlightNo, c.Date, c.Cabin, BookingStore.WaitlistWaiting) < MaxSimulatedWaiting(c.Cabin)).ToList();
+        if (cabins.Count == 0) return false;
+        var (flightNo, date, cabin) = cabins[rng.NextInt(cabins.Count)];
+        (string name, string email) = MadeUpTraveller(rng);
+        return _store.AddSimulatedWaitlistEntry(flightNo, date, cabin, name, email, PartySize(rng), now);
+    }
+
+    /// <summary>
+    /// A demo traveller cancels a booking in a sold-out cabin that has people waiting. The normal cancellation frees the seats and the
+    /// normal waitlist logic offers them to the first entry that fits, so an OFFERED entry appears on the tab.
+    /// </summary>
+    private bool TryFreeWaitlistSeat(DateTime now, JavaRandom rng, List<(string FlightNo, DateTime Date)> upcoming)
+    {
+        var cabins = SoldOutCabins(now, upcoming)
+            .Where(c => _store.CountSimulatedWaitlist(c.FlightNo, c.Date, c.Cabin, BookingStore.WaitlistWaiting) > 0
+                        && _store.CountSimulatedWaitlist(c.FlightNo, c.Date, c.Cabin, BookingStore.WaitlistOffered) == 0).ToList();
+        if (cabins.Count == 0) return false;
+        var (flightNo, date, cabin) = cabins[rng.NextInt(cabins.Count)];
+        List<string> references = _store.LoadSimulatedConfirmedReferences(flightNo, date, cabin);
+        return references.Count > 0 && CancelSimulatedBooking(references[rng.NextInt(references.Count)]);
+    }
+
+    /// <summary>
+    /// Demo travellers answer their offers. Each one has a fixed fate, decided by their code: about 60% book the seats a few minutes
+    /// after the offer (the entry becomes CONVERTED and a booking appears), about 15% decline (the offer passes to the next in line),
+    /// and about 25% never answer, so the offer lapses after its deadline and the next in line is offered. Returns how many answered.
+    /// </summary>
+    public int ProgressWaitlistOffers(DateTime now)
+    {
+        int answered = 0;
+        foreach (WaitlistEntry entry in _store.LoadSimulatedOffers())
+        {
+            if (entry.OfferedAt is not { } offeredAt || entry.OfferExpiresAt is not { } until || until <= now) continue;
+            int roll = WaitlistFate(entry.BookingReference);
+            int delay = (int)((((FlightStatusEngine.StableSeed("fate|" + entry.BookingReference) / 100) % 25) + 25) % 25);
+            try
+            {
+                if (roll < 60) { if (now >= offeredAt.AddMinutes(2 + delay) && BookForWaitlist(entry, now)) answered++; }
+                else if (roll < 75) { if (now >= offeredAt.AddMinutes(4 + delay) && _store.CancelWaitlistEntry(entry.BookingReference)) answered++; }
+            }
+            catch (IOException ex) { AppLogger.Error("Demo", ex); }   // one traveller's problem never stops the others
+        }
+        return answered;
+    }
+
+    /// <summary>
+    /// Frees seats in one cabin on demand by cancelling a demo booking with the normal cancellation rules, so the normal waitlist
+    /// logic offers them. The booking chosen is the first one large enough for the traveller first in line (or the largest there is).
+    /// Returns the cancelled reference and how many seats it freed, or null when the cabin has no demo booking to cancel.
+    /// Real bookings are never touched.
+    /// </summary>
+    public (string Reference, int Seats)? FreeSeatsInCabin(string flightNo, DateTime date, string cabin)
+    {
+        int needed = _store.LoadWaitlistDetails(flightNo, date)
+            .Where(e => e.ClassName == cabin && e.Status == BookingStore.WaitlistWaiting)
+            .Select(e => e.SeatsWanted).FirstOrDefault();
+        BookingRecord? pick = null;
+        foreach (string reference in _store.LoadSimulatedConfirmedReferences(flightNo, date, cabin).Take(60))
+        {
+            if (_store.FindByReference(reference) is not { } booking) continue;
+            if (pick is null || booking.Passengers.Count > pick.Passengers.Count) pick = booking;
+            if (pick.Passengers.Count >= needed) break;
+        }
+        return pick is not null && CancelSimulatedBooking(pick.Reference) ? (pick.Reference, pick.Passengers.Count) : null;
+    }
+
+    /// <summary>0–99, fixed for a waitlist code: below 60 the traveller books, 60–74 declines, 75 and above never answers.</summary>
+    internal static int WaitlistFate(string code)
+        => (int)(((FlightStatusEngine.StableSeed("fate|" + code) % 100) + 100) % 100);
+
+    /// <summary>The waitlisted demo traveller books the offered seats under their own name; the entry is marked CONVERTED.</summary>
+    private bool BookForWaitlist(WaitlistEntry entry, DateTime now)
+    {
+        Flight? flight = AllFlights().FirstOrDefault(f => f.FlightNo == entry.FlightNo);
+        CabinLayout? cabin = _store.LoadAircraft(entry.FlightNo).Cabin(entry.ClassName);
+        if (flight is null || cabin is null) return false;
+
+        HashSet<string> blocked = _store.LoadTakenSeats(entry.FlightNo, entry.FlightDate);
+        foreach (string held in _store.GetActiveHoldsForFlightDate(entry.FlightNo, entry.FlightDate, now).Keys) blocked.Add(SeatLayout.Normalize(held));
+        List<Seat> free = AllSeats(cabin).Where(s => !blocked.Contains(SeatLayout.Normalize(cabin.Code(s.Row + 1, cabin.Letters[s.Col])))).ToList();
+        if (free.Count < entry.SeatsWanted) return false;
+
+        var rng = new JavaRandom(FlightStatusEngine.StableSeed("wlbook|" + entry.BookingReference));
+        Shuffle(free, rng);
+        var remaining = new HashSet<Seat>(free);
+        var seats = new List<Seat>();
+        while (seats.Count < entry.SeatsWanted && remaining.Count > 0)
+            seats.AddRange(TakeParty(cabin, free.First(remaining.Contains), entry.SeatsWanted - seats.Count, remaining));
+
+        BookingRecord booking = MakeBooking(flight, entry.FlightDate, cabin, seats, now, rng, counter: 0, cancelled: false,
+            referenceSalt: "wl" + entry.BookingReference, bookedAtOverride: now, leadName: entry.PassengerName);
+        _store.SaveSimulatedBooking(booking);
+        return _store.MarkWaitlistConverted(entry.BookingReference);
     }
 
     private List<(string FlightNo, DateTime Date)> UpcomingLoads(DateTime now, int days)
@@ -378,9 +603,11 @@ public sealed class SimulationService
         MigrateIfNeeded();   // before the switch: an old database may have it off, and nothing on screen can turn it back on
         if (!_store.DemoActivityEnabled) return null;
         int loads = EnsureLoad(now);
+        SeedWaitlist(now);
+        int resolved = ProgressWaitlistOffers(now);
         int checkIns = ProgressCheckIns(now);
         SimulationTick tick = Tick(now, FlightStatusEngine.StableSeed($"tick|{now:yyyyMMddHHmm}"));
-        return tick with { LoadsGenerated = loads, CheckInsAdded = checkIns };
+        return tick with { LoadsGenerated = loads, CheckInsAdded = checkIns, WaitlistResolved = resolved };
     }
 
     // ------------------------------------------------------------------ demo check-ins

@@ -51,7 +51,7 @@ public sealed class FlightLoadTests
     [TestMethod]
     public void Cabins_ListsOnlyTheAircraftsCabins_WithTheirSeatsLeft()
     {
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         DateTime date = Now.Date.AddDays(1);
 
         IReadOnlyList<CabinLoad> domestic = FlightLoad.Cabins(_store, "PR-101", date);
@@ -86,7 +86,7 @@ public sealed class FlightLoadTests
     [TestMethod]
     public void Details_ShowRouteAircraftAndOneRowPerCabin_WithFareAndLoad()
     {
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         Flight flight = _store.LoadActiveFlights(true).First(f => f.FlightNo == "PR-101");
         DateTime day = Now.Date.AddDays(1);
 
@@ -117,7 +117,7 @@ public sealed class FlightLoadTests
     [TestMethod]
     public void TheBoard_ShowsHowFullEachFlightIs_ForTheSearchedCabin()
     {
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         DateTime date = Now.Date.AddDays(1);
 
         List<FlightRow> rows = FlightSearch.Search(_store, null, date, "Economy", Now);

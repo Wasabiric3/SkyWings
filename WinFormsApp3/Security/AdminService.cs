@@ -97,6 +97,28 @@ public sealed class AdminService
         return _store.LoadAllLiveWaitlist();
     }
 
+    /// <summary>
+    /// Frees seats in a sold-out cabin (by cancelling a booking in it that is not a real customer's) so the waitlist logic offers them
+    /// to the first traveller in line. Returns null when the cabin has no such booking; <see cref="WaitlistSeatRelease.OfferedTo"/>
+    /// is null when the seats were freed but nobody could be offered them (for example the flight is inside the booking cutoff).
+    /// </summary>
+    public WaitlistSeatRelease? ReleaseSeatForWaitlist(string flightNo, DateTime flightDate, string className)
+    {
+        Session.Require(Permission.CancelBookings);
+        DateTime started = DateTime.Now.AddSeconds(-1);
+        var freed = new SimulationService(_store).FreeSeatsInCabin(flightNo, flightDate, className);
+        if (freed is null)
+        {
+            Audit("SEAT_RELEASE_SKIPPED", flightNo, $"{flightDate:yyyy-MM-dd} {className}: nothing to release");
+            return null;
+        }
+        WaitlistEntry? offered = _store.LoadWaitlistDetails(flightNo, flightDate)
+            .Where(e => e.ClassName == className && e.Status == BookingStore.WaitlistOffered && e.OfferedAt >= started)
+            .OrderBy(e => e.OfferedAt).FirstOrDefault();
+        Audit("SEAT_RELEASED", flightNo, $"{flightDate:yyyy-MM-dd} {className} x{freed.Value.Seats}" + (offered is null ? "" : $", offered to {offered.BookingReference}"));
+        return new WaitlistSeatRelease(freed.Value.Seats, offered);
+    }
+
     /// <summary>Removes a waitlist entry. The seats it held (if it was offered) go to the next traveller in line.</summary>
     public bool RemoveWaitlistEntry(string code)
     {

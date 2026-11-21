@@ -17,7 +17,7 @@ public sealed class SimulationServiceTests
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-simsvc-{Guid.NewGuid():N}.db");
         _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
         _store.SeedDefaultFlights();
-        _sim = new SimulationService(_store);
+        _sim = new SimulationService(_store, TestSim.FullLoad);
     }
 
     [TestCleanup]
@@ -56,6 +56,7 @@ public sealed class SimulationServiceTests
         foreach (Flight flight in _store.LoadActiveFlights(true).Concat(_store.LoadActiveFlights(false)))
             for (int d = 0; d < 14; d++)
             {
+                if (SimulationService.IsEconomySoldOutDay(flight.FlightNo, Now.Date.AddDays(d))) continue;   // a deliberately full flight
                 double load = Occupancy(flight.FlightNo, Now.Date.AddDays(d), "Economy");
                 Assert.IsTrue(load is >= 0.60 and <= 0.90, $"{flight.FlightNo} day {d}: {load:P0}");
             }
@@ -118,7 +119,7 @@ public sealed class SimulationServiceTests
         {
             var other = new BookingStore(new SqliteConnectionStringBuilder { DataSource = dbPath2, ForeignKeys = true }.ConnectionString);
             other.SeedDefaultFlights();
-            new SimulationService(other).EnsureLoad(Now, horizonDays: 2);
+            new SimulationService(other, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
 
             DateTime date = Now.Date.AddDays(1);
             CollectionAssert.AreEquivalent(_store.LoadTakenSeats("PR-301", date).ToArray(), other.LoadTakenSeats("PR-301", date).ToArray());
@@ -375,7 +376,7 @@ public sealed class SimulationServiceTests
     }
 
     [TestMethod]
-    public void RunIfEnabled_Version3_RegeneratesOldSimBookings_AndIncludesThemInReports()
+    public void RunIfEnabled_AnOlderVersion_RegeneratesOldSimBookings_AndIncludesThemInReports()
     {
         var p = new PassengerRecord("Old Sim", "Demo data", "09170000000", 30, "1996-01-01", "DEMO", false, false,
             new SeatAssignment("Old Sim", "ECO30A"), Array.Empty<string>(), 4000m);
@@ -389,11 +390,11 @@ public sealed class SimulationServiceTests
 
         Assert.IsNull(_store.FindByReference("SIM-0000000000F1"), "old-style simulated bookings are regenerated");
         Assert.AreEqual("1", _store.GetSetting(BookingStore.SettingDemoInReports, ""));
-        Assert.AreEqual("3", _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
+        Assert.AreEqual(SimulationService.LoadVersion, _store.GetSetting(BookingStore.SettingDemoLoadVersion, ""));
     }
 
     [TestMethod]
-    public void RunIfEnabled_OnAnOldDatabaseWithTheSimulationSwitchedOff_StillMovesToVersion3_AndRuns()
+    public void RunIfEnabled_OnAnOldDatabaseWithTheSimulationSwitchedOff_StillMovesToTheCurrentVersion_AndRuns()
     {
         // The switch lived on the Demo tab, which is gone: a database where it was turned off must not stay stuck.
         var p = new PassengerRecord("Old Sim", "Demo data", "09170000000", 30, "1996-01-01", "DEMO", false, false,

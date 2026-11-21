@@ -44,7 +44,7 @@ public sealed class SimulatedCheckInStoreTests
     {
         DateTime date = Now.Date.AddDays(1);
         SaveReal(RealBooking("SKY-REALCHECKIN01", "PR-101", date, "ECO9A"));
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
 
         List<SimCheckInCandidate> before = _store.LoadSimulatedCheckInCandidates(Now.Date, date);
         Assert.IsNotEmpty(before);
@@ -62,7 +62,7 @@ public sealed class SimulatedCheckInStoreTests
     [TestMethod]
     public void Candidates_RespectTheDateRange()
     {
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 3);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 3);
         DateTime day = Now.Date.AddDays(1);
         Assert.IsTrue(_store.LoadSimulatedCheckInCandidates(day, day).All(c => c.FlightDate.Date == day));
     }
@@ -100,7 +100,7 @@ public sealed class SimulatedCheckInStoreTests
     [TestMethod]
     public void LoadCheckInsByBooking_GroupsByReference()
     {
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         List<SimCheckInCandidate> candidates = _store.LoadSimulatedCheckInCandidates(Now.Date.AddDays(1), Now.Date.AddDays(1));
         SimCheckInCandidate[] pick = candidates.GroupBy(c => c.Reference).First(g => g.Count() >= 2).Take(2)
             .Append(candidates.First(c => c.Reference != candidates[0].Reference)).ToArray();
@@ -122,7 +122,7 @@ public sealed class SimulatedCheckInStoreTests
         DateTime date = Now.Date.AddDays(1);
         SaveReal(RealBooking("SKY-REALCHECKIN04", "PR-101", date, "ECO9E"));
         Assert.IsTrue(_store.CheckInPassenger("SKY-REALCHECKIN04", "Real Person", "PR-101", date, "ECO9E", AppData.DepartureOf("PR-101", date).AddHours(-3)));
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         SimCheckInCandidate demo = _store.LoadSimulatedCheckInCandidates(date, date)[0];
         _store.SaveSimulatedCheckIns(new[] { From(demo, AppData.DepartureOf(demo.FlightNo, demo.FlightDate).AddHours(-2)) });
 
@@ -140,7 +140,7 @@ public sealed class SimulatedCheckInStoreTests
         SaveReal(RealBooking("SKY-REALCHECKIN03", "PR-101", date, "ECO9C"));
         DateTime departure = AppData.DepartureOf("PR-101", date);
         Assert.IsTrue(_store.CheckInPassenger("SKY-REALCHECKIN03", "Real Person", "PR-101", date, "ECO9C", departure.AddHours(-3)));
-        new SimulationService(_store).EnsureLoad(Now, horizonDays: 2);
+        new SimulationService(_store, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
         SimCheckInCandidate demo = _store.LoadSimulatedCheckInCandidates(date, date)[0];
         _store.SaveSimulatedCheckIns(new[] { From(demo, departure.AddHours(-2)) });
 
