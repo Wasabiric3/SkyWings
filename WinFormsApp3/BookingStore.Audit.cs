@@ -4,23 +4,46 @@ namespace SkyWings;
 
 public sealed partial class BookingStore
 {
+    // Column order matters: DatabaseBackup copies this table with SELECT *.
+    private static string StaffUsersDdl(string name) =>
+        $"CREATE TABLE IF NOT EXISTS {name} (" +
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT," +
+        "  username VARCHAR(40) NOT NULL UNIQUE COLLATE NOCASE," +
+        "  display_name VARCHAR(80) NOT NULL," +
+        "  password_hash VARCHAR(200) NOT NULL," +
+        "  role VARCHAR(10) NOT NULL CHECK (role IN ('SUPERADMIN','ADMIN','AGENT'))," +
+        "  active INTEGER NOT NULL DEFAULT 1," +
+        "  must_change_password INTEGER NOT NULL DEFAULT 0," +
+        "  failed_attempts INTEGER NOT NULL DEFAULT 0," +
+        "  locked_until DATETIME NULL," +
+        "  created_at DATETIME NOT NULL," +
+        "  last_login_at DATETIME NULL" +
+        ")";
+
+    /// <summary>
+    /// Databases made before the Super Admin role have <c>CHECK (role IN ('ADMIN','AGENT'))</c>, which SQLite cannot alter.
+    /// Rebuilds the table once, in a single transaction, keeping every row (ids, password hashes) as it was.
+    /// </summary>
+    private static void UpgradeStaffRoleCheck(SqliteConnection con)
+    {
+        using (var read = Cmd(con, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'staff_users'"))
+        {
+            if (read.ExecuteScalar() is not string sql || sql.Contains("SUPERADMIN", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        const string columns = "id, username, display_name, password_hash, role, active, must_change_password, failed_attempts, locked_until, created_at, last_login_at";
+        using var tx = con.BeginTransaction();
+        Cmd(con, "ALTER TABLE staff_users RENAME TO staff_users_old", tx).ExecuteNonQuery();
+        Cmd(con, StaffUsersDdl("staff_users"), tx).ExecuteNonQuery();
+        Cmd(con, $"INSERT INTO staff_users ({columns}) SELECT {columns} FROM staff_users_old", tx).ExecuteNonQuery();
+        Cmd(con, "DROP TABLE staff_users_old", tx).ExecuteNonQuery();
+        tx.Commit();
+    }
+
     private static void EnsureSecuritySchema(SqliteConnection con)
     {
         string[] ddl =
         {
-            "CREATE TABLE IF NOT EXISTS staff_users (" +
-            "  id INTEGER PRIMARY KEY AUTOINCREMENT," +
-            "  username VARCHAR(40) NOT NULL UNIQUE COLLATE NOCASE," +
-            "  display_name VARCHAR(80) NOT NULL," +
-            "  password_hash VARCHAR(200) NOT NULL," +
-            "  role VARCHAR(10) NOT NULL CHECK (role IN ('ADMIN','AGENT'))," +
-            "  active INTEGER NOT NULL DEFAULT 1," +
-            "  must_change_password INTEGER NOT NULL DEFAULT 0," +
-            "  failed_attempts INTEGER NOT NULL DEFAULT 0," +
-            "  locked_until DATETIME NULL," +
-            "  created_at DATETIME NOT NULL," +
-            "  last_login_at DATETIME NULL" +
-            ")",
+            StaffUsersDdl("staff_users"),
             "CREATE TABLE IF NOT EXISTS audit_log (" +
             "  id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  at DATETIME NOT NULL," +
@@ -33,6 +56,7 @@ public sealed partial class BookingStore
             "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at)"
         };
         foreach (string sql in ddl) Exec(con, sql);
+        UpgradeStaffRoleCheck(con);
     }
 
     /// <summary>Removes control characters and cuts a value to fit the audit columns.</summary>

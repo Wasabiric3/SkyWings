@@ -80,6 +80,10 @@ SkyWings.exe --reset-simulation
 
 It shows how many flight dates were regenerated and exits.
 
+There are three kinds of staff account: **Agent**, **Admin** and **Super Admin**. Sign-in is the same for everyone: enter your username and password and SkyWings opens with the rights of your account. Only a Super Admin can create or change Admin accounts. From a terminal, `SkyWings.exe --make-superadmin <username>` makes an existing account a Super Admin and `SkyWings.exe --rename-staff <old> <new>` changes a sign-in name; neither changes the password.
+
+Super Admins also get a **Database** tab in the staff window. Pick any table to see its rows, click a row to load it into the fields on the left, and use INSERT, SEARCH, UPDATE, DELETE and CLEAR. Password hashes are hidden; the staff, audit and migration tables are view-only; inserts, updates and deletes are recorded in the audit log (without the values).
+
 The staff **Bookings** tab shows one flight date at a time (default today); typing a full booking reference in its search box finds that booking on any date.
 
 ## Trip status

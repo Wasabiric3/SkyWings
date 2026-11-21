@@ -261,7 +261,7 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             StaffAccount account = LoadStaff().FirstOrDefault(s => s.Id == staffId) ?? throw new InvalidOperationException("Staff account not found.");
-            if (account.Role == StaffRole.Admin && account.Active && role != StaffRole.Admin) RequireAnotherActiveAdmin(staffId);
+            if (RolePermissions.IsAdministrator(account.Role) && account.Active && !RolePermissions.IsAdministrator(role)) RequireAnotherActiveAdmin(staffId);
             UpdateStaff(staffId, "UPDATE staff_users SET role = @r WHERE id = @id", ("@r", RolePermissions.ToDb(role)));
         }
     }
@@ -271,14 +271,60 @@ public sealed partial class BookingStore
         lock (_lock)
         {
             StaffAccount account = LoadStaff().FirstOrDefault(s => s.Id == staffId) ?? throw new InvalidOperationException("Staff account not found.");
-            if (!active && account.Role == StaffRole.Admin && account.Active) RequireAnotherActiveAdmin(staffId);
+            if (!active && RolePermissions.IsAdministrator(account.Role) && account.Active) RequireAnotherActiveAdmin(staffId);
             UpdateStaff(staffId, "UPDATE staff_users SET active = @a, failed_attempts = 0, locked_until = NULL WHERE id = @id", ("@a", active ? 1 : 0));
         }
     }
 
     private void RequireAnotherActiveAdmin(int exceptId)
     {
-        if (!LoadStaff().Any(s => s.Id != exceptId && s.Role == StaffRole.Admin && s.Active))
+        if (!LoadStaff().Any(s => s.Id != exceptId && RolePermissions.IsAdministrator(s.Role) && s.Active))
             throw new InvalidOperationException("At least one active administrator is required.");
+    }
+
+    /// <summary>
+    /// Renames a sign-in name. Only the username changes; password, role and history stay. Reached only from the hidden
+    /// command-line switch.
+    /// </summary>
+    public StaffAccount RenameStaff(string oldUsername, string newUsername)
+    {
+        newUsername = (newUsername ?? "").Trim();
+        if (!UsernamePattern.IsMatch(newUsername))
+            throw new ArgumentException("Username must be 3 to 40 characters: letters, digits, dot, dash or underscore.");
+        lock (_lock)
+        {
+            StaffAccount account = FindStaff(oldUsername ?? "")
+                ?? throw new InvalidOperationException($"There is no staff account called '{oldUsername}'. Existing accounts: {string.Join(", ", LoadStaff().Select(s => s.Username))}.");
+            try
+            {
+                UpdateStaff(account.Id, "UPDATE staff_users SET username = @u WHERE id = @id", ("@u", newUsername));
+            }
+            catch (IOException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 })
+            {
+                throw new InvalidOperationException("That username is already taken.");
+            }
+            WriteAudit("command-line", "system", "STAFF_RENAMED", newUsername, $"{account.Username} to {newUsername}");
+            return account with { Username = newUsername };
+        }
+    }
+
+    /// <summary>
+    /// Makes an existing account a Super Admin. Only the role changes: the password, lockout and "must change password" flag are
+    /// left exactly as they are. Reached only from the hidden command-line switch, never from the staff screens.
+    /// </summary>
+    public StaffAccount PromoteToSuperAdmin(string username)
+    {
+        lock (_lock)
+        {
+            List<StaffAccount> all = LoadStaff();
+            StaffAccount? account = all.FirstOrDefault(s => string.Equals(s.Username, username?.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (account is null)
+                throw new InvalidOperationException($"There is no staff account called '{username}'. Existing accounts: {string.Join(", ", all.Select(s => s.Username))}.");
+            if (!account.Active) throw new InvalidOperationException($"'{account.Username}' is deactivated; activate it first.");
+            if (account.Role == StaffRole.SuperAdmin) return account;
+            UpdateStaff(account.Id, "UPDATE staff_users SET role = @r WHERE id = @id", ("@r", RolePermissions.ToDb(StaffRole.SuperAdmin)));
+            WriteAudit("command-line", "system", "SUPERADMIN_GRANTED", account.Username, $"{account.Role} to SuperAdmin");
+            return account with { Role = StaffRole.SuperAdmin };
+        }
     }
 }

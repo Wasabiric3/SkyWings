@@ -25,7 +25,9 @@ public sealed class AddStaffForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         ClientSize = new Size(D(560), D(520));
 
-        _role.Items.AddRange(new object[] { "Agent  ·  view and cancel bookings, see reports", "Admin  ·  everything, including staff and backups" });
+        _role.Items.Add("Agent  ·  view and cancel bookings, see reports");
+        // Only a Super Admin may create administrators; the list position (1 = Admin) is read in Create().
+        if (service.Session.Has(Permission.ManageAdmins)) _role.Items.Add("Admin  ·  everything except administrators and the database");
         _role.SelectedIndex = 0;
         _usernameRow = new FieldRow("USERNAME", _username);
         _nameRow = new FieldRow("FULL NAME", _name);

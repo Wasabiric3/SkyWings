@@ -267,6 +267,7 @@ public sealed class AdminService
     public StaffAccount CreateStaff(string username, string displayName, string temporaryPassword, StaffRole role)
     {
         Session.Require(Permission.ManageStaff);
+        RequireCanAssign(role);
         StaffAccount created = _store.CreateStaff(username, displayName, temporaryPassword, role, mustChangePassword: true);
         Audit("STAFF_CREATED", created.Username, $"Role {role}");
         return created;
@@ -276,6 +277,7 @@ public sealed class AdminService
     {
         Session.Require(Permission.ManageStaff);
         StaffAccount target = FindStaffOrThrow(staffId);
+        RequireCanManage(target);
         _store.ResetPassword(staffId, temporaryPassword);
         Audit("STAFF_PASSWORD_RESET", target.Username, "Temporary password set; change required at next sign-in");
     }
@@ -284,6 +286,8 @@ public sealed class AdminService
     {
         Session.Require(Permission.ManageStaff);
         StaffAccount target = FindStaffOrThrow(staffId);
+        RequireCanManage(target);
+        RequireCanAssign(role);
         _store.SetStaffRole(staffId, role);
         Audit("STAFF_ROLE_CHANGED", target.Username, $"{target.Role} to {role}");
     }
@@ -292,9 +296,27 @@ public sealed class AdminService
     {
         Session.Require(Permission.ManageStaff);
         StaffAccount target = FindStaffOrThrow(staffId);
+        RequireCanManage(target);
         if (!active && target.Id == Session.Id) throw new InvalidOperationException("You can't deactivate your own account.");
         _store.SetStaffActive(staffId, active);
         Audit(active ? "STAFF_ACTIVATED" : "STAFF_DEACTIVATED", target.Username);
+    }
+
+    private const string AdminsOnlyMessage = "Only a Super Admin can change administrator accounts.";
+
+    /// <summary>Administrator accounts need <see cref="Permission.ManageAdmins"/>; the Super Admin account is never changed from the staff screens.</summary>
+    private void RequireCanManage(StaffAccount target)
+    {
+        if (target.Role == StaffRole.SuperAdmin) throw new UnauthorizedAccessException("The Super Admin account can't be changed from here.");
+        if (RolePermissions.IsAdministrator(target.Role) && !Session.Has(Permission.ManageAdmins))
+            throw new UnauthorizedAccessException(AdminsOnlyMessage);
+    }
+
+    /// <summary>Giving someone the Admin role needs <see cref="Permission.ManageAdmins"/>; nobody is made Super Admin from the screens.</summary>
+    private void RequireCanAssign(StaffRole role)
+    {
+        if (role == StaffRole.SuperAdmin) throw new UnauthorizedAccessException("The Super Admin role can't be given from here.");
+        if (role == StaffRole.Admin && !Session.Has(Permission.ManageAdmins)) throw new UnauthorizedAccessException(AdminsOnlyMessage);
     }
 
     private StaffAccount FindStaffOrThrow(int staffId)
@@ -357,6 +379,50 @@ public sealed class AdminService
     {
         Session.Require(Permission.ViewAudit);
         return _store.LoadAudit(limit, search);
+    }
+
+    // ------------------------------------------------------------------ database browser
+
+    public List<string> ListTables()
+    {
+        Session.Require(Permission.BrowseData);
+        return _store.ListTables();
+    }
+
+    public DataTableInfo DescribeTable(string table)
+    {
+        Session.Require(Permission.BrowseData);
+        return _store.DescribeTable(table);
+    }
+
+    public System.Data.DataTable QueryTable(string table, string? search = null)
+    {
+        Session.Require(Permission.BrowseData);
+        return _store.QueryTable(table, search);
+    }
+
+    private static string KeyText(IReadOnlyDictionary<string, string?> key)
+        => string.Join(", ", key.Select(k => $"{k.Key}={k.Value}"));
+
+    public void InsertRow(string table, IReadOnlyDictionary<string, string?> values)
+    {
+        Session.Require(Permission.BrowseData);
+        _store.InsertRow(table, values);
+        Audit("DB_INSERT", table);   // values are deliberately not logged: they can be customer data
+    }
+
+    public void UpdateRow(string table, IReadOnlyDictionary<string, string?> key, IReadOnlyDictionary<string, string?> values)
+    {
+        Session.Require(Permission.BrowseData);
+        _store.UpdateRow(table, key, values);
+        Audit("DB_UPDATE", table, KeyText(key));
+    }
+
+    public void DeleteRow(string table, IReadOnlyDictionary<string, string?> key)
+    {
+        Session.Require(Permission.BrowseData);
+        _store.DeleteRow(table, key);
+        Audit("DB_DELETE", table, KeyText(key));
     }
 
     public void SignedOut(string reason) => Audit("SIGN_OUT", "", reason);

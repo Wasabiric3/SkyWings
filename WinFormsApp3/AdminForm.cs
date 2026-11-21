@@ -80,6 +80,8 @@ public sealed class AdminForm : GlassForm
         AddSection("Reports", Permission.ViewReports, BuildReportsPage, LoadReport);
         AddSection("Staff", Permission.ManageStaff, BuildStaffPage, LoadStaff);
         AddSection("Audit", Permission.ViewAudit, BuildAuditPage, LoadAudit);
+        DatabaseBrowserPage? browser = null;
+        AddSection("Database", Permission.BrowseData, () => browser = new DatabaseBrowserPage(_service), () => browser?.OnShow());
 
         Controls.Add(_host);
         Controls.Add(BuildHeader(nav));
@@ -118,7 +120,7 @@ public sealed class AdminForm : GlassForm
         var title = new Label { Text = "SkyWings Staff", Font = Theme.Header, ForeColor = Theme.TextPrimary, AutoSize = false, Height = D(30), Dock = DockStyle.Top };
         var who = new Label
         {
-            Text = $"{Session.DisplayName} · {Session.Role}", Font = Theme.Small, ForeColor = Theme.TextSecondary,
+            Text = $"{Session.DisplayName} · {RolePermissions.Label(Session.Role)}", Font = Theme.Small, ForeColor = Theme.TextSecondary,
             AutoSize = false, Height = D(22), Dock = DockStyle.Top
         };
         var identity = new Panel { Dock = DockStyle.Left, Width = D(190) };
@@ -595,7 +597,7 @@ public sealed class AdminForm : GlassForm
         List<StaffAccount> accounts = new();
         if (!Try("Unable to load staff", () => accounts = _service.LoadStaff())) return;
         string Local(DateTime? utc) => utc is { } t ? t.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) : "—";
-        _staff.DataSource = accounts.Select(a => new StaffRowView(a.Username, a.DisplayName, a.Role.ToString(),
+        _staff.DataSource = accounts.Select(a => new StaffRowView(a.Username, a.DisplayName, RolePermissions.Label(a.Role),
             a.Active ? "Active" : "Inactive", Local(a.LastLoginAtUtc),
             a.LockedUntilUtc is { } until && until > DateTime.UtcNow ? "Until " + Local(until) : "—", a)).ToList();
     }

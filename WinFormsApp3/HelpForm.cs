@@ -126,7 +126,7 @@ internal static class HelpContent
     {
         return string.Join(Environment.NewLine,
             $"SkyWings {VersionText()}",
-            $"Role: {session.Role}",
+            $"Role: {RolePermissions.Label(session.Role)}",
             $"Windows: {RuntimeInformation.OSDescription}",
             $".NET: {RuntimeInformation.FrameworkDescription}",
             $"Data folder: {AppPaths.DataDirectory}",
@@ -284,7 +284,7 @@ public sealed class HelpForm : GlassForm
             Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, TabStop = false,
             Text = string.Join(Environment.NewLine + Environment.NewLine,
                 $"SkyWings {HelpContent.VersionText()}",
-                $"Signed in as: {_session.DisplayName} ({_session.Role})",
+                $"Signed in as: {_session.DisplayName} ({RolePermissions.Label(_session.Role)})",
                 HelpContent.SupportInfo(_session))
         };
 

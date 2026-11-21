@@ -1,7 +1,6 @@
 namespace SkyWings;
 
-public enum StaffRole { Agent, Admin }
-
+public enum StaffRole { Agent, Admin, SuperAdmin }
 /// <summary>What a staff member may do. Roles are mapped to these in <see cref="RolePermissions"/>.</summary>
 [Flags]
 public enum Permission
@@ -14,22 +13,39 @@ public enum Permission
     BackupRestore = 16,
     ManageStaff = 32,
     ViewAudit = 64,
-    All = ViewBookings | CancelBookings | ViewReports | ManageFlights | BackupRestore | ManageStaff | ViewAudit
+    BrowseData = 128,
+    ManageAdmins = 256,
+    All = ViewBookings | CancelBookings | ViewReports | ManageFlights | BackupRestore | ManageStaff | ViewAudit | BrowseData | ManageAdmins
 }
 
 public static class RolePermissions
 {
     public static Permission For(StaffRole role) => role switch
     {
-        StaffRole.Admin => Permission.All,
+        StaffRole.SuperAdmin => Permission.All,
+        StaffRole.Admin => Permission.All & ~(Permission.BrowseData | Permission.ManageAdmins),
         StaffRole.Agent => Permission.ViewBookings | Permission.CancelBookings | Permission.ViewReports,
         _ => Permission.None
     };
 
-    public static string ToDb(StaffRole role) => role == StaffRole.Admin ? "ADMIN" : "AGENT";
+    public static string ToDb(StaffRole role) => role switch
+    {
+        StaffRole.SuperAdmin => "SUPERADMIN",
+        StaffRole.Admin => "ADMIN",
+        _ => "AGENT"
+    };
 
+    /// <summary>Unknown values fall back to the least-privileged role.</summary>
     public static StaffRole FromDb(string value)
-        => string.Equals(value, "ADMIN", StringComparison.OrdinalIgnoreCase) ? StaffRole.Admin : StaffRole.Agent;
+        => string.Equals(value, "SUPERADMIN", StringComparison.OrdinalIgnoreCase) ? StaffRole.SuperAdmin
+         : string.Equals(value, "ADMIN", StringComparison.OrdinalIgnoreCase) ? StaffRole.Admin
+         : StaffRole.Agent;
+
+    /// <summary>The name shown to people.</summary>
+    public static string Label(StaffRole role) => role == StaffRole.SuperAdmin ? "Super Admin" : role.ToString();
+
+    /// <summary>True for the roles that administer the system (Admin and Super Admin).</summary>
+    public static bool IsAdministrator(StaffRole role) => role is StaffRole.Admin or StaffRole.SuperAdmin;
 }
 
 /// <summary>A staff account as shown in lists. The password hash is never exposed.</summary>
