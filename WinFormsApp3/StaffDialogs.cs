@@ -9,7 +9,7 @@ public sealed class AddStaffForm : GlassForm
     private readonly TextBox _username = new() { MaxLength = 40 };
     private readonly TextBox _name = new() { MaxLength = 80 };
     private readonly ComboBox _role = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _password = new() { ReadOnly = true };
+    private readonly TextBox _password = new() { MaxLength = PasswordPolicy.MaxLength, PlaceholderText = $"Type a password, at least {PasswordPolicy.MinLength} characters" };
     private readonly FieldRow _usernameRow, _nameRow, _roleRow, _passwordRow;
 
     public AddStaffForm(AdminService service)
@@ -31,9 +31,8 @@ public sealed class AddStaffForm : GlassForm
         _nameRow = new FieldRow("FULL NAME", _name);
         _roleRow = new FieldRow("ROLE", _role);
         _passwordRow = new FieldRow("TEMPORARY PASSWORD  (GIVE IT TO THEM; THEY MUST CHANGE IT)", _password);
-        foreach (var row in new[] { _usernameRow, _nameRow })
+        foreach (var row in new[] { _usernameRow, _nameRow, _passwordRow })
             if (row.Input is TextBox box) { var r = row; box.TextChanged += (_, _) => r.ClearMessage(); }
-        _password.Text = PasswordGenerator.Generate();
 
         var title = new Label { Text = "Add a staff member", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft };
         var save = new GlassButton { Text = "Create account" };
@@ -56,15 +55,14 @@ public sealed class AddStaffForm : GlassForm
     /// <summary>Picks the field a validation message is about.</summary>
     private FieldRow FieldFor(string message)
     {
-        if (message.Contains("assword", StringComparison.Ordinal)) return _passwordRow;
+        if (message.Contains("assword", StringComparison.Ordinal) || message.StartsWith("Use a", StringComparison.Ordinal)) return _passwordRow;
         if (message.StartsWith("Enter the person", StringComparison.Ordinal)) return _nameRow;
         return _usernameRow;
     }
 
     private void Create()
     {
-        // The generated password must not contain the username that was typed afterwards.
-        if (PasswordPolicy.Check(_password.Text, _username.Text) is not null) _password.Text = PasswordGenerator.Generate(_username.Text);
+        if (PasswordPolicy.Check(_password.Text, _username.Text) is { } problem) { _passwordRow.SetMessage(problem); return; }
         try
         {
             _service.CreateStaff(_username.Text, _name.Text, _password.Text, _role.SelectedIndex == 1 ? StaffRole.Admin : StaffRole.Agent);
@@ -91,7 +89,8 @@ public sealed class ResetPasswordForm : GlassForm
 {
     private readonly AdminService _service;
     private readonly StaffAccount _account;
-    private readonly TextBox _password = new() { ReadOnly = true };
+    private readonly TextBox _password = new() { MaxLength = PasswordPolicy.MaxLength, PlaceholderText = $"Type a password, at least {PasswordPolicy.MinLength} characters" };
+    private FieldRow _row = null!;
 
     public ResetPasswordForm(AdminService service, StaffAccount account)
     {
@@ -107,14 +106,14 @@ public sealed class ResetPasswordForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         ClientSize = new Size(D(540), D(340));
 
-        _password.Text = PasswordGenerator.Generate(account.Username);
         var title = new Label { Text = $"Reset password for {account.DisplayName}", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft };
         var hint = new Label
         {
             Text = "They will use this temporary password once and must choose their own. Any lock on the account is cleared.",
             Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(46)
         };
-        var row = new FieldRow("TEMPORARY PASSWORD", _password);
+        var row = _row = new FieldRow("TEMPORARY PASSWORD", _password);
+        _password.TextChanged += (_, _) => _row.ClearMessage();
 
         var reset = new GlassButton { Text = "Reset password" };
         reset.Click += (_, _) => Reset();
@@ -134,6 +133,7 @@ public sealed class ResetPasswordForm : GlassForm
 
     private void Reset()
     {
+        if (PasswordPolicy.Check(_password.Text, _account.Username) is { } problem) { _row.SetMessage(problem); return; }
         try
         {
             _service.ResetPassword(_account.Id, _password.Text);

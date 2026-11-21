@@ -37,7 +37,10 @@ public sealed class FirstRunAdminForm : GlassForm
         {
             Text = "No staff accounts exist yet. This account can manage flights, other staff, and backups. " +
                    "A long phrase works better than a short complicated password.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(54)
+            Font = Theme.Small,
+            ForeColor = Theme.TextSecondary,
+            AutoSize = false,
+            Height = D(54)
         };
 
         var create = new GlassButton { Text = "Create account" };
@@ -80,5 +83,10 @@ public sealed class FirstRunAdminForm : GlassForm
             AppLogger.Error("StaffSetup", ex);
             MessageBox.Show(this, "The account could not be created.\n\n" + ex.Message, "Staff accounts", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void InitializeComponent()
+    {
+
     }
 }
