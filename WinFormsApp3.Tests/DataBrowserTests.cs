@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The admin database browser: generic table access that must stay safe, masked and admin-only.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class DataBrowserTests
 {
     private string _dbPath = "";
@@ -142,6 +143,44 @@ public sealed class DataBrowserTests
         var actions = _store.LoadAudit().Select(a => a.Action).ToList();
         CollectionAssert.Contains(actions, "DB_INSERT");
         CollectionAssert.Contains(actions, "DB_DELETE");
-        Assert.IsFalse(_store.LoadAudit().Any(a => a.Detail.Contains("ADM") && a.Action == "DB_INSERT"), "inserted values are not logged");
+        Assert.IsTrue(_store.LoadAudit().Any(a => a.Action == "DB_INSERT" && a.Detail.Contains("code='ADM'")), "the inserted values are logged");
+    }
+
+    [TestMethod]
+    public void Update_AuditShowsOnlyTheChangedColumns_BeforeAndAfter()
+    {
+        var admin = new AdminService(_store, new StaffSession(2, "admin", "Admin", StaffRole.SuperAdmin, false));
+        admin.InsertRow("promo_codes", Promo("CHG", "10"));
+        admin.UpdateRow("promo_codes", Row(("code", "CHG")), Row(("discount_value", "25"), ("discount_type", "PERCENT")));
+
+        string detail = _store.LoadAudit().First(a => a.Action == "DB_UPDATE").Detail;
+        StringAssert.Contains(detail, "code=CHG");
+        StringAssert.Contains(detail, "discount_value: '10' → '25'");
+        Assert.DoesNotContain("discount_type", detail, "an unchanged column is not listed");
+    }
+
+    [TestMethod]
+    public void Delete_AuditKeepsWhatTheRowHeld()
+    {
+        var admin = new AdminService(_store, new StaffSession(2, "admin", "Admin", StaffRole.SuperAdmin, false));
+        admin.InsertRow("promo_codes", Promo("GONE", "15"));
+        admin.DeleteRow("promo_codes", Row(("code", "GONE")));
+
+        string detail = _store.LoadAudit().First(a => a.Action == "DB_DELETE").Detail;
+        StringAssert.Contains(detail, "was ");
+        StringAssert.Contains(detail, "discount_value='15'");
+    }
+
+    [TestMethod]
+    public void AuditValue_HidesCustomerDetailsAndSecrets_AndShortensLongText()
+    {
+        DataColumnInfo Col(string name, bool masked = false) => new(name, "VARCHAR(40)", true, false, false, masked);
+        Assert.AreEqual("(hidden)", BookingStore.AuditValue(Col("id_number"), "P1234567A"));
+        Assert.AreEqual("(hidden)", BookingStore.AuditValue(Col("birthday"), "1991-01-01"));
+        Assert.AreEqual("(hidden)", BookingStore.AuditValue(Col("contact_email"), "a@b.c"));
+        Assert.AreEqual("(hidden)", BookingStore.AuditValue(Col("password_hash", masked: true), "x"));
+        Assert.AreEqual("NULL", BookingStore.AuditValue(Col("note"), null));
+        Assert.AreEqual("'a b'", BookingStore.AuditValue(Col("note"), "a\nb"));
+        Assert.AreEqual("'" + new string('x', 30) + "…'", BookingStore.AuditValue(Col("note"), new string('x', 50)));
     }
 }

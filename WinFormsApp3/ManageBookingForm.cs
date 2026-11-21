@@ -20,6 +20,8 @@ public sealed class ManageBookingForm : GlassForm
     private readonly ReceiptPanel _receipt = new() { Dock = DockStyle.Top };
     private readonly Panel _receiptHost = new() { Dock = DockStyle.Fill, AutoScroll = true };
     private readonly GlassButton _find = new() { Text = "Find booking" };
+    private readonly GlassButton _logRequest = new() { Text = "Log refund request", Style = GlassButtonStyle.Secondary };
+    private readonly GlassButton _changeFlight = new() { Text = "Change flight", Style = GlassButtonStyle.Secondary };
     private readonly GlassButton _changeSeats = new() { Text = "Change seats", Style = GlassButtonStyle.Secondary };
     private readonly GlassButton _cancel = new() { Text = "Cancel booking", Style = GlassButtonStyle.Danger };
     private readonly ManageBookingController _controller;
@@ -28,10 +30,11 @@ public sealed class ManageBookingForm : GlassForm
     private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Secondary };
     private readonly FlowLayoutPanel _emailBar = new() { WrapContents = false };
 
-    public ManageBookingForm(BookingStore store)
+    /// <param name="operatorName">Who is at the desk (the signed-in staff member); recorded when a refund request is logged.</param>
+    public ManageBookingForm(BookingStore store, string operatorName = "desk")
     {
         _store = store;
-        _controller = new ManageBookingController(store);
+        _controller = new ManageBookingController(store, operatorName);
         Text = "Manage booking · SkyWings";
         StartPosition = FormStartPosition.CenterParent;
         SizeForScreen(860, 640, 720, 520);
@@ -96,6 +99,8 @@ public sealed class ManageBookingForm : GlassForm
         _policy.Height = D(48);
         _policy.Dock = DockStyle.Bottom;
 
+        _changeFlight.Click += (_, _) => ChangeFlight();
+        _logRequest.Click += (_, _) => LogRefundRequest();
         _changeSeats.Click += (_, _) => ChangeSeats();
         _cancel.Click += (_, _) => CancelBooking();
         var another = new GlassButton { Text = "Look up another", Style = GlassButtonStyle.Ghost };
@@ -103,9 +108,11 @@ public sealed class ManageBookingForm : GlassForm
         var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
         var footer = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom, Height = D(56), WrapContents = false, Padding = new Padding(0, D(10), 0, 0)
+            Dock = DockStyle.Bottom, Height = D(108), WrapContents = true, Padding = new Padding(0, D(10), 0, 0)   // six buttons: two rows
         };
+        footer.Controls.Add(_changeFlight);
         footer.Controls.Add(_changeSeats);
+        footer.Controls.Add(_logRequest);
         footer.Controls.Add(_cancel);
         footer.Controls.Add(another);
         footer.Controls.Add(close);
@@ -174,7 +181,7 @@ public sealed class ManageBookingForm : GlassForm
         TripStatusInfo? trip = null;
         try { trip = _controller.CurrentTrip(DateTime.Now); }
         catch (IOException ex) { AppLogger.Error("ManageBooking", ex); }   // without check-ins the banner falls back to "departed"
-        BookingBanner banner = ManageBookingController.DescribeBooking(booking, trip);
+        BookingBanner banner = ManageBookingController.DescribeBooking(booking, trip, _controller.CurrentRefund());
         Color bannerColor = banner.Kind switch
         {
             BannerKind.Canceled => Theme.DangerRed,
@@ -189,6 +196,10 @@ public sealed class ManageBookingForm : GlassForm
         _banner.Height = D(34);
         _banner.Text = banner.Text;
         _changeSeats.Enabled = banner.CanModify;
+        _changeFlight.Enabled = banner.CanModify && _controller.ChangeFlightRefusal(DateTime.Now) is null;   // not after check-in
+        bool requestOpen = banner.CanModify && _controller.HasOpenRefundRequest();
+        _logRequest.Text = requestOpen ? "Refund requested" : "Log refund request";
+        _logRequest.Enabled = banner.CanModify && !requestOpen;
         _cancel.Enabled = banner.CanModify;
         _policy.Text = banner.PolicyText;
 
@@ -246,6 +257,27 @@ public sealed class ManageBookingForm : GlassForm
         BookingRecord? fresh = _controller.Reload();
         if (fresh is null) { ShowLookup(); return; }
         ShowBooking(fresh);
+    }
+
+    private void LogRefundRequest()
+    {
+        RefundRequestResult result = _controller.LogRefundRequest();
+        MessageBox.Show(this, result.Message + (result.Ok ? "\n\nTo give the refund, cancel the booking here." : ""), "Refund request", MessageBoxButtons.OK,
+            result.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        Reload();
+    }
+
+    private void ChangeFlight()
+    {
+        if (_controller.Current is null) return;
+        if (_controller.ChangeFlightRefusal(DateTime.Now) is { } refusal)
+        {
+            MessageBox.Show(this, refusal, "Change flight", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using var form = new ChangeFlightForm(_controller);
+        form.ShowDialog(this);
+        if (form.Changed) Reload();
     }
 
     private void ChangeSeats()

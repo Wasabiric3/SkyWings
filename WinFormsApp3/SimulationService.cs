@@ -573,7 +573,7 @@ public sealed class SimulationService
     {
         if (!_store.IsSimulatedBooking(reference)) return false;   // never a real booking
         BookingRecord? booking = _store.FindByReference(reference);
-        return booking is not null && _store.CancelBooking(reference, AppData.Round2(booking.TotalAmount * 0.5m));
+        return booking is not null && _store.CancelBooking(reference, AppData.Round2(booking.TotalAmount * 0.5m), "system");
     }
 
     // ------------------------------------------------------------------ switch and reset

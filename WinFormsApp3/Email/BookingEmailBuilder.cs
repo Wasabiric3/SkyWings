@@ -13,7 +13,7 @@ public static class BookingEmailBuilder
         "contact SkyWings staff and ask for the address to be removed from receipt emails.";
 
     public static EmailMessage Build(BookingRecord booking, string toEmail, byte[] qrPng, string? unsubscribeMailbox = null,
-        IReadOnlyList<EmailAttachment>? attachments = null)
+        IReadOnlyList<EmailAttachment>? attachments = null, DateTime? now = null)
     {
         var rows = BookingSummary.Rows(booking).Where(r => r.Label != "Refund" || booking.RefundAmount > 0).ToList();
         string subject = $"SkyWings booking {booking.Reference}: {booking.Origin} to {booking.Destination}";
@@ -30,6 +30,7 @@ public static class BookingEmailBuilder
         html.Append("</table>");
         html.Append($"<div style=\"text-align:center;margin:20px 0\"><img src=\"cid:{QrContentId}\" width=\"180\" height=\"180\" alt=\"QR code for booking {Enc(booking.Reference)}\"/>");
         html.Append("<div style=\"font-size:12px;color:#687e74;margin-top:6px\">Show this code at check-in. It contains your booking reference.</div></div>");
+        html.Append(RefundRequestButtonHtml(unsubscribeMailbox, booking, now ?? DateTime.Now));
         html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
         html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
         html.Append("</div></body></html>");
@@ -40,6 +41,7 @@ public static class BookingEmailBuilder
         text.AppendLine("Booking reference: " + booking.Reference);
         foreach ((string label, string value) in rows) text.AppendLine($"{label}: {value}");
         text.AppendLine().AppendLine("Show your booking reference (the QR code in the HTML version) at check-in.");
+        text.Append(RefundRequestTextLine(unsubscribeMailbox, booking, now ?? DateTime.Now));
         text.AppendLine().AppendLine(UnsubscribeText);
         text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
 
@@ -50,7 +52,7 @@ public static class BookingEmailBuilder
 
     /// <summary>The boarding pass email sent after check-in. Carries the pass PDF(s) and the booking QR code.</summary>
     public static EmailMessage BuildBoardingPass(BookingRecord booking, string toEmail, byte[] qrPng, string? unsubscribeMailbox,
-        IReadOnlyList<EmailAttachment> attachments)
+        IReadOnlyList<EmailAttachment> attachments, DateTime? now = null)
     {
         string subject = $"SkyWings boarding pass {booking.Reference}: {booking.Origin} to {booking.Destination}";
         string attached = AttachmentNames(attachments);
@@ -63,6 +65,7 @@ public static class BookingEmailBuilder
         html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
         html.Append($"<div style=\"text-align:center;margin:20px 0\"><img src=\"cid:{QrContentId}\" width=\"180\" height=\"180\" alt=\"QR code for booking {Enc(booking.Reference)}\"/>");
         html.Append("<div style=\"font-size:12px;color:#687e74;margin-top:6px\">Show this code or the attached boarding pass at the airport.</div></div>");
+        html.Append(RefundRequestButtonHtml(unsubscribeMailbox, booking, now ?? DateTime.Now));
         html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
         html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
         html.Append("</div></body></html>");
@@ -71,12 +74,155 @@ public static class BookingEmailBuilder
         text.AppendLine("SkyWings - you are checked in").AppendLine();
         text.AppendLine("Attached (PDF): " + attached + ".").AppendLine();
         text.AppendLine("Booking reference: " + booking.Reference);
+        text.Append(RefundRequestTextLine(unsubscribeMailbox, booking, now ?? DateTime.Now));
         text.AppendLine().AppendLine(UnsubscribeText);
         text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
 
         return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(),
             new[] { new InlineImage(QrContentId, qrPng) }, unsubscribeMailbox, attachments);
     }
+
+    /// <summary>
+    /// The email sent after a booking was cancelled: that it is cancelled, and (when money went back) the amount, the refund reference
+    /// and where it was paid back to. <paramref name="refund"/> is null when nothing was refunded.
+    /// </summary>
+    public static EmailMessage BuildCancellation(BookingRecord booking, RefundRecord? refund, string toEmail, string? unsubscribeMailbox = null,
+        bool approvedRequest = false)
+    {
+        string subject = approvedRequest ? $"SkyWings refund approved for booking {booking.Reference}" : $"SkyWings booking {booking.Reference} is cancelled";
+        string trip = $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:dddd, d MMMM yyyy}";
+        string money = approvedRequest && refund is not null
+            ? $"PHP {refund.Amount:N2} has been refunded to your original payment method ({refund.Method} {refund.AccountMasked}). Refund reference: {refund.Reference}."
+            : refund is not null
+            ? $"PHP {refund.Amount:N2} is being refunded to {refund.Method} {refund.AccountMasked}. Refund reference: {refund.Reference}."
+            : booking.RefundAmount > 0
+                ? $"PHP {booking.RefundAmount:N2} is being refunded to {booking.PaymentMethod} {booking.MaskedAccount}."
+                : "No refund is due for this cancellation.";
+
+        var html = new StringBuilder();
+        html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
+        html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
+        html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
+        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">" + (approvedRequest ? "Good news: your refund request has been approved" : "Your booking has been cancelled") + "</div>");
+        html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
+        html.Append($"<p style=\"margin:14px 0\">{Enc(trip)}</p>");
+        html.Append($"<p style=\"margin:14px 0\"><b>{Enc(money)}</b></p>");
+        if (refund is not null)
+            html.Append("<div style=\"font-size:12px;color:#687e74\">Quote the refund reference if you contact SkyWings about this refund.</div>");
+        html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
+        html.Append("</div></body></html>");
+
+        var text = new StringBuilder();
+        text.AppendLine(approvedRequest ? "SkyWings - your refund request has been approved" : "SkyWings - your booking has been cancelled").AppendLine();
+        if (approvedRequest) text.AppendLine("The booking is cancelled and the refund is on its way back to you.").AppendLine();
+        text.AppendLine("Booking reference: " + booking.Reference);
+        text.AppendLine(trip).AppendLine();
+        text.AppendLine(money);
+        if (refund is not null) text.AppendLine("Quote the refund reference if you contact SkyWings about this refund.");
+        text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
+
+        return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
+    }
+
+    /// <summary>The acknowledgement sent to the booking's own address when a refund request arrived by email: received, under review, booking still active.</summary>
+    public static EmailMessage BuildRefundRequestReceived(BookingRecord booking, string toEmail, string? unsubscribeMailbox = null)
+    {
+        // The subject must not contain "Refund request SKY-", the phrase the mailbox reader looks for.
+        string subject = $"SkyWings: we received your refund request for booking {booking.Reference}";
+        string trip = $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:dddd, d MMMM yyyy}";
+        string note = $"If the booking is cancelled today the refund would be PHP {AppData.ComputeRefundAmount(booking.TotalAmount, booking.FlightDateValue):N2} " +
+                      $"({AppData.RefundRate(booking.FlightDateValue):P0} of the fare).";
+
+        var html = new StringBuilder();
+        html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
+        html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
+        html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
+        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">We received your refund request</div>");
+        html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
+        html.Append($"<p style=\"margin:14px 0\">{Enc(trip)}</p>");
+        html.Append("<p style=\"margin:14px 0\"><b>SkyWings staff will review it and email you the result.</b> Your booking stays active until then.</p>");
+        html.Append($"<p style=\"margin:14px 0;color:#687e74\">{Enc(note)}</p>");
+        html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
+        html.Append("</div></body></html>");
+
+        var text = new StringBuilder();
+        text.AppendLine("SkyWings - we received your refund request").AppendLine();
+        text.AppendLine("Booking reference: " + booking.Reference);
+        text.AppendLine(trip).AppendLine();
+        text.AppendLine("SkyWings staff will review it and email you the result. Your booking stays active until then.");
+        text.AppendLine(note);
+        text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
+
+        return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
+    }
+
+    /// <summary>The email sent when staff decline a refund request: the booking stays active, and the reason is given.</summary>
+    public static EmailMessage BuildRefundDeclined(BookingRecord booking, string reason, string toEmail, string? unsubscribeMailbox = null)
+    {
+        string subject = $"SkyWings refund request for booking {booking.Reference}";
+        string trip = $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:dddd, d MMMM yyyy}";
+        string why = string.IsNullOrWhiteSpace(reason) ? "No reason was given." : reason.Trim();
+
+        var html = new StringBuilder();
+        html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
+        html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
+        html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
+        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">About your refund request</div>");
+        html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
+        html.Append($"<p style=\"margin:14px 0\">{Enc(trip)}</p>");
+        html.Append("<p style=\"margin:14px 0\"><b>We could not approve this refund request. Your booking is still confirmed.</b></p>");
+        html.Append($"<p style=\"margin:14px 0\">Reason: {Enc(why)}</p>");
+        html.Append("<div style=\"font-size:12px;color:#687e74\">If you have more to tell us, reply to this email or contact SkyWings staff.</div>");
+        html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
+        html.Append("</div></body></html>");
+
+        var text = new StringBuilder();
+        text.AppendLine("SkyWings - about your refund request").AppendLine();
+        text.AppendLine("Booking reference: " + booking.Reference);
+        text.AppendLine(trip).AppendLine();
+        text.AppendLine("We could not approve this refund request. Your booking is still confirmed.");
+        text.AppendLine("Reason: " + why).AppendLine();
+        text.AppendLine("If you have more to tell us, reply to this email or contact SkyWings staff.");
+        text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
+
+        return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
+    }
+
+    /// <summary>Whether the emails should offer a refund request: a mailbox to write to, a confirmed booking, and a flight that has not left.</summary>
+    internal static bool CanRequestRefund(string? mailbox, BookingRecord booking, DateTime now)
+        => !string.IsNullOrWhiteSpace(mailbox) && booking.Status == AppData.StatusConfirmed
+           && AppData.DepartureOf(booking.FlightNo, booking.FlightDateValue) > now;
+
+    /// <summary>
+    /// The "Request cancellation / refund" button: a mailto: link, like Unsubscribe, to the SkyWings address. It only asks; staff cancel the
+    /// booking themselves. The email says what the refund would be today.
+    /// </summary>
+    private static string RefundRequestButtonHtml(string? mailbox, BookingRecord booking, DateTime now)
+    {
+        if (!CanRequestRefund(mailbox, booking, now)) return "";
+        return "<div style=\"text-align:center;margin:14px 0 0\"><a href=\"" + Enc(RefundRequestLink(mailbox!, booking, now)) + "\" style=\"display:inline-block;padding:9px 22px;" +
+               "border:1px solid #3f6556;border-radius:8px;color:#3f6556;font-size:13px;font-weight:600;text-decoration:none\">Request cancellation / refund</a>" +
+               $"<div style=\"font-size:12px;color:#687e74;margin-top:6px\">{Enc(RefundRequestNote(booking))}</div></div>";
+    }
+
+    private static string RefundRequestTextLine(string? mailbox, BookingRecord booking, DateTime now)
+        => CanRequestRefund(mailbox, booking, now)
+            ? $"{Environment.NewLine}To ask for a cancellation and refund, email {mailbox} with the subject \"Refund request {booking.Reference}\". {RefundRequestNote(booking)}{Environment.NewLine}"
+            : "";
+
+    private static string RefundRequestNote(BookingRecord booking)
+        => $"If cancelled today you would get PHP {AppData.ComputeRefundAmount(booking.TotalAmount, booking.FlightDateValue):N2} " +
+           $"({AppData.RefundRate(booking.FlightDateValue):P0} of the fare). The booking stays active until SkyWings staff confirm the cancellation.";
+
+    internal static string RefundRequestLink(string mailbox, BookingRecord booking, DateTime now)
+        => $"mailto:{mailbox}?subject={Uri.EscapeDataString("Refund request " + booking.Reference)}" +
+           $"&body={Uri.EscapeDataString($"Please cancel booking {booking.Reference} and refund it. " + RefundRequestNote(booking))}";
 
     private static string AttachmentNames(IReadOnlyList<EmailAttachment> attachments)
         => string.Join(", ", attachments.Select(a => a.Label ?? a.FileName));

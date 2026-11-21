@@ -46,6 +46,24 @@ public sealed class AdminForm : GlassForm
     private readonly GlassButton _toggleStaff = new() { Text = "Deactivate", Style = GlassButtonStyle.Secondary };
 
     // audit
+    private readonly DataGridView _refunds = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
+    private readonly TextBox _refundSearch = new() { PlaceholderText = "Reference, flight or refund ref" };
+    private readonly CheckBox _refundShowAll = new() { Text = "Include no-refund", AutoSize = true };
+    private readonly Label _refundCount = new() { AutoSize = true };
+    private readonly System.Windows.Forms.Timer _refundTimer = new() { Interval = 300 };
+    private RefundList _refundList = new(Array.Empty<RefundListRow>(), 0, 0m);
+    private readonly ComboBox _refundView = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _refundPeriod = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _refundSort = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _refundHandled = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private bool _loadingViewSettings;
+    private readonly DataGridView _requests = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true, Visible = false };
+    private readonly CheckBox _requestShowClosed = new() { Text = "Show closed", AutoSize = true };
+    private readonly List<Control> _refundOnlyControls = new();
+    private readonly List<Control> _requestOnlyControls = new();
+    private readonly System.Windows.Forms.Timer _requestPoll = new() { Interval = 60_000 };
+    private List<RefundRequestRow> _requestRows = new();
+    private GlassButton? _refundsNav;
     private readonly DataGridView _audit = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
     private readonly TextBox _auditSearch = new() { PlaceholderText = "Search who, what or which item" };
     private readonly System.Windows.Forms.Timer _auditTimer = new() { Interval = 300 };
@@ -69,6 +87,7 @@ public sealed class AdminForm : GlassForm
             var button = new GlassButton { Text = title, Style = GlassButtonStyle.Ghost };
             Panel page = build();
             _sections[button] = page;
+            if (title == "Refunds") _refundsNav = button;
             _host.Controls.Add(page);
             button.Click += (_, _) => { ShowSection(button); onShow?.Invoke(); };
             nav.Controls.Add(button);
@@ -76,6 +95,7 @@ public sealed class AdminForm : GlassForm
         }
         AddSection("Flights", Permission.ManageFlights, BuildFlightsPage);
         AddSection("Bookings", Permission.ViewBookings, BuildBookingsPage, LoadBookingsFromStore);
+        AddSection("Refunds", Permission.ViewBookings, BuildRefundsPage, ReloadRefundsView);
         AddSection("Waitlist", Permission.ViewBookings, BuildWaitlistPage, LoadWaitlist);
         AddSection("Reports", Permission.ViewReports, BuildReportsPage, LoadReport);
         AddSection("Staff", Permission.ManageStaff, BuildStaffPage, LoadStaff);
@@ -87,7 +107,7 @@ public sealed class AdminForm : GlassForm
         Controls.Add(BuildHeader(nav));
 
         Theme.Apply(this);
-        foreach (var label in new[] { _inventoryLabel, _bookingCount })
+        foreach (var label in new[] { _inventoryLabel, _bookingCount, _refundCount })
         {
             label.Font = Theme.Small;
             label.ForeColor = Theme.TextSecondary;
@@ -95,10 +115,17 @@ public sealed class AdminForm : GlassForm
 
         _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); ApplyBookingFilter(); };
         _auditTimer.Tick += (_, _) => { _auditTimer.Stop(); LoadAudit(); };
+        _refundTimer.Tick += (_, _) => { _refundTimer.Stop(); LoadRefunds(); };
+        _requestPoll.Tick += (_, _) => RefreshRequestBadge();
+        if (SkyWings.Email.EmailServices.RefundMail is { } reader) reader.RequestsLogged += OnRefundEmailsLogged;
+        if (_refundsNav is not null) { _requestPoll.Start(); RefreshRequestBadge(); }
         FormClosed += (_, _) =>
         {
             _searchTimer.Dispose();
             _auditTimer.Dispose();
+            _refundTimer.Dispose();
+            _requestPoll.Dispose();
+            if (SkyWings.Email.EmailServices.RefundMail is { } reader) reader.RequestsLogged -= OnRefundEmailsLogged;
         };
 
         // Load whatever the first visible section needs.
@@ -367,6 +394,7 @@ public sealed class AdminForm : GlassForm
         if (Session.Has(Permission.CancelBookings))
             toolbar.Controls.Add(ToolButton("Cancel booking", (_, _) => CancelSelectedBooking(), GlassButtonStyle.Danger));
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadBookingsFromStore(), GlassButtonStyle.Ghost));
+        toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportBookings(), GlassButtonStyle.Secondary));
         toolbar.Controls.Add(_bookingCount);
 
         GridStyle.Apply(_bookings);
@@ -391,7 +419,8 @@ public sealed class AdminForm : GlassForm
         {
             ["Reference"] = (1.0f, null), ["BookedAt"] = (1.3f, null), ["FlightNo"] = (0.9f, null),
             ["Route"] = (2.8f, null), ["FlightDate"] = (1.3f, null), ["Passengers"] = (0.6f, "Pax"),
-            ["TotalAmount"] = (1.0f, null), ["Status"] = (1.6f, null),   // room for the widest pill, "Check-in open" ["PaymentStatus"] = (1.0f, null),
+            ["TotalAmount"] = (1.0f, null), ["Status"] = (1.6f, null),   // room for the widest pill, "Check-in open"
+            ["PaymentStatus"] = (1.4f, null),   // and for "PAID · not used"
             ["RefundAmount"] = (0.9f, null)
         };
         foreach (DataGridViewColumn column in _bookings.Columns)
@@ -422,7 +451,7 @@ public sealed class AdminForm : GlassForm
 
     private static BookingAdminRow ToRow(BookingRecord b, TripStatusInfo trip)
         => new(b.Reference, b.BookedAtValue.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), b.FlightNo,
-            $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count, b.TotalAmount, trip.Label, b.PaymentStatus, b.RefundAmount);
+            $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count, b.TotalAmount, trip.Label, BookingSummary.PaymentLabel(b.PaymentStatus, trip.Phase), b.RefundAmount);
 
     private void ApplyBookingFilter()
     {
@@ -459,6 +488,44 @@ public sealed class AdminForm : GlassForm
             : $"{rows.Count:N0} of {_allBookings.Count:N0} bookings on {day}";
     }
 
+    /// <summary>Saves the bookings currently shown (after the date, status and search filters) as a CSV file.</summary>
+    private void ExportBookings()
+    {
+        if (_bookings.DataSource is not List<BookingAdminRow> shown || shown.Count == 0) { ShowInfo("There are no bookings in the list to export."); return; }
+        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-bookings-{_bookingDate.Value:yyyyMMdd}.csv" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var lines = CsvExport.Build(
+            new[] { "Reference", "Booked", "Flight", "Route", "Flight date", "Passengers", "Total", "Status", "Payment", "Refund" },
+            shown.Select(r => new[] { r.Reference, r.BookedAt, r.FlightNo, r.Route, r.FlightDate, r.Passengers.ToString(CultureInfo.InvariantCulture),
+                CsvExport.Money(r.TotalAmount), r.Status, r.PaymentStatus, CsvExport.Money(r.RefundAmount) }));
+        if (Try("Unable to export the bookings", () => File.WriteAllLines(dialog.FileName, lines)))
+        {
+            AuditExport("EXPORT_BOOKINGS", $"{shown.Count} bookings");
+            ShowInfo($"{shown.Count:N0} bookings exported.");
+        }
+    }
+
+    private void AuditExport(string action, string detail)
+        => Try("Unable to record the export", () => _service.RecordExport(action, detail));
+
+    private void ExportWaitlist()
+    {
+        if (_waitlistEntries.Count == 0) { ShowInfo("The waitlist is empty, so there is nothing to export."); return; }
+        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-waitlist-{DateTime.Today:yyyyMMdd}.csv" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var inv = CultureInfo.InvariantCulture;
+        var lines = CsvExport.Build(
+            new[] { "Flight", "Flight date", "Cabin", "Traveller", "Seats", "Joined", "Status", "Position", "Offer expires", "Code" },
+            _waitlistEntries.Select(e => new[] { e.FlightNo, e.FlightDate.ToString("yyyy-MM-dd", inv), e.ClassName, e.PassengerName,
+                e.SeatsWanted.ToString(inv), e.AddedAt.ToString("yyyy-MM-dd HH:mm", inv), e.Status, e.Position.ToString(inv),
+                e.OfferExpiresAt?.ToString("yyyy-MM-dd HH:mm", inv), e.BookingReference }));
+        if (Try("Unable to export the waitlist", () => File.WriteAllLines(dialog.FileName, lines)))
+        {
+            AuditExport("EXPORT_WAITLIST", $"{_waitlistEntries.Count} entries");
+            ShowInfo($"{_waitlistEntries.Count:N0} waitlist entries exported.");
+        }
+    }
+
     private BookingAdminRow? SelectedBooking() => _bookings.CurrentRow?.DataBoundItem as BookingAdminRow;
 
     private void ShowBookingDetails()
@@ -489,6 +556,366 @@ public sealed class AdminForm : GlassForm
         if (!Try("Unable to cancel booking", () => done = _service.CancelBooking(booking.Reference, refund))) return;
         if (!done) ShowInfo("This booking was already canceled or changed elsewhere. The list has been refreshed.");
         LoadBookingsFromStore();
+    }
+
+    // ------------------------------------------------------------------ refunds
+
+    private sealed record RefundRow(string Reference, string Refunded, string FlightNo, string Route, string FlightDate,
+        decimal TotalAmount, decimal RefundAmount, string RefundRef, string Method, string HandledBy);
+
+    // The choices of the "view" row: label, what it does. Remembered between sessions (app_settings view_* keys).
+    private static readonly (string Label, string Key)[] PeriodChoices =
+        { ("Any time", "all"), ("Today", "today"), ("Last 7 days", "7d"), ("Last 30 days", "30d"), ("This month", "month") };
+    private static readonly (string Label, string Key)[] SortChoices =
+        { ("Newest first", RefundSort.Newest), ("Oldest first", RefundSort.Oldest), ("Largest refund", RefundSort.Largest), ("Smallest refund", RefundSort.Smallest) };
+    private static readonly (string Label, string Key)[] HandledChoices =
+        { ("Handled by anyone", RefundHandler.Anyone), ("Handled by staff", RefundHandler.Staff), ("Customer desk", RefundHandler.Customer), ("System", RefundHandler.System) };
+
+    /// <summary>The start of the chosen period (local time), or null for any time.</summary>
+    internal static DateTime? PeriodStart(string key, DateTime now) => key switch
+    {
+        "today" => now.Date,
+        "7d" => now.AddDays(-7),
+        "30d" => now.AddDays(-30),
+        "month" => new DateTime(now.Year, now.Month, 1),
+        _ => null
+    };
+
+    private static void FillChoices(ComboBox box, (string Label, string Key)[] choices, int width, Padding margin)
+    {
+        box.Items.AddRange(choices.Select(c => (object)c.Label).ToArray());
+        box.Width = width;
+        box.Margin = margin;
+    }
+
+    private static string KeyOf(ComboBox box, (string Label, string Key)[] choices)
+        => box.SelectedIndex >= 0 && box.SelectedIndex < choices.Length ? choices[box.SelectedIndex].Key : choices[0].Key;
+
+    private void SelectByKey(ComboBox box, (string Label, string Key)[] choices, string key)
+    {
+        int index = Array.FindIndex(choices, c => c.Key == key);
+        box.SelectedIndex = index < 0 ? 0 : index;
+    }
+
+    private Panel BuildRefundsPage()
+    {
+        // Two toolbar rows: actions on top, "how to see the list" below.
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(108) };
+        FlowLayoutPanel actions = Toolbar();
+        FlowLayoutPanel view = Toolbar();
+        toolbar.Controls.Add(view);       // docked first = lower row
+        toolbar.Controls.Add(actions);
+
+        _refundView.Items.AddRange(new object[] { "Refunded bookings", "Refund requests" });
+        _refundView.SelectedIndex = 0;
+        _refundView.Width = D(170);
+        _refundView.Margin = new Padding(0, D(5), D(8), 0);
+        _refundView.SelectedIndexChanged += (_, _) => { ApplyRefundView(); ReloadRefundsView(); };
+
+        var gap = new Padding(0, D(5), D(8), 0);
+        FillChoices(_refundPeriod, PeriodChoices, D(130), gap);
+        FillChoices(_refundSort, SortChoices, D(140), gap);
+        FillChoices(_refundHandled, HandledChoices, D(150), gap);
+        _loadingViewSettings = true;
+        SelectByKey(_refundPeriod, PeriodChoices, _service.GetViewSetting("view_refund_period", "all"));
+        SelectByKey(_refundSort, SortChoices, _service.GetViewSetting("view_refund_sort", RefundSort.Newest));
+        SelectByKey(_refundHandled, HandledChoices, _service.GetViewSetting("view_refund_handled", RefundHandler.Anyone));
+        _loadingViewSettings = false;
+        _refundPeriod.SelectedIndexChanged += (_, _) => ViewSettingChanged("view_refund_period", KeyOf(_refundPeriod, PeriodChoices));
+        _refundSort.SelectedIndexChanged += (_, _) => ViewSettingChanged("view_refund_sort", KeyOf(_refundSort, SortChoices));
+        _refundHandled.SelectedIndexChanged += (_, _) => ViewSettingChanged("view_refund_handled", KeyOf(_refundHandled, HandledChoices));
+
+        _refundSearch.Width = D(220);
+        _refundSearch.Margin = gap;
+        _refundSearch.TextChanged += (_, _) => { _refundTimer.Stop(); _refundTimer.Start(); };
+        _refundShowAll.Margin = new Padding(D(4), D(10), D(8), 0);
+        _refundShowAll.CheckedChanged += (_, _) => LoadRefunds();
+        _requestShowClosed.Margin = new Padding(D(4), D(10), D(8), 0);
+        _requestShowClosed.CheckedChanged += (_, _) => LoadRequests();
+        _refundCount.Margin = new Padding(D(4), D(12), 0, 0);
+
+        GlassButton logRequest = ToolButton("Log request", (_, _) => LogRefundRequest(), GlassButtonStyle.Secondary);
+        GlassButton approve = ToolButton("Approve", (_, _) => ApproveSelectedRequest(), GlassButtonStyle.Primary);
+        GlassButton decline = ToolButton("Decline", (_, _) => DeclineSelectedRequest(), GlassButtonStyle.Danger);
+
+        actions.Controls.Add(_refundView);
+        actions.Controls.Add(logRequest);
+        actions.Controls.Add(approve);
+        actions.Controls.Add(decline);
+        actions.Controls.Add(ToolButton("Details", (_, _) => ShowRefundBooking()));
+        actions.Controls.Add(ToolButton("Refresh", async (_, _) => await RefreshRefundsViewAsync(), GlassButtonStyle.Ghost));
+        actions.Controls.Add(ToolButton("Export CSV", (_, _) => ExportRefundsView(), GlassButtonStyle.Secondary));
+        actions.Controls.Add(_refundCount);
+
+        view.Controls.Add(_refundPeriod);
+        view.Controls.Add(_refundSort);
+        view.Controls.Add(_refundHandled);
+        view.Controls.Add(_refundSearch);
+        view.Controls.Add(_refundShowAll);
+        view.Controls.Add(_requestShowClosed);
+        _refundOnlyControls.AddRange(new Control[] { _refundSort, _refundHandled, _refundSearch, _refundShowAll });
+        _requestOnlyControls.AddRange(new Control[] { logRequest, approve, decline, _requestShowClosed });
+
+        GridStyle.Apply(_refunds);
+        _refunds.DefaultCellStyle.Font = Theme.Small;
+        _refunds.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _refunds.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _refunds.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowRefundBooking(); };
+        _refunds.DataBindingComplete += (_, _) =>
+        {
+            var weights = new Dictionary<string, float>
+            {
+                ["Reference"] = 1.1f, ["Refunded"] = 1.3f, ["FlightNo"] = 0.7f, ["Route"] = 2.6f, ["FlightDate"] = 1.2f,
+                ["TotalAmount"] = 1f, ["RefundAmount"] = 1f, ["RefundRef"] = 1.3f, ["Method"] = 1.6f, ["HandledBy"] = 1f
+            };
+            foreach (DataGridViewColumn column in _refunds.Columns)
+                if (weights.TryGetValue(column.DataPropertyName, out float w)) column.FillWeight = w * 100;
+        };
+
+        GridStyle.Apply(_requests);
+        _requests.DefaultCellStyle.Font = Theme.Small;
+        _requests.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _requests.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _requests.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowRefundBooking(); };
+        _requests.DataBindingComplete += (_, _) =>
+        {
+            var weights = new Dictionary<string, float>
+            {
+                ["Reference"] = 1.2f, ["Status"] = 1f, ["Source"] = 0.7f, ["Logged"] = 1.4f, ["FlightNo"] = 0.7f, ["Route"] = 2.2f,
+                ["FlightDate"] = 1.2f, ["TotalAmount"] = 1f, ["EstimatedRefund"] = 1.1f, ["Note"] = 1.8f
+            };
+            foreach (DataGridViewColumn column in _requests.Columns)
+                if (weights.TryGetValue(column.DataPropertyName, out float w)) column.FillWeight = w * 100;
+        };
+
+        var content = new Panel { Dock = DockStyle.Fill };
+        content.Controls.Add(_refunds);
+        content.Controls.Add(_requests);
+        ApplyRefundView();
+        return Section(toolbar, content);
+    }
+
+    /// <summary>A view choice changed: remember it and reload (not while the saved choices are being put back).</summary>
+    private void ViewSettingChanged(string key, string value)
+    {
+        if (_loadingViewSettings) return;
+        Try("Unable to save the view setting", () => _service.SetViewSetting(key, value));
+        ReloadRefundsView();
+    }
+
+    private DateTime? SelectedPeriodStart() => PeriodStart(KeyOf(_refundPeriod, PeriodChoices), DateTime.Now);
+    private bool ShowingRequests => _refundView.SelectedIndex == 1;
+
+    /// <summary>Shows the grid and the toolbar controls that belong to the chosen view.</summary>
+    private void ApplyRefundView()
+    {
+        _refunds.Visible = !ShowingRequests;
+        _requests.Visible = ShowingRequests;
+        foreach (Control c in _refundOnlyControls) c.Visible = !ShowingRequests;
+        foreach (Control c in _requestOnlyControls) c.Visible = ShowingRequests;
+    }
+
+    /// <summary>The Refresh button: in the requests view it first reads the desk mailbox for new refund emails, then reloads the list.</summary>
+    private async Task RefreshRefundsViewAsync()
+    {
+        if (ShowingRequests && SkyWings.Email.EmailServices.RefundMail is { } mailbox)
+        {
+            SkyWings.Email.RefundMailCheck check = await mailbox.CheckNowAsync();
+            if (!check.Ok) ShowInfo(check.Message + "\n\nThe list shows what SkyWings already has.");
+        }
+        ReloadRefundsView();
+    }
+
+    /// <summary>Called when the mailbox reader logged new requests (on another thread): show them without a click.</summary>
+    private void OnRefundEmailsLogged(SkyWings.Email.RefundMailCheck check)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try { BeginInvoke(new Action(() => { if (ShowingRequests && _requests.Visible) LoadRequests(); else RefreshRequestBadge(); })); }
+        catch (InvalidOperationException) { /* the window closed meanwhile */ }
+    }
+
+    private void ReloadRefundsView()
+    {
+        if (ShowingRequests) LoadRequests(); else LoadRefunds();
+        RefreshRequestBadge();
+    }
+
+    // ------------------------------------------------------------------ refund requests
+
+    private sealed record RequestRow(string Reference, string Status, string Source, string Logged, string FlightNo, string Route,
+        string FlightDate, decimal TotalAmount, decimal EstimatedRefund, string Note);
+
+    private const string SenderWarning = "⚠ Sender differs from the booking's email. ";
+
+    private static string RequestStatusText(string status) => status switch
+    {
+        BookingStore.RequestOpen => "Pending",
+        BookingStore.RequestDone => "Done",
+        _ => "Declined"
+    };
+
+    private void LoadRequests()
+    {
+        List<RefundRequestRow>? rows = null;
+        if (!Try("Unable to load the refund requests", () => rows = _service.LoadRefundRequests(_requestShowClosed.Checked, SelectedPeriodStart()))) return;
+        _requestRows = rows!;
+        _requests.DataSource = _requestRows.Select(r => new RequestRow(r.Reference, RequestStatusText(r.Status), r.Source == "EMAIL" ? "Email" : "Desk",
+            r.LoggedAt.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture), r.FlightNo, r.Route,
+            r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.EstimatedRefund,
+            r.Status == BookingStore.RequestDismissed ? $"Declined: {r.Note}"
+                : r.Status == BookingStore.RequestDone ? $"Refunded by {r.ClosedBy}"
+                : (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.CustomerMessage)).ToList();
+        int open = _requestRows.Count(r => r.Status == BookingStore.RequestOpen);
+        _refundCount.Text = open == 0
+            ? "No refund requests waiting"
+            : $"{open:N0} request(s) waiting · cancel the booking to complete one, or dismiss it";
+        UpdateRefundsBadge(open);
+    }
+
+    /// <summary>Counts the open requests for the tab button. Quiet on failure: this also runs from a timer.</summary>
+    private void RefreshRequestBadge()
+    {
+        if (_refundsNav is null) return;
+        try { UpdateRefundsBadge(_service.CountOpenRefundRequests()); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLogger.Error("RefundRequests", ex); }
+    }
+
+    private void UpdateRefundsBadge(int open)
+    {
+        if (_refundsNav is null) return;
+        _refundsNav.Text = open > 0 ? $"Refunds ({open})" : "Refunds";
+        _refundsNav.Invalidate();
+    }
+
+    private void LogRefundRequest()
+    {
+        using var prompt = new PromptForm("Log refund request",
+            "Use this when a customer asks for a refund (for example from the email button). It only writes the request down. " +
+            "Cancel the booking from Bookings or Manage booking to give the refund.",
+            "BOOKING REFERENCE", "e.g. SKY-1A2B3C4D5E6F", 20, "Log request",
+            text => AdminService.AsReference(text) is null ? "Enter the full booking reference, like SKY-1A2B3C4D5E6F." : null);
+        if (prompt.ShowDialog(this) != DialogResult.OK) return;
+        RefundRequestResult? result = null;
+        if (!Try("Unable to log the request", () => result = _service.LogRefundRequest(prompt.Value))) return;
+        ShowInfo(result!.Message);
+        if (ShowingRequests) LoadRequests(); else RefreshRequestBadge();
+    }
+
+    private RefundRequestRow? SelectedOpenRequest()
+    {
+        if (_requests.CurrentRow?.DataBoundItem is not RequestRow row) { ShowInfo("Select a request first."); return null; }
+        RefundRequestRow? request = _requestRows.FirstOrDefault(r => r.Reference == row.Reference && r.Status == BookingStore.RequestOpen);
+        if (request is null) ShowInfo("That request is already closed.");
+        return request;
+    }
+
+    /// <summary>Shows the request and what the refund would be, then (after a yes) cancels the booking, refunds it and emails the customer.</summary>
+    private void ApproveSelectedRequest()
+    {
+        if (SelectedOpenRequest() is not { } request) return;
+        BookingRecord? booking = null;
+        if (!Try("Unable to load the booking", () => booking = _service.FindBooking(request.Reference))) return;
+        if (booking is null) { ShowInfo("The booking is no longer available."); LoadRequests(); return; }
+        if (booking.Status != AppData.StatusConfirmed) { ShowInfo("This booking is no longer confirmed, so there is nothing to refund. The list has been refreshed."); LoadRequests(); return; }
+
+        decimal refund = AppData.ComputeRefundAmount(booking.TotalAmount, booking.FlightDateValue);
+        string message = string.IsNullOrWhiteSpace(request.CustomerMessage) ? "(no message was recorded)" : request.CustomerMessage;
+        string warning = request.Source == "EMAIL" && !request.SenderMatches
+            ? "WARNING: this request came from an email address that is not the one on the booking. Check it before approving.\n\n" : "";
+        string question = warning + $"Approve the refund for {booking.Reference}?\n\n" +
+                          $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:MMM d, yyyy}\n" +
+                          $"Total paid: PHP {booking.TotalAmount:N2}\n" +
+                          $"Refund ({AppData.RefundRate(booking.FlightDateValue):P0}): PHP {refund:N2} to {booking.PaymentMethod} {booking.MaskedAccount}\n\n" +
+                          $"Customer's message:\n{message}\n\n" +
+                          "This cancels the booking, frees the seats, refunds the original payment method and emails the customer that the refund is approved.";
+        if (MessageBox.Show(this, question, "Approve refund", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+        RefundApprovalResult? result = null;
+        if (!Try("Unable to approve the refund", () => result = _service.ApproveRefundRequest(request.Id, request.Reference))) return;
+        MessageBox.Show(this, result!.Ok ? $"{result.Message}\nRefund reference: {result.RefundReference}" : result.Message, "Approve refund",
+            MessageBoxButtons.OK, result.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        LoadRequests();
+    }
+
+    /// <summary>Closes the request without cancelling the booking; by default the customer is emailed the reason.</summary>
+    private void DeclineSelectedRequest()
+    {
+        if (SelectedOpenRequest() is not { } request) return;
+        using var prompt = new PromptForm("Decline request",
+            $"The booking {request.Reference} stays active and nothing is refunded. Say why, for the record.",
+            "REASON", "e.g. Flight is within the no-refund window", 200, "Decline",
+            text => text.Length == 0 ? "Please give a short reason." : null,
+            "Email this reason to the customer", true);
+        if (prompt.ShowDialog(this) != DialogResult.OK) return;
+        bool done = false;
+        if (!Try("Unable to decline the request", () => done = _service.DismissRefundRequest(request.Id, request.Reference, prompt.Value, prompt.OptionChecked))) return;
+        if (!done) ShowInfo("That request was already closed. The list has been refreshed.");
+        LoadRequests();
+    }
+    private void ExportRefundsView()
+    {
+        if (ShowingRequests) ExportRequests(); else ExportRefunds();
+    }
+
+    private void ExportRequests()
+    {
+        if (_requestRows.Count == 0) { ShowInfo("There are no requests in the list to export."); return; }
+        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-refund-requests-{DateTime.Today:yyyyMMdd}.csv" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var lines = CsvExport.Build(
+            new[] { "Reference", "Status", "Logged", "Logged by", "Flight", "Route", "Flight date", "Total", "Estimated refund", "Closed", "Closed by", "Note" },
+            _requestRows.Select(r => new[] { r.Reference, RequestStatusText(r.Status), r.LoggedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+                r.LoggedBy, r.FlightNo, r.Route, r.FlightDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), CsvExport.Money(r.Total),
+                CsvExport.Money(r.EstimatedRefund), r.ClosedAt?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), r.ClosedBy, r.Note }));
+        if (Try("Unable to export the requests", () => File.WriteAllLines(dialog.FileName, lines)))
+        {
+            AuditExport("EXPORT_REFUND_REQUESTS", $"{_requestRows.Count} requests");
+            ShowInfo($"{_requestRows.Count:N0} requests exported.");
+        }
+    }
+    private static string RefundTime(RefundListRow r)
+        => r.RefundedAt is { } at ? at.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) : "";
+
+    private void LoadRefunds()
+    {
+        RefundList? list = null;
+        if (!Try("Unable to load the refunds", () => list = _service.LoadRefundList(_refundSearch.Text, _refundShowAll.Checked, SelectedPeriodStart(), KeyOf(_refundSort, SortChoices), KeyOf(_refundHandled, HandledChoices)))) return;
+        _refundList = list!;
+        _refunds.DataSource = _refundList.Rows.Select(r => new RefundRow(r.Reference, RefundTime(r), r.FlightNo, r.Route,
+            r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.Refund, r.RefundReference, r.Method, r.HandledBy)).ToList();
+        string shown = _refundList.Rows.Count < _refundList.MatchCount ? $"newest {_refundList.Rows.Count:N0} of {_refundList.MatchCount:N0}" : $"{_refundList.MatchCount:N0}";
+        _refundCount.Text = $"{shown} cancelled · PHP {_refundList.MatchRefundTotal:N2} refunded";
+    }
+
+    private void ShowRefundBooking()
+    {
+        string? reference = ShowingRequests
+            ? (_requests.CurrentRow?.DataBoundItem as RequestRow)?.Reference
+            : (_refunds.CurrentRow?.DataBoundItem as RefundRow)?.Reference;
+        if (reference is null) { ShowInfo("Select a booking first."); return; }
+        BookingRecord? booking = null;
+        if (!Try("Unable to load the booking", () => booking = _service.FindBooking(reference))) return;
+        if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
+        TripStatusInfo? trip = null;
+        if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatus(booking, DateTime.Now))) return;
+        using var details = new BookingDetailForm(booking, trip!);
+        details.ShowDialog(this);
+    }
+
+    private void ExportRefunds()
+    {
+        if (_refundList.Rows.Count == 0) { ShowInfo("There are no refunds in the list to export."); return; }
+        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-refunds-{DateTime.Today:yyyyMMdd}.csv" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var lines = CsvExport.Build(
+            new[] { "Reference", "Refunded", "Flight", "Route", "Flight date", "Total", "Refund", "Refund ref", "Method", "Handled by" },
+            _refundList.Rows.Select(r => new[] { r.Reference, RefundTime(r), r.FlightNo, r.Route, r.FlightDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                CsvExport.Money(r.Total), CsvExport.Money(r.Refund), r.RefundReference, r.Method, r.HandledBy }));
+        if (Try("Unable to export the refunds", () => File.WriteAllLines(dialog.FileName, lines)))
+        {
+            AuditExport("EXPORT_REFUNDS", $"{_refundList.Rows.Count} refunds");
+            ShowInfo($"{_refundList.Rows.Count:N0} refunds exported.");
+        }
     }
 
     // ------------------------------------------------------------------ reports
@@ -649,6 +1076,7 @@ public sealed class AdminForm : GlassForm
     {
         var toolbar = Toolbar();
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadWaitlist(), GlassButtonStyle.Ghost));
+        toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportWaitlist(), GlassButtonStyle.Secondary));
         toolbar.Controls.Add(ToolButton("Details", (_, _) => ShowWaitlistDetails(), GlassButtonStyle.Secondary));
         toolbar.Controls.Add(ToolButton("Copy code", (_, _) => CopyWaitlistCode(), GlassButtonStyle.Secondary));
         if (Session.Has(Permission.CancelBookings))

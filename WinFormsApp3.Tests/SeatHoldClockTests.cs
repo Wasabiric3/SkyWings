@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Seat holds last SeatHoldMinutes on the app's (local) clock, in any time zone.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class SeatHoldClockTests
 {
     private string _dbPath = "";

@@ -14,9 +14,21 @@ internal static class CommandLine
     /// <summary><c>SkyWings.exe --rename-staff &lt;old&gt; &lt;new&gt;</c> changes an account's sign-in name; its password and role are not touched.</summary>
     public const string RenameStaff = "--rename-staff";
 
+    /// <summary><c>SkyWings.exe --protect-smtp-password</c> replaces the plain <c>smtp.password</c> in db.properties with a
+    /// version only this Windows user can read.</summary>
+    public const string ProtectSmtpPassword = "--protect-smtp-password";
+
+    /// <summary><c>SkyWings.exe --check-refund-mail</c> logs in to the desk mailbox and says how many refund emails it can see. Read-only: nothing is saved.</summary>
+    public const string CheckRefundMail = "--check-refund-mail";
+
     /// <summary>Runs the switch in <paramref name="args"/> and returns what to tell the user, or null when there is none (start normally).</summary>
     public static string? Run(string[] args, BookingStore store, DateTime now)
     {
+        if (args.Any(a => string.Equals(a.Trim(), ProtectSmtpPassword, StringComparison.OrdinalIgnoreCase)))
+            return ProtectSmtpPasswordIn(AppConfig.PropertiesPath);
+        if (args.Any(a => string.Equals(a.Trim(), CheckRefundMail, StringComparison.OrdinalIgnoreCase)))
+            return CheckRefundMailbox(AppConfig.Imap);
+
         int rename = Array.FindIndex(args, a => string.Equals(a.Trim(), RenameStaff, StringComparison.OrdinalIgnoreCase));
         if (rename >= 0)
         {
@@ -65,4 +77,43 @@ internal static class CommandLine
             return "The reset could not be completed: " + ex.Message;
         }
     }
-}
+
+    /// <summary>Protects the SMTP password in the given settings file. Internal so the tests can use a temp file.</summary>
+    internal static string ProtectSmtpPasswordIn(string? path)
+    {
+        if (path is null) return "There is no db.properties file, so there is nothing to protect.";
+        try
+        {
+            var (lines, changed) = SecretProtector.ProtectSmtpPassword(File.ReadAllLines(path));
+            if (!changed) return "No plain-text smtp.password was found in db.properties. Nothing was changed.";
+            File.WriteAllLines(path, lines);
+            AppLogger.Info("Security", "smtp.password in db.properties was encrypted for the current Windows user.");
+            return "The SMTP password in db.properties is now encrypted for this Windows user. It will not work for other users or on another PC.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            AppLogger.Error("CommandLine", ex);
+            return "Could not protect the password: " + ex.Message;
+        }
+    }
+
+    /// <summary>Connects to the desk mailbox and reports how many refund request emails it can see (the last 14 days). Saves nothing.</summary>
+    internal static string CheckRefundMailbox(SkyWings.Email.ImapSettings imap)
+    {
+        if (!imap.IsConfigured)
+            return "Reading refund emails is not set up. It needs the mail settings (smtp.host, smtp.user, smtp.password) in db.properties, and imap.enabled must not be false.";
+        try
+        {
+            SkyWings.Email.RefundMailBatch batch = new SkyWings.Email.ImapRefundMailSource(imap)
+                .FetchAsync(0, DateTime.Now.AddDays(-14), 50).GetAwaiter().GetResult();
+            var references = batch.Mails.Select(m => SkyWings.Email.RefundMailProcessor.ReferenceIn(m.Subject)).Where(r => r is not null).ToList();
+            AppLogger.Info("RefundMail", $"Mailbox check: connected, {batch.Mails.Count} refund email(s) in the last 14 days.");
+            return $"Connected to {imap.Host}. {batch.Mails.Count} refund email(s) in the last 14 days" +
+                   (references.Count > 0 ? ": " + string.Join(", ", references) : "") + ". Nothing was saved or changed.";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("RefundMail", ex);
+            return "Could not read the mailbox: " + ex.Message;
+        }
+    }}

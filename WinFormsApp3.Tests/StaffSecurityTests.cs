@@ -4,6 +4,8 @@ using Microsoft.Data.Sqlite;
 namespace SkyWings.Tests;
 
 [TestClass]
+
+[DoNotParallelize]
 public sealed class PasswordPolicyTests
 {
     [TestMethod]
@@ -27,6 +29,7 @@ public sealed class PasswordPolicyTests
 
 /// <summary>Staff accounts, sign-in lockout, roles and the audit log, against a throwaway SQLite file.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class StaffSecurityTests
 {
     private const string GoodPassword = "correct horse battery";

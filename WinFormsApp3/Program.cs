@@ -32,6 +32,15 @@ namespace SkyWings
             }
             // Emails the offer to the next waitlisted traveller whenever a cancellation or expiry frees seats.
             SkyWings.Email.EmailServices.CreateWaitlist(store).Attach();
+            // Emails the customer a cancellation notice (with the refund reference) whenever a booking is cancelled.
+            SkyWings.Email.EmailServices.Create(store).Attach();
+            // Reads refund request emails from the desk mailbox every minute (read-only) and writes them into the Refunds tab.
+            if (AppConfig.Imap.IsConfigured)
+            {
+                var mailPoller = new SkyWings.Email.RefundMailPoller(store, new SkyWings.Email.ImapRefundMailSource(AppConfig.Imap), TimeSpan.FromSeconds(60));
+                SkyWings.Email.EmailServices.RefundMail = mailPoller;
+                mailPoller.Start();
+            }
 
             // The dashboard is only reachable after a staff sign-in. "Sign out" (or the idle timeout) brings the
             // sign-in screen back; closing the sign-in screen or the dashboard window quits the program.

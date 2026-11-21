@@ -80,6 +80,131 @@ public sealed class BookingEmailService
         }
     }
 
+    /// <summary>Sends the cancellation email whenever a booking is cancelled (staff, customer desk or simulator), from now on.</summary>
+    public void Attach()
+    {
+        _store.BookingCanceled += reference => _ = SendCancellationForAsync(reference);
+        _store.RefundRequestDeclined += (reference, reason) => _ = SendDeclinedForAsync(reference, reason);
+        _store.RefundRequestReceived += reference => _ = SendRequestReceivedForAsync(reference);
+    }
+
+    private async Task SendRequestReceivedForAsync(string reference)
+    {
+        try
+        {
+            BookingRecord? booking = _store.FindByReference(reference);
+            string? email = booking is null ? null : _store.LoadBookingContact(reference);
+            if (booking is null || string.IsNullOrEmpty(email)) return;
+            await SendRefundRequestReceivedAsync(booking, email).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+    }
+
+    /// <summary>
+    /// Tells the booking's own address that a refund request was received. It goes to the address on the booking, never to the sender of
+    /// the email, so a forged request cannot make SkyWings write to a stranger. Same rules as the other emails.
+    /// </summary>
+    public async Task<EmailSendResult> SendRefundRequestReceivedAsync(BookingRecord booking, string toEmail)
+    {
+        try
+        {
+            if (!BookingRules.IsValidEmail(toEmail))
+                return new EmailSendResult(false, "Skipped", "The email address is not valid.");
+            if (!_store.IsEmailSubscribed(toEmail))
+                return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
+            if (_store.IsSimulatedBooking(booking.Reference))
+                return new EmailSendResult(false, "Skipped", "Demo bookings do not send email.");
+
+            EmailSendResult result = await _sender.SendAsync(
+                BookingEmailBuilder.BuildRefundRequestReceived(booking, toEmail.Trim(), _unsubscribeMailbox)).ConfigureAwait(false);
+            _store.WriteAudit("system", "SYSTEM", "EMAIL_REFUND_RECEIVED", booking.Reference, result.Channel);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return new EmailSendResult(false, "Failed", "The email could not be sent or saved.");
+        }
+    }
+
+    private async Task SendDeclinedForAsync(string reference, string reason)
+    {
+        try
+        {
+            BookingRecord? booking = _store.FindByReference(reference);
+            string? email = booking is null ? null : _store.LoadBookingContact(reference);
+            if (booking is null || string.IsNullOrEmpty(email)) return;
+            await SendRefundDeclinedAsync(booking, email, reason).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+    }
+
+    /// <summary>Emails that the refund request was declined and why. Same rules as the other emails; the booking is unaffected.</summary>
+    public async Task<EmailSendResult> SendRefundDeclinedAsync(BookingRecord booking, string toEmail, string reason)
+    {
+        try
+        {
+            if (!BookingRules.IsValidEmail(toEmail))
+                return new EmailSendResult(false, "Skipped", "The email address is not valid.");
+            if (!_store.IsEmailSubscribed(toEmail))
+                return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
+            if (_store.IsSimulatedBooking(booking.Reference))
+                return new EmailSendResult(false, "Skipped", "Demo bookings do not send email.");
+
+            EmailSendResult result = await _sender.SendAsync(
+                BookingEmailBuilder.BuildRefundDeclined(booking, reason, toEmail.Trim(), _unsubscribeMailbox)).ConfigureAwait(false);
+            _store.WriteAudit("system", "SYSTEM", "EMAIL_REFUND_DECLINED", booking.Reference, result.Channel);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return new EmailSendResult(false, "Failed", "The email could not be sent or saved.");
+        }
+    }
+
+    private async Task SendCancellationForAsync(string reference)
+    {
+        try
+        {
+            BookingRecord? booking = _store.FindByReference(reference);
+            string? email = booking is null ? null : _store.LoadBookingContact(reference);
+            if (booking is null || string.IsNullOrEmpty(email)) return;
+            await SendCancellationAsync(booking, email).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+    }
+
+    /// <summary>
+    /// Emails that the booking is cancelled, with the refund amount and reference. Same rules as the other emails: invalid or unsubscribed
+    /// addresses are skipped, demo bookings never send, and no problem here can affect the cancellation.
+    /// </summary>
+    public async Task<EmailSendResult> SendCancellationAsync(BookingRecord booking, string toEmail)
+    {
+        try
+        {
+            if (!BookingRules.IsValidEmail(toEmail))
+                return new EmailSendResult(false, "Skipped", "The email address is not valid.");
+            if (!_store.IsEmailSubscribed(toEmail))
+                return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
+            if (_store.IsSimulatedBooking(booking.Reference))
+                return new EmailSendResult(false, "Skipped", "Demo bookings do not send email.");
+            if (booking.Status != AppData.StatusCanceled)
+                return new EmailSendResult(false, "Skipped", "The booking is not cancelled.");
+
+            EmailSendResult result = await _sender.SendAsync(
+                BookingEmailBuilder.BuildCancellation(booking, _store.LoadRefund(booking.Reference), toEmail.Trim(), _unsubscribeMailbox,
+                    approvedRequest: _store.HasCompletedRefundRequest(booking.Reference))).ConfigureAwait(false);
+            _store.WriteAudit("system", "SYSTEM", "EMAIL_CANCELLATION", booking.Reference, result.Channel);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return new EmailSendResult(false, "Failed", "The cancellation email could not be sent or saved.");
+        }
+    }
+
     /// <summary>
     /// Emails the boarding pass PDF for the given check-ins. Same rules as the receipt: invalid or unsubscribed addresses are skipped,
     /// demo bookings never send, and no problem here can affect the check-in itself.
@@ -168,6 +293,9 @@ public static class EmailServices
 
     public static WaitlistEmailService CreateWaitlist(BookingStore store)
         => new(store, CreateSender(AppConfig.Smtp), AppConfig.Smtp.IsConfigured ? AppConfig.Smtp.From : null);
+
+    /// <summary>The running mailbox reader, or null when mail settings are missing or reading is switched off. Set once at start-up.</summary>
+    public static RefundMailPoller? RefundMail { get; set; }
 
     public static BookingEmailService Create(BookingStore store)
         => new(store, CreateSender(AppConfig.Smtp), new QrCodeRenderer(), AppConfig.Smtp.IsConfigured ? AppConfig.Smtp.From : null);

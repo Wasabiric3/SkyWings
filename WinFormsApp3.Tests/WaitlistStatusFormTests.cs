@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The traveller's waitlist lookup: with every button showing (an offer is live), they all fit on one line.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class WaitlistStatusFormTests
 {
     private static void OnStaThread(Action action)

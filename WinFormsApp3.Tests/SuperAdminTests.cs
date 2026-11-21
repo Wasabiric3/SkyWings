@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The Super Admin role: permissions, the sign-in type gate, who may manage administrators, and the schema upgrade.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class SuperAdminTests
 {
     private const string Pass = "correct horse battery";

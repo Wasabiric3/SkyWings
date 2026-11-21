@@ -190,6 +190,37 @@ public sealed class ManageBookingControllerTests
     }
 
     [TestMethod]
+    public void Cancel_RecordsARefundThatTheBannerShows()
+    {
+        BookingRecord booking = Save("SKY-MNG000050", DateTime.Today.AddDays(30), 4_000m);
+        _controller.Find(booking.Reference);
+        Assert.IsNull(_store.LoadRefund(booking.Reference), "nothing is refunded before the cancellation");
+
+        Assert.AreEqual(CancelOutcome.Canceled, _controller.Cancel().Outcome);
+        BookingRecord fresh = _controller.Reload()!;
+        RefundRecord? refund = _controller.CurrentRefund();
+
+        Assert.IsNotNull(refund);
+        Assert.AreEqual(fresh.RefundAmount, refund.Amount);
+        Assert.AreEqual("Credit Card", refund.Method);
+        Assert.AreEqual("**** 4521", refund.AccountMasked);
+        StringAssert.Matches(refund.Reference, new System.Text.RegularExpressions.Regex("^RFD-[0-9A-F]{12}$"));
+        StringAssert.Contains(refund.Detail, "customer");
+        StringAssert.Contains(ManageBookingController.DescribeBooking(fresh, null, refund).Text, refund.Reference);
+        Assert.AreEqual(1, _store.LoadRefunds(booking.Reference).Count);
+    }
+
+    [TestMethod]
+    public void Cancel_WithNoRefundDue_WritesNoRefundRecord()
+    {
+        BookingRecord booking = Save("SKY-MNG000051", DateTime.Today.AddDays(30), 4_000m);
+        Assert.IsTrue(_store.CancelBooking(booking.Reference, 0m));
+        Assert.IsNull(_store.LoadRefund(booking.Reference));
+        Assert.IsFalse(_store.CancelBooking(booking.Reference, 100m), "a second cancel is refused");
+        Assert.IsNull(_store.LoadRefund(booking.Reference), "and never writes a second refund");
+    }
+
+    [TestMethod]
     public void Cancel_AlreadyCanceledElsewhere_ReportsAlreadyChanged()
     {
         BookingRecord booking = Save("SKY-MNG000006", DateTime.Today.AddDays(30));

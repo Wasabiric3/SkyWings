@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Per-cabin seat counts, searches and class choices follow the flight's aircraft.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class AircraftSeatCountTests
 {
     private string _dbPath = "";
@@ -103,6 +104,8 @@ public sealed class AircraftSeatCountTests
 }
 
 [TestClass]
+
+[DoNotParallelize]
 public sealed class SeatStepAircraftTextTests
 {
     private string _dbPath = "";

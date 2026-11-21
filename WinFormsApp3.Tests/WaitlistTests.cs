@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Waitlist with time-limited offers. Each test runs against its own temporary SQLite file.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class WaitlistTests
 {
     private const string Flight = "PR-101";

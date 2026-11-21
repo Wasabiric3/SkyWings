@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>How full a flight is: the board's load column and the per-cabin occupancy bars.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class FlightLoadTests
 {
     private static readonly DateTime Now = DateTime.Today.AddHours(6);

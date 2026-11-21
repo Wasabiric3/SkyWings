@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Flights can carry an aircraft; flights without one keep the original ratio-based layout.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class FlightAircraftStoreTests
 {
     private string _dbPath = "";
@@ -123,6 +124,8 @@ public sealed class FlightAircraftStoreTests
 }
 
 [TestClass]
+
+[DoNotParallelize]
 public sealed class SeedDefaultFlightsTests
 {
     private string _dbPath = "";

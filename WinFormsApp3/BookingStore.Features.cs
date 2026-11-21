@@ -29,6 +29,7 @@ public sealed partial class BookingStore
 
         foreach (string sql in ddl) Exec(con, sql);
         EnsureEmailSchema(con);
+        EnsureRefundRequestSchema(con);
         EnsureWaitlistSchema(con);
         EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN profile_ref VARCHAR(36) NOT NULL DEFAULT ''");
         EnsureColumn(con, "ALTER TABLE bookings ADD COLUMN promo_code VARCHAR(40) NOT NULL DEFAULT ''");

@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The hidden "--reset-simulation" switch: regenerates only simulated bookings.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class CommandLineTests
 {
     private static readonly DateTime Now = DateTime.Today.AddHours(6);

@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The daily booking budget of the demo load, and the simulated waitlist that fills the staff Waitlist tab.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class SimulationBudgetAndWaitlistTests
 {
     private static readonly DateTime Now = DateTime.Today.AddHours(6);

@@ -31,10 +31,13 @@ public sealed class ManageBookingController
     private const string Screen = "Manage booking";
     private readonly BookingStore _store;
 
-    public ManageBookingController(BookingStore store)
+    public ManageBookingController(BookingStore store, string operatorName = "desk")
     {
         _store = store;
+        _operator = operatorName;
     }
+
+    private readonly string _operator;
 
     /// <summary>The booking being viewed, or null while the lookup page is showing.</summary>
     public BookingRecord? Current { get; private set; }
@@ -83,7 +86,7 @@ public sealed class ManageBookingController
     // ------------------------------------------------------------------ banner and refund
 
     /// <param name="trip">Where the trip is now; when given, a finished trip says it was completed (and where it landed) or a no-show.</param>
-    public static BookingBanner DescribeBooking(BookingRecord booking, TripStatusInfo? trip = null)
+    public static BookingBanner DescribeBooking(BookingRecord booking, TripStatusInfo? trip = null, RefundRecord? refund = null)
     {
         bool canModify = BookingSummary.CanModify(booking);
         string policy = canModify
@@ -95,7 +98,8 @@ public sealed class ManageBookingController
         if (booking.Status == AppData.StatusCanceled)
             return new BookingBanner(BannerKind.Canceled,
                 booking.RefundAmount > 0
-                    ? $"This booking was canceled. PHP {booking.RefundAmount:N2} is being refunded."
+                    ? $"This booking was canceled. PHP {booking.RefundAmount:N2} is being refunded" +
+                      (refund is null ? "." : $" to {refund.Method} {refund.AccountMasked}. Refund reference {refund.Reference}.")
                     : "This booking was canceled.",
                 canModify, policy);
         if (!canModify && trip is { Phase: TripPhase.Completed, LandedAt: { } landed })
@@ -114,6 +118,14 @@ public sealed class ManageBookingController
     /// <exception cref="IOException">The database could not be read.</exception>
     public TripStatusInfo? CurrentTrip(DateTime now)
         => Current is null ? null : TripStatus.Of(Current, _store.LoadCheckIns(Current.Reference), now);
+
+    /// <summary>The refund record of the open (canceled) booking, or null when there is none or it cannot be read.</summary>
+    public RefundRecord? CurrentRefund()
+    {
+        if (Current is null || Current.Status != AppData.StatusCanceled) return null;
+        try { return _store.LoadRefund(Current.Reference); }
+        catch (IOException ex) { AppLogger.Error("ManageBooking", ex); return null; }
+    }
 
     /// <summary>The refund the traveller would get today, or null when the booking cannot be changed.</summary>
     public CancelPreview? PreviewCancel()
@@ -139,6 +151,88 @@ public sealed class ManageBookingController
         {
             AppLogger.Error("ManageBooking", ex);
             return new CancelResult(CancelOutcome.StoreError, ex);
+        }
+    }
+
+    // ------------------------------------------------------------------ refund requests
+
+    /// <summary>Writes down that the customer asked for a refund (usually by email). Staff then cancel the booking, which closes the request.</summary>
+    public RefundRequestResult LogRefundRequest()
+    {
+        if (Current is null) return new RefundRequestResult(false, "No booking is open.");
+        try
+        {
+            RefundRequestResult result = _store.LogRefundRequest(Current.Reference, _operator);
+            if (result.Ok) _store.WriteAudit(_operator, "STAFF", "REFUND_REQUEST_LOGGED", Current.Reference);
+            return result;
+        }
+        catch (IOException ex)
+        {
+            AppLogger.Error("ManageBooking", ex);
+            return new RefundRequestResult(false, "The request could not be saved. Please try again.");
+        }
+    }
+
+    /// <summary>True when the open booking already has a refund request waiting.</summary>
+    public bool HasOpenRefundRequest()
+    {
+        if (Current is null) return false;
+        try { return _store.LoadRefundRequests().Any(r => r.Reference == Current.Reference); }
+        catch (IOException ex) { AppLogger.Error("ManageBooking", ex); return false; }
+    }
+
+    // ------------------------------------------------------------------ changing the flight
+
+    /// <summary>Why the open booking's outbound flight cannot be changed, or null when it can.</summary>
+    public string? ChangeFlightRefusal(DateTime now)
+    {
+        if (Current is null) return "No booking is open.";
+        try { return FlightChangeRules.BookingRefusal(Current, _store.HasOutboundCheckIn(Current.Reference), now); }
+        catch (IOException ex) { AppLogger.Error("ManageBooking", ex); return "The booking could not be checked. Please try again."; }
+    }
+
+    /// <summary>The flights on the same route on <paramref name="date"/>: seats left in the booked cabin, the cost, and why one is not possible.</summary>
+    /// <exception cref="IOException">The database could not be read.</exception>
+    public List<FlightChangeOption> ChangeOptions(DateTime date, DateTime now)
+    {
+        var options = new List<FlightChangeOption>();
+        if (Current is null) return options;
+        BookingRecord booking = Current;
+        List<FlightAdminRow> all = _store.LoadAllFlights();
+        FlightAdminRow? oldRow = all.FirstOrDefault(f => f.FlightNo == booking.FlightNo);
+        if (oldRow is null) return options;
+        var oldFlight = new Flight(oldRow.FlightNo, oldRow.Origin, oldRow.Destination, oldRow.BasePrice);
+        foreach (FlightAdminRow row in all.Where(f => f.Status == "Active" && f.Origin == booking.Origin && f.Destination == booking.Destination)
+                     .OrderBy(f => f.FlightNo))
+        {
+            var flight = new Flight(row.FlightNo, row.Origin, row.Destination, row.BasePrice);
+            DateTime departure = AppData.DepartureOf(flight.FlightNo, date);
+            int left = _store.CabinSeatsLeft(flight.FlightNo, date, booking.ClassName);
+            string? problem = FlightChangeRules.TargetRefusal(booking, flight, date, now);
+            if (problem is null && left < booking.Passengers.Count)
+                problem = left == 0 ? $"No {booking.ClassName} seats left." : $"Only {left} {booking.ClassName} seat(s) left.";
+            options.Add(new FlightChangeOption(flight, departure, left, FlightChangeRules.Quote(booking, oldFlight, flight, date), problem));
+        }
+        return options;
+    }
+
+    /// <summary>Moves the open booking to the chosen flight and date. Call after the traveller confirmed the cost.</summary>
+    public FlightChangeResult ChangeFlight(FlightChangeOption option, DateTime date)
+    {
+        if (Current is null) return FlightChangeResult.Refused("No booking is open.");
+        try
+        {
+            string from = $"{Current.FlightNo} {Current.FlightDateValue:yyyy-MM-dd}";
+            FlightChangeResult result = _store.ChangeOutboundFlight(Current.Reference, option.Flight.FlightNo, date, "customer");
+            if (result.Outcome == FlightChangeOutcome.Changed)
+                _store.WriteAudit("customer", "CUSTOMER", "BOOKING_REBOOKED", Current.Reference,
+                    $"{from} to {option.Flight.FlightNo} {date:yyyy-MM-dd}; charged PHP {option.Quote.Total:N2}");
+            return result;
+        }
+        catch (IOException ex)
+        {
+            AppLogger.Error("ManageBooking", ex);
+            return new FlightChangeResult(FlightChangeOutcome.StoreError, "The flight could not be changed. Please try again.", Array.Empty<string>());
         }
     }
 

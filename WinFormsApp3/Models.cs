@@ -256,3 +256,5 @@ public sealed record CompletedBookingRow(
 public sealed record CancelledBookingRow(
     string Reference, string FlightNo, string Route, string FlightDate,
     string ClassName, long PaxCount, decimal TotalAmount, string PaymentStatus, decimal RefundAmount);
+/// <summary>Money paid back to the customer when a booking was canceled. <see cref="Reference"/> is the refund's own code (RFD-...).</summary>
+public sealed record RefundRecord(decimal Amount, string Method, string AccountMasked, string Reference, DateTime IssuedAt, string Detail);

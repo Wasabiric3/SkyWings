@@ -138,12 +138,13 @@ public sealed partial class BookingStore
     }
 
     /// <summary>Adds a row. Blank fields are left out so the column's default (or NULL) applies.</summary>
-    public void InsertRow(string table, IReadOnlyDictionary<string, string?> values)
+    public string InsertRow(string table, IReadOnlyDictionary<string, string?> values)
     {
         lock (_lock)
         {
             DataTableInfo info = RequireWritable(table);
             var names = new List<string>();
+            var added = new List<string>();
             var args = new List<(string, object?)>();
             foreach (var c in info.Columns.Where(c => !c.Masked))
             {
@@ -155,21 +156,25 @@ public sealed partial class BookingStore
                     text = "";
                 }
                 names.Add(Quote(c.Name));
+                added.Add($"{c.Name}={AuditValue(c, text)}");
                 args.Add(("@v" + args.Count, ToDbValue(c, text)));
             }
             string sql = names.Count == 0
                 ? $"INSERT INTO {Quote(info.Name)} DEFAULT VALUES"
                 : $"INSERT INTO {Quote(info.Name)} ({string.Join(", ", names)}) VALUES ({string.Join(", ", args.Select(a => a.Item1))})";
             Write(sql, args);
+            return string.Join("; ", added);
         }
     }
 
     /// <summary>Changes one row, found by its key (primary-key columns, or rowid). Key and secret columns are not changed.</summary>
-    public void UpdateRow(string table, IReadOnlyDictionary<string, string?> key, IReadOnlyDictionary<string, string?> values)
+    public string UpdateRow(string table, IReadOnlyDictionary<string, string?> key, IReadOnlyDictionary<string, string?> values)
     {
         lock (_lock)
         {
             DataTableInfo info = RequireWritable(table);
+            Dictionary<string, string?>? before = ReadRowValues(info, key);
+            var changes = new List<string>();
             var sets = new List<string>();
             var args = new List<(string, object?)>();
             foreach (var c in info.Columns.Where(c => !c.Masked && !c.IsKey))
@@ -181,26 +186,75 @@ public sealed partial class BookingStore
                     text = c.NotNull ? "" : null;
                 }
                 sets.Add($"{Quote(c.Name)} = @v{args.Count}");
+                string? old = null;
+                bool hadOld = before is not null && before.TryGetValue(c.Name, out old);
+                if (!hadOld || !string.Equals(old ?? "", text ?? "", StringComparison.Ordinal))
+                    changes.Add($"{c.Name}: {AuditValue(c, old)} → {AuditValue(c, text)}");
                 args.Add(("@v" + args.Count, ToDbValue(c, text)));
             }
             if (sets.Count == 0) throw new ArgumentException("There is nothing to change.");
             string where = KeyClause(info, key, args);
             if (Write($"UPDATE {Quote(info.Name)} SET {string.Join(", ", sets)} WHERE {where}", args) == 0)
                 throw new InvalidOperationException("That row no longer exists. Refresh and try again.");
+            return changes.Count == 0 ? "no values changed" : string.Join("; ", changes);
         }
     }
 
-    public void DeleteRow(string table, IReadOnlyDictionary<string, string?> key)
+    /// <summary>Deletes one row and returns what it held (secret and customer-detail columns hidden), for the audit trail.</summary>
+    public string DeleteRow(string table, IReadOnlyDictionary<string, string?> key)
     {
         lock (_lock)
         {
             DataTableInfo info = RequireWritable(table);
+            Dictionary<string, string?>? before = ReadRowValues(info, key);
             var args = new List<(string, object?)>();
             string where = KeyClause(info, key, args);
             if (Write($"DELETE FROM {Quote(info.Name)} WHERE {where}", args) == 0)
                 throw new InvalidOperationException("That row no longer exists. Refresh and try again.");
+            return before is null ? "" : Describe(info, before);
         }
     }
+
+    // Customer details that are logged as "(hidden)": the audit trail shows that the column changed, not what it held.
+    private static bool IsSensitiveColumn(string name)
+        => new[] { "id_number", "passport", "phone", "email", "address", "birth", "card" }
+            .Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase));
+
+    internal static string AuditValue(DataColumnInfo c, string? value)
+    {
+        if (c.Masked || IsSensitiveColumn(c.Name)) return "(hidden)";
+        if (value is null) return "NULL";
+        string v = value.Replace('\r', ' ').Replace('\n', ' ');
+        return "'" + (v.Length > 30 ? v[..30] + "…" : v) + "'";
+    }
+
+    /// <summary>The current values of one row (non-secret columns as text), or null when it does not exist. Caller holds the lock.</summary>
+    private Dictionary<string, string?>? ReadRowValues(DataTableInfo info, IReadOnlyDictionary<string, string?> key)
+    {
+        var args = new List<(string, object?)>();
+        string where = KeyClause(info, key, args);
+        var columns = info.Columns.Where(c => !c.Masked).ToList();
+        if (columns.Count == 0) return new Dictionary<string, string?>();
+        try
+        {
+            using var con = OpenConnection();
+            using var cmd = Cmd(con, $"SELECT {string.Join(", ", columns.Select(c => Quote(c.Name)))} FROM {Quote(info.Name)} WHERE {where}", null, args.ToArray());
+            using var rs = cmd.ExecuteReader();
+            if (!rs.Read()) return null;
+            var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < columns.Count; i++)
+                row[columns[i].Name] = rs.IsDBNull(i) ? null : Convert.ToString(rs.GetValue(i), CultureInfo.InvariantCulture);
+            return row;
+        }
+        catch (SqliteException e)
+        {
+            LogError(e);
+            throw new IOException("Unable to read the row: " + e.Message, e);
+        }
+    }
+
+    private static string Describe(DataTableInfo info, Dictionary<string, string?> row)
+        => string.Join("; ", info.Columns.Where(c => !c.Masked && row.ContainsKey(c.Name)).Select(c => $"{c.Name}={AuditValue(c, row[c.Name])}"));
 
     private DataTableInfo RequireWritable(string table)
     {

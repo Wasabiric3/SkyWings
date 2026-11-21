@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Simulated (demo) bookings block seats like real ones but stay out of staff reports unless switched on.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class SimulatedBookingStoreTests
 {
     private string _dbPath = "";

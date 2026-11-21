@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The home screen's top menu: every link is fully visible, whatever the signed-in name.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class HomeHeaderTests
 {
     private static void OnStaThread(Action action)

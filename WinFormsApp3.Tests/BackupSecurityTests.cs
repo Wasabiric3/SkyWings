@@ -5,6 +5,8 @@ using Microsoft.Data.Sqlite;
 namespace SkyWings.Tests;
 
 [TestClass]
+
+[DoNotParallelize]
 public sealed class CsvAndPasswordHelperTests
 {
     [TestMethod]
@@ -30,6 +32,7 @@ public sealed class CsvAndPasswordHelperTests
 
 /// <summary>Encrypted backups and the safety rules of restore, against throwaway SQLite files.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class BackupSecurityTests
 {
     private const string BackupPassword = "backup passphrase one";

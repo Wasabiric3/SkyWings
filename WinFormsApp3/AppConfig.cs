@@ -16,6 +16,8 @@ public static class AppConfig
     public static string DbPassword { get; }
     /// <summary>Optional mail server for receipt emails. Without it, emails are saved to the outbox folder instead.</summary>
     public static SkyWings.Email.SmtpSettings Smtp { get; }
+    /// <summary>Where refund request emails are read from. Reuses the mail account above unless imap.* keys say otherwise.</summary>
+    public static SkyWings.Email.ImapSettings Imap { get; }
     // The old single shared admin account. Only read once, to move it into the staff accounts table; after that
     // these settings are ignored and should be deleted from db.properties.
     private static string LegacyAdminUsername { get; set; } = "admin";
@@ -31,10 +33,34 @@ public static class AppConfig
         int port = int.TryParse(Get(props, "smtp.port", "587"), NumberStyles.None, CultureInfo.InvariantCulture, out int p) && p is > 0 and <= 65535 ? p : 587;
         bool ssl = !string.Equals(Get(props, "smtp.ssl", "true"), "false", StringComparison.OrdinalIgnoreCase);
         Smtp = new SkyWings.Email.SmtpSettings(Get(props, "smtp.host", ""), port, Get(props, "smtp.user", ""),
-            Get(props, "smtp.password", ""), Get(props, "smtp.from", ""), ssl);
+            ReadSmtpPassword(Get(props, "smtp.password", "")), Get(props, "smtp.from", ""), ssl);
+        string imapHost = Get(props, "imap.host", SkyWings.Email.ImapSettings.HostFor(Smtp.Host));
+        int imapPort = int.TryParse(Get(props, "imap.port", "993"), NumberStyles.None, CultureInfo.InvariantCulture, out int ip) && ip is > 0 and <= 65535 ? ip : 993;
+        bool imapOn = !string.Equals(Get(props, "imap.enabled", "true"), "false", StringComparison.OrdinalIgnoreCase);
+        Imap = Smtp.IsConfigured
+            ? new SkyWings.Email.ImapSettings(imapHost, imapPort, Get(props, "imap.user", Smtp.User),
+                props.ContainsKey("imap.password") ? ReadSmtpPassword(Get(props, "imap.password", "")) : Smtp.Password, imapOn)
+            : SkyWings.Email.ImapSettings.None;
         LegacyAdminUsername = Get(props, "admin.username", "admin");
         LegacyAdminPassword = Get(props, "admin.password", "");
         LegacyAdminPasswordHash = Get(props, "admin.password.hash", "");
+    }
+
+    /// <summary>The settings file that is in use (next to the exe, else the data folder), or null when there is none.</summary>
+    public static string? PropertiesPath
+        => new[] { Path.Combine(AppContext.BaseDirectory, PropsFile), Path.Combine(AppPaths.DataDirectory, PropsFile) }
+            .FirstOrDefault(File.Exists);
+
+    // A DPAPI-protected password is decrypted here. If it cannot be read (another Windows user or machine), mail falls back
+    // to the outbox folder instead of the program failing to start.
+    private static string ReadSmtpPassword(string value)
+    {
+        try { return SecretProtector.Unprotect(value); }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException)
+        {
+            AppLogger.Info("Config", "smtp.password could not be decrypted (it was protected by another Windows user or machine). Enter it again as plain text and run --protect-smtp-password.");
+            return "";
+        }
     }
 
     private static string Get(Dictionary<string, string> p, string key, string fallback)

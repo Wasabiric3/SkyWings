@@ -86,12 +86,12 @@ internal static class GridStyle
         if (key.StartsWith("RETURN · ", StringComparison.Ordinal)) key = key["RETURN · ".Length..];
         return key switch
         {
-            "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" or "SUCCESS" or "COMPLETED" => PillGood,
+            "CONFIRMED" or "ACTIVE" or "PAID" or "OPEN" or "SUCCESS" or "COMPLETED" or "DONE" => PillGood,
             "CANCELED" or "CANCELLED" or "INACTIVE" or "CLOSED" => PillBad,
             "DELAYED" or "NO-SHOW" => PillDelayed,
             "REFUNDED" or "PENDING" => PillPending,
             "CHECK-IN OPEN" or "CHECKED IN" or "BOARDING" or "IN FLIGHT" => PillUnderway,
-            "UPCOMING" => PillNeutral,
+            "UPCOMING" or "PAID · NOT USED" or "DECLINED" => PillNeutral,   // paid, but the traveller never flew
             _ => null
         };
     }

@@ -86,7 +86,7 @@ public sealed class AdminService
     public bool CancelBooking(string reference, decimal refund)
     {
         Session.Require(Permission.CancelBookings);
-        bool done = _store.CancelBooking(reference, refund);
+        bool done = _store.CancelBooking(reference, refund, Session.Username);
         Audit(done ? "BOOKING_CANCELED" : "BOOKING_CANCEL_SKIPPED", reference, done ? $"Refund PHP {refund:N2}" : "Already canceled or changed");
         return done;
     }
@@ -381,6 +381,79 @@ public sealed class AdminService
         return _store.LoadAudit(limit, search);
     }
 
+    /// <summary>Cancelled bookings and the refunds paid back (what the Refunds tab shows).</summary>
+    public RefundList LoadRefundList(string? search = null, bool includeNoRefund = false, DateTime? since = null,
+        string sort = RefundSort.Newest, string handledBy = RefundHandler.Anyone)
+    {
+        Session.Require(Permission.ViewBookings);
+        return _store.LoadRefundList(search, includeNoRefund, 1000, since, sort, handledBy);
+    }
+
+    /// <summary>A remembered choice about how a list is shown (the Refunds tab period, sort and so on). Only "view_*" settings.</summary>
+    public string GetViewSetting(string key, string fallback)
+    {
+        Session.Require(Permission.ViewBookings);
+        return key.StartsWith("view_", StringComparison.Ordinal) ? _store.GetSetting(key, fallback) : fallback;
+    }
+
+    public void SetViewSetting(string key, string value)
+    {
+        Session.Require(Permission.ViewBookings);
+        if (key.StartsWith("view_", StringComparison.Ordinal)) _store.SetSetting(key, BookingStore.Clean(value, 40));
+    }
+
+    // ------------------------------------------------------------------ refund requests
+
+    /// <summary>Writes down that a customer asked for a refund. Nothing is cancelled or refunded; staff do that from the booking.</summary>
+    public RefundRequestResult LogRefundRequest(string reference)
+    {
+        Session.Require(Permission.ViewBookings);
+        RefundRequestResult result = _store.LogRefundRequest(reference, Session.Username);
+        if (result.Ok) Audit("REFUND_REQUEST_LOGGED", reference.Trim().ToUpperInvariant());
+        return result;
+    }
+
+    public List<RefundRequestRow> LoadRefundRequests(bool includeClosed = false, DateTime? since = null)
+    {
+        Session.Require(Permission.ViewBookings);
+        return _store.LoadRefundRequests(includeClosed, 500, since);
+    }
+
+    public int CountOpenRefundRequests()
+    {
+        Session.Require(Permission.ViewBookings);
+        return _store.CountOpenRefundRequests();
+    }
+
+    /// <summary>
+    /// Closes an open request without cancelling the booking (a decline). With <paramref name="notifyCustomer"/> the customer is emailed the
+    /// reason. False when it was already closed.
+    /// </summary>
+    public bool DismissRefundRequest(long id, string reference, string note, bool notifyCustomer = false)
+    {
+        Session.Require(Permission.ViewBookings);
+        bool done = _store.DismissRefundRequest(id, Session.Username, note, notifyCustomer);
+        if (done) Audit("REFUND_REQUEST_DISMISSED", reference, (notifyCustomer ? "Customer told. " : "") + BookingStore.Clean(note, 190));
+        return done;
+    }
+
+    /// <summary>Approves a request: cancels the booking and pays the refund back to the original payment method. Needs the right to cancel bookings.</summary>
+    public RefundApprovalResult ApproveRefundRequest(long id, string reference)
+    {
+        Session.Require(Permission.CancelBookings);
+        RefundApprovalResult result = _store.ApproveRefundRequest(id, Session.Username);
+        Audit(result.Ok ? "REFUND_REQUEST_APPROVED" : "REFUND_REQUEST_APPROVAL_SKIPPED", reference,
+            result.Ok ? $"PHP {result.Refund:N2} {result.RefundReference}" : result.Message);
+        return result;
+    }
+
+    /// <summary>Records that a list was exported to a file (who and how many rows, never the contents).</summary>
+    public void RecordExport(string action, string detail)
+    {
+        Session.Require(Permission.ViewBookings);
+        Audit(action, "", detail);
+    }
+
     // ------------------------------------------------------------------ database browser
 
     public List<string> ListTables()
@@ -407,22 +480,22 @@ public sealed class AdminService
     public void InsertRow(string table, IReadOnlyDictionary<string, string?> values)
     {
         Session.Require(Permission.BrowseData);
-        _store.InsertRow(table, values);
-        Audit("DB_INSERT", table);   // values are deliberately not logged: they can be customer data
+        string added = _store.InsertRow(table, values);
+        Audit("DB_INSERT", table, added);   // secret and customer-detail columns show as (hidden)
     }
 
     public void UpdateRow(string table, IReadOnlyDictionary<string, string?> key, IReadOnlyDictionary<string, string?> values)
     {
         Session.Require(Permission.BrowseData);
-        _store.UpdateRow(table, key, values);
-        Audit("DB_UPDATE", table, KeyText(key));
+        string changes = _store.UpdateRow(table, key, values);
+        Audit("DB_UPDATE", table, KeyText(key) + " | " + changes);
     }
 
     public void DeleteRow(string table, IReadOnlyDictionary<string, string?> key)
     {
         Session.Require(Permission.BrowseData);
-        _store.DeleteRow(table, key);
-        Audit("DB_DELETE", table, KeyText(key));
+        string removed = _store.DeleteRow(table, key);
+        Audit("DB_DELETE", table, KeyText(key) + " | was " + removed);
     }
 
     public void SignedOut(string reason) => Audit("SIGN_OUT", "", reason);

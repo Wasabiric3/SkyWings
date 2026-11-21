@@ -30,6 +30,15 @@ internal static class BookingSummary
         return rows;
     }
 
+    /// <summary>
+    /// What the Payment column shows. A paid booking whose flight left without anyone checking in reads "PAID · not used", so a
+    /// no-show is not mistaken for a normal paid trip (nothing is refunded; only the label differs).
+    /// </summary>
+    public static string PaymentLabel(string paymentStatus, Controllers.TripPhase phase)
+        => phase == Controllers.TripPhase.NoShow && string.Equals(paymentStatus, AppData.PaymentPaid, StringComparison.OrdinalIgnoreCase)
+            ? AppData.PaymentPaid + " · not used"
+            : paymentStatus;
+
     /// <summary>Customers can change or cancel only confirmed bookings whose outbound flight has not left yet.</summary>
     public static bool CanModify(BookingRecord booking)
         => booking.Status == AppData.StatusConfirmed &&

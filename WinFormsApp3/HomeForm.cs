@@ -724,7 +724,7 @@ public partial class HomeForm : GlassForm
 
     private void ShowBookingLookupMessage(object? sender, EventArgs e)
     {
-        using var manage = new ManageBookingForm(_store);
+        using var manage = new ManageBookingForm(_store, _session.Username);
         manage.ShowDialog(this);
         LoadDashboard();
     }

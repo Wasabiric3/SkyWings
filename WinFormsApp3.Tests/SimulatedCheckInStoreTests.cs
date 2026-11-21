@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Store support for demo check-ins: who is still to check in, saving them, loading all check-ins, and reset.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class SimulatedCheckInStoreTests
 {
     private static readonly DateTime Now = DateTime.Today.AddHours(6);

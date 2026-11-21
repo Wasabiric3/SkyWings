@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Staff (admin only) switch the demo activity on and off, include it in reports, and reset it.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class DemoAdminTests
 {
     private const string GoodPassword = "a long enough password 1!";

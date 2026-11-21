@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>The staff Bookings tab gets every booking's live trip status in one go.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class TripStatusAdminTests
 {
     private const string GoodPassword = "a long enough password 1!";

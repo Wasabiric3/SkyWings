@@ -4,6 +4,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Staff can change a flight's aircraft, unless real booked seats would no longer exist.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class FlightAircraftAdminTests
 {
     private const string GoodPassword = "a long enough password 1!";

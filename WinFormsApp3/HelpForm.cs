@@ -33,7 +33,14 @@ internal static class HelpContent
         new("Change a seat or cancel",
             "Choose \"Manage booking\" on the home screen. Enter the booking reference from the receipt.\n\n" +
             "A confirmed booking can have its seats changed or be cancelled. Once the flight has departed, the booking can no longer be changed.\n\n" +
-            "Refunds depend on how far away the flight is. See the \"Fares & policies\" tab."),
+            "Change flight moves the outbound leg to another flight or date on the same route, in the same cabin. The traveller pays any increase in fare plus tax, " +
+            $"and a change fee of PHP {FlightChangeRules.FeePerPassenger:N0} per traveller; a cheaper flight is not refunded. New seats are assigned automatically " +
+            "(use Change seats to pick others), and the old seats are freed. It is not possible after anyone has checked in, and a round trip's outbound flight must still leave before the return.\n\n" +
+            "Refunds depend on how far away the flight is. See the \"Fares & policies\" tab. A cancelled booking shows the refund reference (RFD-...) for the money returned to the original payment method, and the customer is emailed the amount and that reference.\n\n" +
+            "When a customer asks for a refund (the receipt and boarding pass emails have a \"Request cancellation / refund\" button that writes to the SkyWings address), " +
+            "SkyWings reads that mailbox about once a minute and adds the request to the Refunds tab (Refund requests view) with the customer's message; press Refresh there to check right away. " +
+            "It warns you when the email came from an address that is not the one on the booking. You can also log a request by hand with \"Log refund request\" in Manage booking, or \"Log request\" in the Refunds tab. A request only writes the request down: the booking stays active, and the tab button shows how many requests are waiting. " +
+            "Choose Approve to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left."),
 
         new("Waitlist for a sold-out flight",
             "When a cabin is sold out, select the flight on the home screen and choose \"Join waitlist\". Enter the traveller's name, email and seats needed. " +

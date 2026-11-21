@@ -15,20 +15,39 @@ public sealed partial class BookingStore
     /// Cancels a confirmed booking and records the refund. Returns false when the booking is missing or is no longer
     /// confirmed (for example it was already canceled from another screen), so a refund is never recorded twice.
     /// </summary>
-    public bool CancelBooking(string reference, decimal refundAmount)
+    public bool CancelBooking(string reference, decimal refundAmount, string issuedBy = "customer")
     {
         var freed = new List<(string FlightNo, DateTime Date)>();
         bool done;
+        int closedRequests = 0;
         lock (_lock)
         {
             try
             {
                 using var con = OpenConnection();
-                done = Exec(con,
-                    "UPDATE bookings SET status = 'CANCELED', refund_amount = @refund, " +
-                    "payment_status = CASE WHEN @refund > 0 THEN 'REFUNDED' ELSE payment_status END " +
-                    "WHERE reference = @ref AND status = 'CONFIRMED'",
-                    ("@refund", refundAmount), ("@ref", reference)) > 0;
+                using (var tx = con.BeginTransaction())
+                {
+                    done = Exec(con, tx,
+                        "UPDATE bookings SET status = 'CANCELED', refund_amount = @refund, " +
+                        "payment_status = CASE WHEN @refund > 0 THEN 'REFUNDED' ELSE payment_status END " +
+                        "WHERE reference = @ref AND status = 'CONFIRMED'",
+                        ("@refund", refundAmount), ("@ref", reference)) > 0;
+                    // The money going back is its own record (same table as the payment), so it can be shown and audited.
+                    if (done && refundAmount > 0)
+                        Exec(con, tx,
+                            "INSERT INTO booking_payments (booking_ref,amount,method,account_masked,status,transaction_ref,detail_message,created_at) " +
+                            "SELECT reference, @refund, payment_method, masked_account, '" + RefundStatus + "', @txn, @detail, @now FROM bookings WHERE reference = @ref",
+                            ("@refund", refundAmount), ("@txn", NewRefundReference()), ("@detail", "Cancellation refund by " + issuedBy),
+                            ("@now", DateTime.Now), ("@ref", reference));
+                    // A refund request waiting for this booking is answered by the cancellation itself.
+                    if (done)
+                        closedRequests = Exec(con, tx,
+                            "UPDATE refund_requests SET status = 'DONE', closed_at = @now, closed_by = @by WHERE booking_ref = @ref AND status = 'OPEN'",
+                            ("@now", DateTime.Now), ("@by", Clean(issuedBy, 80)), ("@ref", reference));
+                    tx.Commit();
+                }
+                if (closedRequests > 0)
+                    WriteAuditCore(con, issuedBy, "SYSTEM", "REFUND_REQUEST_CLOSED", reference, "Closed because the booking was cancelled");
                 if (done)
                 {
                     using var cmd = Cmd(con,
@@ -50,9 +69,48 @@ public sealed partial class BookingStore
             try { PromoteWaitlist(flightNo, date, DateTime.Now); }
             catch (Exception ex) { LogError(ex); }
         }
+        if (done)
+        {
+            // Outside the lock: the handler emails the customer and must never affect the cancellation.
+            try { BookingCanceled?.Invoke(reference); }
+            catch (Exception ex) { LogError(ex); }
+        }
         return done;
     }
 
+    /// <summary>Status of a <c>booking_payments</c> row that records money paid back to the customer.</summary>
+    public const string RefundStatus = "REFUND";
+
+    private static string NewRefundReference() => "RFD-" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
+
+    /// <summary>The newest refund issued for the booking, or null when there is none (not canceled, or nothing to return).</summary>
+    public RefundRecord? LoadRefund(string reference) => LoadRefunds(reference).FirstOrDefault();
+
+    /// <summary>Every refund recorded for the booking, newest first. A booking is canceled once, so normally zero or one.</summary>
+    public List<RefundRecord> LoadRefunds(string reference)
+    {
+        lock (_lock)
+        {
+            var list = new List<RefundRecord>();
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = Cmd(con,
+                    "SELECT amount, method, account_masked, transaction_ref, detail_message, created_at FROM booking_payments " +
+                    "WHERE booking_ref = @ref AND status = @status ORDER BY id DESC", null, ("@ref", reference), ("@status", RefundStatus));
+                using var rs = cmd.ExecuteReader();
+                while (rs.Read())
+                    list.Add(new RefundRecord(Money(rs, "amount"), Str(rs, "method"), Str(rs, "account_masked"),
+                        StrOrNull(rs, "transaction_ref") ?? "", Dt(rs, "created_at"), StrOrNull(rs, "detail_message") ?? ""));
+            }
+            catch (SqliteException e)
+            {
+                LogError(e);
+                throw new IOException("Unable to read the refund: " + e.Message, e);
+            }
+            return list;
+        }
+    }
     /// <summary>
     /// Moves one passenger to another seat on the outbound or return leg. Returns false when the seat is taken, held by
     /// someone else, outside the booked cabin, or the booking is no longer confirmed.

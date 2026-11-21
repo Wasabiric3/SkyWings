@@ -5,6 +5,7 @@ namespace SkyWings.Tests;
 
 /// <summary>Integrity of the built-in flight schedule: numbers, times, durations and prices.</summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class FlightScheduleTests
 {
     private static IEnumerable<(Flight Flight, bool Domestic)> Outbound()
