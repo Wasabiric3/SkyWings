@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: data-location-question
+expected_outcome: |
+  The answer gives the database location (skywings.db in %LocalAppData%\SkyWings), the logs location
+  (%LocalAppData%\SkyWings\logs\skywings.log), the SKYWINGS_DATA_DIR environment variable to use another folder,
+  and dotnet test SkyWings.slnx as the test command.

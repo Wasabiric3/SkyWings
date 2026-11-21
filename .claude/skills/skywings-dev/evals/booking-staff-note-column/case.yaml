@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: booking-staff-note-column
+expected_outcome: |
+  A staff note column is added to bookings through EnsureColumn with a NOT NULL DEFAULT, BookingStore gets
+  lock-guarded, parameterised methods to save and read the note, tests cover saving, reading and upgrading an
+  old database, and the build and tests are run with the results reported.

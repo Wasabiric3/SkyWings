@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: expiring-holds-count
+expected_outcome: |
+  A BookingStore method counts ACTIVE seat holds on a flight whose expires_at falls between now and now plus N
+  minutes, using DateTime.Now (local clock, same as hold writes), parameterised SQL and the store lock, with
+  MSTest tests on a temp database, and the build and tests are run with the results reported.
