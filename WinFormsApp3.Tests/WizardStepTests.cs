@@ -126,4 +126,102 @@ public sealed class WizardStepTests
         foreach (string name in new[] { "_nameRow", "_idRow", "_birthdayRow", "_contactRow", "_addressRow", "_emailRow" })
             Assert.IsNotNull(All(wizard.Field<FieldRow>(name)).OfType<RoundedInput>().SingleOrDefault(), name + " is a rounded field");
     });
+
+    // ------------------------------------------------------------------ step 3: class and extras
+
+    private static void ClickCard(ChoiceCard card)
+        => typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(card, new object[] { EventArgs.Empty });
+
+    [TestMethod]
+    public void Options_ClickingACard_SelectsThatClass_AndRefillsBaggageAndMeal() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.GoTo(2);
+        var cards = wizard.Field<ChoiceCard[]>("_classCards");
+        Assert.AreEqual(4, cards.Length);
+        int index = Array.FindIndex(cards, c => c.Enabled && !c.Selected);
+        Assert.IsGreaterThanOrEqualTo(0, index, "another cabin is offered");
+        ClickCard(cards[index]);
+        string className = AppData.ClassNames[index];
+        Assert.AreEqual(className, wizard.Field<string>("_selectedClass"));
+        Assert.IsTrue(cards[index].Selected);
+        CollectionAssert.AreEqual(AppData.BaggageOptionsForClass(className).ToArray(), wizard.Field<ComboBox>("_baggage").Items.Cast<object>().Select(o => o.ToString()).ToArray());
+    });
+
+    [TestMethod]
+    public void Options_ACabinTheAircraftDoesNotHave_IsDisabled_WithNotOfferedText() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        // The A320 has only Business and Economy cabins.
+        var flight = (Flight)wizard.Field<ComboBox>("_flight").SelectedItem!;
+        wizard.Store.SetFlightAircraft(flight.FlightNo, "A320");
+        wizard.Call("SyncSession");
+        var cards = wizard.Field<ChoiceCard[]>("_classCards");
+        for (int i = 0; i < cards.Length; i++)
+        {
+            bool offered = AppData.ClassNames[i] is "Business" or "Economy";
+            Assert.AreEqual(offered, cards[i].Enabled, AppData.ClassNames[i]);
+            if (!offered)
+            {
+                Assert.AreEqual("Not offered on this aircraft", cards[i].Subtitle);
+                Assert.IsFalse(cards[i].Selected, "a cabin that is not offered is never the selected one");
+            }
+        }
+    });
+
+    [TestMethod]
+    public void Options_FieldsAreRounded_AndAddOnsAreRoundedCheckBoxes() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        foreach (string name in new[] { "_baggageRow", "_mealRow", "_promoRow" })
+            Assert.IsNotNull(All(wizard.Field<FieldRow>(name)).OfType<RoundedInput>().SingleOrDefault(), name + " is a rounded field");
+        var boxes = wizard.Field<List<CheckBox>>("_addonBoxes");
+        Assert.IsNotEmpty(boxes);
+        Assert.IsTrue(boxes.All(b => b is GlassCheckBox));
+    });
+
+    [TestMethod]
+    public void Options_ABadPromoCode_ShowsAMessage_WithARedOutline() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.GoTo(2);
+        wizard.Field<TextBox>("_promoCode").Text = "NOT-A-CODE";
+        All(wizard.Form).OfType<GlassButton>().Single(b => b.Text == "Apply").PerformClick();
+        var row = wizard.Field<FieldRow>("_promoRow");
+        Assert.IsFalse(string.IsNullOrEmpty(row.Message));
+        Assert.IsTrue(All(row).OfType<RoundedInput>().Single().HasError);
+    });
+
+    [TestMethod]
+    public void Options_TheCardsShowThePrice_AndTheHintSaysItIsPerTraveller() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.GoTo(2);
+        var cards = wizard.Field<ChoiceCard[]>("_classCards");
+        for (int i = 0; i < cards.Length; i++)
+        {
+            if (!cards[i].Enabled) continue;
+            StringAssert.StartsWith(cards[i].Subtitle, "PHP ");
+            Assert.IsFalse(cards[i].Detail.EndsWith("…"), "the detail is short enough for the card");
+            Assert.IsLessThanOrEqualTo(24, cards[i].Detail.Length, $"{AppData.ClassNames[i]}: \"{cards[i].Detail}\" would be cut off");
+        }
+        StringAssert.Contains(wizard.Field<Label>("_pageHint").Text, "per traveller");
+    });
+
+    [TestMethod]
+    public void Options_TheCabinCards_LineUpWithTheCardBelow() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.GoTo(2);
+        var cards = wizard.Field<ChoiceCard[]>("_classCards");
+        GlassCard below = All(wizard.Form).OfType<GlassCard>().First(c => c is not PriceSummaryPanel && c.Visible && c.Controls.Count > 0);
+        // The white card draws its border ShadowSize inside its bounds; a cabin card draws 2px inside its own.
+        int cardLeft = wizard.InForm(below).Left + Gfx.S(below, below.ShadowSize);
+        Assert.AreEqual(cardLeft, wizard.InForm(cards[0]).Left + 2, 1, "left edges line up");
+        int cardRight = wizard.InForm(below).Right - Gfx.S(below, below.ShadowSize);
+        Assert.AreEqual(cardRight, wizard.InForm(cards[3]).Right - 3, 2, "right edges line up");
+    });
 }

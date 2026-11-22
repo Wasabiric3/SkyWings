@@ -355,7 +355,6 @@ public sealed class FieldRow : Control, ISelfStyled
 /// <summary>Selectable card used for cabin classes.</summary>
 public sealed class ChoiceCard : Control, ISelfStyled
 {
-    private static readonly Font TitleFont = new(Theme.Body, FontStyle.Bold);
 
     private bool _hover;
     private bool _selected;
@@ -367,7 +366,17 @@ public sealed class ChoiceCard : Control, ISelfStyled
                  ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.StandardClick, true);
         TabStop = true;
         Cursor = Cursors.Hand;
-        Height = Gfx.S(this, 92);
+        Height = Gfx.S(this, 118);
+    }
+
+    /// <summary>The circle that holds the tick, at the top right of the card.</summary>
+    internal Rectangle TickBounds
+    {
+        get
+        {
+            int d = Gfx.S(this, 22);
+            return new Rectangle(Width - 3 - Gfx.S(this, 16) - d, 2 + Gfx.S(this, 14), d, d);
+        }
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -406,27 +415,39 @@ public sealed class ChoiceCard : Control, ISelfStyled
         Gfx.HighQuality(g);
         var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
         using var path = Gfx.RoundedRect(bounds, Gfx.S(this, 14));
-        Color fill = !Enabled ? Theme.DisabledBack : _selected ? Theme.SoftFill : _hover ? Theme.BgMuted : Theme.BgCard;
+        Color fill = !Enabled ? Theme.DisabledBack : _selected ? Theme.BrandSoft : _hover ? Theme.BgMuted : Theme.BgCard;
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
-        using (var pen = new Pen(_selected && Enabled ? Theme.Primary : Theme.Border, _selected && Enabled ? 2f : 1f)) g.DrawPath(pen, path);
+        using (var pen = new Pen(_selected && Enabled ? Theme.Brand : Theme.Border, _selected && Enabled ? 2f : 1f)) g.DrawPath(pen, path);
         if (Focused && ShowFocusCues)
         {
-            using var ring = new Pen(Color.FromArgb(150, Theme.Primary), 1f) { DashStyle = DashStyle.Dot };
+            using var ring = new Pen(Color.FromArgb(150, Theme.Brand), 1f) { DashStyle = DashStyle.Dot };
             g.DrawPath(ring, Gfx.RoundedRect(RectangleF.Inflate(bounds, -4, -4), Gfx.S(this, 10)));
         }
 
-        // Selection is shown by the border, tint and accent title, so the full width stays available for text.
-        float pad = Gfx.S(this, 12f);
-        var titleFont = TitleFont;
-        using var titleBrush = new SolidBrush(!Enabled ? Theme.DisabledText : _selected ? Theme.Accent : Theme.TextPrimary);
-        using var accentBrush = new SolidBrush(Enabled ? Theme.Accent : Theme.DisabledText);
-        using var mutedBrush = new SolidBrush(Enabled ? Theme.TextSecondary : Theme.DisabledText);
-        using var near = Gfx.Format(StringAlignment.Near, StringAlignment.Near);
-        float lineH = Gfx.S(this, 24f);
-        float y = bounds.Top + Gfx.S(this, 10f);
-        float width = bounds.Width - 2 * pad;
-        g.DrawString(Title, titleFont, titleBrush, new RectangleF(bounds.Left + pad, y, width, lineH), near);
-        g.DrawString(Subtitle, Theme.Small, accentBrush, new RectangleF(bounds.Left + pad, y + lineH, width, lineH), near);
-        g.DrawString(Detail, Theme.Small, mutedBrush, new RectangleF(bounds.Left + pad, y + lineH * 2, width, lineH), near);
+        // The class name in capitals, the price large, the detail small; a tick circle marks the chosen card.
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        int pad = Gfx.S(this, 16);
+        int x = (int)bounds.Left + pad;
+        int width = (int)bounds.Width - 2 * pad;
+        int y = (int)bounds.Top + Gfx.S(this, 14);
+        Color strong = Enabled ? Theme.Brand : Theme.DisabledText;
+        Color muted = Enabled ? Theme.TextSecondary : Theme.DisabledText;
+        TextRenderer.DrawText(g, Title.ToUpperInvariant(), CapsFont, new Rectangle(x, y, width - Gfx.S(this, 30), Gfx.S(this, 22)), strong, flags);
+        // A cabin that is not offered says so in small muted text instead of a price.
+        TextRenderer.DrawText(g, Subtitle, Enabled ? PriceFont : Theme.Small, new Rectangle(x, y + Gfx.S(this, 28), width, Gfx.S(this, 32)),
+            Enabled ? strong : muted, flags);
+        TextRenderer.DrawText(g, Detail, Theme.Small, new Rectangle(x, y + Gfx.S(this, 64), width, Gfx.S(this, 22)), muted, flags);
+
+        if (_selected && Enabled)
+        {
+            Rectangle tick = TickBounds;
+            using (var circle = new SolidBrush(Theme.Brand)) g.FillEllipse(circle, tick);
+            using var mark = new Pen(Color.White, Gfx.S(this, 2f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            float s = tick.Width / 22f;
+            g.DrawLines(mark, new[] { new PointF(tick.X + 6 * s, tick.Y + 11.5f * s), new PointF(tick.X + 9.5f * s, tick.Y + 15 * s), new PointF(tick.X + 16 * s, tick.Y + 7.5f * s) });
+        }
     }
+
+    private static readonly Font CapsFont = new(Theme.Small, FontStyle.Bold);
+    private static readonly Font PriceFont = new(Theme.Subtitle, FontStyle.Bold);
 }

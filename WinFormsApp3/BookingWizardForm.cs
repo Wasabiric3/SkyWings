@@ -20,14 +20,14 @@ public sealed class BookingWizardForm : GlassForm
     {
         "Choose your destination, travel date, and preferred flight.",
         "Enter the traveller details exactly as shown on a valid identification document.",
-        "Select the level of comfort and travel add-ons for your flight.",
+        "Select the level of comfort and travel add-ons for your flight. Prices are per traveller.",
         // These two state rules (the seat hold, the demo payment), so they keep their wording.
         "Select one seat per traveller. Seats are held for 10 minutes once you continue.",
         "This is a demo payment. Never enter real card details.",
         "Your booking is confirmed. Keep the receipt for your records."
     };
     /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
-    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers };
+    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions };
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -548,11 +548,12 @@ public sealed class BookingWizardForm : GlassForm
     private Panel BuildOptionsPage()
     {
         var page = NewPage();
-        var cards = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(100), ColumnCount = 4, RowCount = 1 };
+        // Padded so the cards line up with the white card below (which draws its border a few pixels inside its bounds).
+        var cards = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(134), ColumnCount = 4, RowCount = 1, Padding = new Padding(D(8), 0, D(8), 0) };
         for (int i = 0; i < 4; i++)
         {
             cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            var card = new ChoiceCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, i < 3 ? D(10) : 0, D(8)) };
+            var card = new ChoiceCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, i < 3 ? D(14) : 0, D(14)) };
             card.Title = AppData.ClassNames[i];
             card.Detail = ClassDetails[i];
             card.AccessibleName = $"{AppData.ClassNames[i]} class";
@@ -563,28 +564,28 @@ public sealed class BookingWizardForm : GlassForm
         }
         cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        _baggageRow = new FieldRow("BAGGAGE", _baggage);
-        _mealRow = new FieldRow("MEAL", _meal);
+        _baggageRow = new FieldRow("BAGGAGE ALLOWANCE", _baggage, rounded: true);
+        _mealRow = new FieldRow("MEAL PREFERENCE", _meal, rounded: true);
         _baggage.SelectedIndexChanged += (_, _) => SyncSession();
         _meal.SelectedIndexChanged += (_, _) => SyncSession();
 
         // Add-ons are plain checkboxes in one row: there are only a couple, so a list box wastes space.
-        var addons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = D(36), WrapContents = false, Padding = new Padding(0, D(4), 0, 0) };
+        var addons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = D(48), WrapContents = false, Padding = new Padding(0, D(8), 0, 0) };
         var addonsTitle = new Label { Text = "ADD-ONS PER TRAVELLER", Font = new Font(Theme.Small, FontStyle.Bold),
-            ForeColor = Theme.TextSecondary, AutoSize = true, Margin = new Padding(0, D(6), D(16), 0) };
+            ForeColor = Theme.TextSecondary, AutoSize = true, Margin = new Padding(0, D(4), D(24), 0) };
         addons.Controls.Add(addonsTitle);
         foreach (string addon in AppData.OptionalAddonNames)
         {
             int index = AppData.GetAddonIndex(addon);
-            string price = index >= 0 ? $" (+PHP {AppData.AddonPrices[index]:N0})" : "";
-            var box = new CheckBox { Text = addon + price, Tag = addon, AutoSize = true, Margin = new Padding(0, 0, D(18), 0) };
+            string price = index >= 0 ? $"  + PHP {AppData.AddonPrices[index]:N0}" : "";
+            var box = new GlassCheckBox { Text = addon + price, Tag = addon, AutoSize = true, Margin = new Padding(0, 0, D(32), 0) };
             box.CheckedChanged += (_, _) => SyncSession();
             _addonBoxes.Add(box);
             addons.Controls.Add(box);
         }
 
-        _promoRow = new FieldRow("PROMO CODE", _promoCode);
-        var apply = new GlassButton { Text = "Apply", Style = GlassButtonStyle.Secondary, Dock = DockStyle.Bottom };
+        _promoRow = new FieldRow("PROMO CODE", _promoCode, rounded: true);
+        var apply = new GlassButton { Text = "Apply", Pill = true, Dock = DockStyle.Bottom, Height = D(44) };
         apply.Click += (_, _) => ApplyPromoCode();
         var applyHost = new Panel { Padding = new Padding(0, 0, 0, D(24)) };
         applyHost.Controls.Add(apply);
@@ -601,7 +602,16 @@ public sealed class BookingWizardForm : GlassForm
         promo.Controls.Add(applyHost, 1, 0);
         promo.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        AddStack(page, cards, Row(_baggageRow, _mealRow), addons, promo);
+        // The four cabin cards sit on the page; the rest of the options are in one white card below them.
+        var stack = NewPage();
+        AddStack(stack, Row(_baggageRow, _mealRow), addons, promo);
+        stack.Dock = DockStyle.Fill;
+        stack.Visible = true;
+        var optionsCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16 };
+        optionsCard.Controls.Add(stack);
+        page.AutoScroll = false;
+        page.Controls.Add(optionsCard);
+        page.Controls.Add(cards);
         return page;
     }
 
@@ -644,8 +654,9 @@ public sealed class BookingWizardForm : GlassForm
             _classCards[i].Subtitle = !offered
                 ? "Not offered on this aircraft"
                 : perTraveller > 0
-                    ? $"PHP {perTraveller * AppData.ClassMultipliers[i]:N0} per traveller"
+                    ? $"PHP {perTraveller * AppData.ClassMultipliers[i]:N0}"
                     : $"×{AppData.ClassMultipliers[i]:0.0} base fare";
+            _classCards[i].Detail = offered ? ClassDetails[i] : "";
             _classCards[i].Invalidate();
         }
     }
