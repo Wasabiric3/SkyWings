@@ -18,7 +18,7 @@ public class ThemeTests
         AssertRgb(Theme.SoftFill, 0xDAECE1, nameof(Theme.SoftFill));
         AssertRgb(Theme.TextPrimary, 0x171C1A, nameof(Theme.TextPrimary));
         AssertRgb(Theme.TextSecondary, 0x77857E, nameof(Theme.TextSecondary));
-        AssertRgb(Theme.BgMain, 0xF3F7F4, nameof(Theme.BgMain));
+        AssertRgb(Theme.BgMain, 0xF6F5F0, nameof(Theme.BgMain));   // the wizard's warm page colour is now the app's page colour
         AssertRgb(Theme.Border, 0xE1E8E4, nameof(Theme.Border));
         AssertRgb(Theme.BorderLight, 0xDFE7E1, nameof(Theme.BorderLight));
     }
@@ -40,6 +40,26 @@ public class ThemeTests
             Assert.AreNotEqual(Color.Transparent.ToArgb(), c.BackColor.ToArgb(), $"{c.GetType().Name} is transparent");
         Assert.AreEqual(form.BackColor.ToArgb(), panel.BackColor.ToArgb());
         Assert.AreEqual(panel.BackColor.ToArgb(), label.BackColor.ToArgb());
+    }
+
+    [TestMethod]
+    public void Apply_FormAndTabPage_GetThePageColour()
+    {
+        using var form = new Form();
+        var page = new TabPage();
+        form.Controls.Add(new TabControl { TabPages = { page } });
+
+        Theme.Apply(form);
+
+        Assert.AreEqual(Theme.PageBg.ToArgb(), form.BackColor.ToArgb());
+        Assert.AreEqual(Theme.PageBg.ToArgb(), page.BackColor.ToArgb());
+    }
+
+    [TestMethod]
+    public void GlassForm_DefaultsToThePageColour()
+    {
+        using var form = new GlassForm();
+        Assert.AreEqual(Theme.PageBg.ToArgb(), form.BackColor.ToArgb());
     }
 
     [TestMethod]

@@ -39,7 +39,7 @@ public class GlassForm : Form
     public GlassForm()
     {
         DoubleBuffered = true;
-        BackColor = Theme.BgMain;
+        BackColor = Theme.PageBg;
     }
 
     protected override void OnHandleCreated(EventArgs e)
