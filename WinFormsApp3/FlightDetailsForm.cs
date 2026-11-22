@@ -28,11 +28,7 @@ public sealed class FlightDetailsForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         Padding = new Padding(D(24), D(12), D(24), D(16));
 
-        var heading = new Label
-        {
-            Text = title, Font = Theme.Title, ForeColor = Theme.TextPrimary, AutoSize = false,
-            Height = D(48), Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleLeft
-        };
+        var heading = new PageHeader { Title = title };
 
         GridStyle.Apply(_grid);
         _grid.Dock = DockStyle.Fill;

@@ -14,6 +14,8 @@ public sealed class ManageBookingForm : GlassForm
     private readonly FieldRow _referenceRow;
     private readonly Panel _lookupPage = new() { Dock = DockStyle.Fill };
     private readonly Panel _detailsPage = new() { Dock = DockStyle.Fill, Visible = false };
+    private const string LookupHint = "Enter the booking reference from your receipt.";
+    private readonly PageHeader _header = new() { Title = "Manage booking", Hint = LookupHint };
     private readonly Label _title = new();
     private readonly Label _banner = new();
     private readonly Label _policy = new();
@@ -52,6 +54,7 @@ public sealed class ManageBookingForm : GlassForm
         card.Controls.Add(_lookupPage);
         card.Controls.Add(_detailsPage);
         Controls.Add(card);
+        Controls.Add(_header);   // added last, so it docks above the card
 
         Theme.Apply(this);
         StyleLabels();
@@ -59,12 +62,6 @@ public sealed class ManageBookingForm : GlassForm
 
     private void BuildLookupPage(Func<int, int> D)
     {
-        var heading = new Label { Text = "Find your booking", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleCenter };
-        var hint = new Label
-        {
-            Text = "Enter the booking reference from your receipt.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.TopCenter
-        };
         _find.Height = D(44);
         _find.Click += (_, _) => Find();
         var findHost = new Panel { Height = D(64), Padding = new Padding(0, D(12), 0, 0) };
@@ -76,7 +73,7 @@ public sealed class ManageBookingForm : GlassForm
 
         // The lookup is one field, so it sits in the middle of the card instead of the left.
         var column = new Panel();
-        column.Height = Layouts.Stack(column, heading, hint, _referenceRow, findHost);
+        column.Height = Layouts.Stack(column, _referenceRow, findHost);
         Layouts.CenterColumn(_lookupPage, column, D(480), D(30));
     }
 
@@ -162,6 +159,7 @@ public sealed class ManageBookingForm : GlassForm
     {
         _controller.Clear();
         _detailsPage.Visible = false;
+        _header.Hint = LookupHint;
         _lookupPage.Visible = true;
         AcceptButton = _find;
         _reference.Focus();
@@ -187,7 +185,7 @@ public sealed class ManageBookingForm : GlassForm
             BannerKind.Canceled => Theme.DangerRed,
             BannerKind.Departed => Theme.TextSecondary,
             BannerKind.NoShow => Theme.Warning,
-            _ => Theme.Accent
+            _ => Theme.Brand
         };
         _banner.ForeColor = bannerColor;
         _banner.BackColor = Color.FromArgb(28, bannerColor);   // tinted strip so the state reads at a glance
@@ -206,6 +204,7 @@ public sealed class ManageBookingForm : GlassForm
         RefreshEmailBar();
         _lookupPage.Visible = false;
         _detailsPage.Visible = true;
+        _header.Hint = "View the receipt, change seats or the flight, or cancel the booking.";
         AcceptButton = null;
     }
 

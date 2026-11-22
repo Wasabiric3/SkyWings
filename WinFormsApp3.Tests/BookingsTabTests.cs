@@ -77,7 +77,7 @@ public sealed class BookingsTabTests
 
     private static void ShowDate(AdminForm form, DateTime date)
     {
-        Field<DateTimePicker>(form, "_bookingDate").Value = date;
+        Field<DateField>(form, "_bookingDate").Value = date;
         Application.DoEvents();
     }
 
@@ -212,7 +212,7 @@ public sealed class BookingsTabTests
 
         ChooseView(form, "Booked in the last 7 days");
         CollectionAssert.AreEqual(new[] { "SKY-TABTEST000051", "SKY-TABTEST000052", "SKY-TABTEST000053" }, Refs(form));
-        Assert.IsFalse(Field<DateTimePicker>(form, "_bookingDate").Enabled, "the flight date does not apply to this view");
+        Assert.IsFalse(Field<DateField>(form, "_bookingDate").Enabled, "the flight date does not apply to this view");
         StringAssert.Contains(Field<Label>(form, "_bookingCount").Text, "last 7 days");
 
         ChooseView(form, "Booked in the last 24 hours");
@@ -221,7 +221,7 @@ public sealed class BookingsTabTests
         Assert.AreEqual(4, Refs(form).Length);
 
         ChooseView(form, "By flight date");
-        Assert.IsTrue(Field<DateTimePicker>(form, "_bookingDate").Enabled);
+        Assert.IsTrue(Field<DateField>(form, "_bookingDate").Enabled);
     });
 
     [TestMethod]
@@ -304,7 +304,7 @@ public sealed class BookingsTabTests
         // Only what the Bookings tab shows (the other tabs have buttons with the same names, hidden).
         var shownButtons = All(form).OfType<GlassButton>().Where(b => b.Visible && b.Text is "Details" or "Refresh" or "Export CSV" or "Cancel booking").ToList();
         Assert.IsGreaterThanOrEqualTo(3, shownButtons.Count);
-        foreach (Control control in new Control[] { Field<ComboBox>(form, "_bookingView"), Field<DateTimePicker>(form, "_bookingDate"),
+        foreach (Control control in new Control[] { Field<ComboBox>(form, "_bookingView"), Field<DateField>(form, "_bookingDate"),
                      Field<ComboBox>(form, "_bookingStatus"), Field<TextBox>(form, "_bookingSearch") }.Concat(shownButtons))
         {
             Assert.IsTrue(control.Visible, control.GetType().Name + " is showing");

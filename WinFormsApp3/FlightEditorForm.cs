@@ -34,7 +34,6 @@ public sealed class FlightEditorForm : GlassForm
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(560), D(550));
 
         _flightNo.Text = flight?.FlightNo ?? "";
         _flightNo.ReadOnly = flight is not null;
@@ -73,20 +72,15 @@ public sealed class FlightEditorForm : GlassForm
 
         var save = new GlassButton { Text = "Save flight" };
         save.Click += (_, _) => { if (ValidateInput()) { DialogResult = DialogResult.OK; Close(); } };
-        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(save);
-        buttons.Controls.Add(cancel);
-
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, Layouts.Row(D(14), _flightNoRow, typeRow), Layouts.Row(D(14), _originRow, _destinationRow),
-            Layouts.Row(D(14), _priceRow, _capacityRow), _aircraftRow, departureRow, activeHost, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
-
+        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary };
+        DialogFrame.Create(this, 560, flight is null ? "Add a flight" : $"Edit {flight.FlightNo}",
+            flight is null ? "Enter the route, base fare, aircraft and departure time." : "Change the fare, aircraft, capacity, departure time or availability.",
+            new Control[]
+            {
+                Layouts.Row(D(14), _flightNoRow, typeRow), Layouts.Row(D(14), _originRow, _destinationRow),
+                Layouts.Row(D(14), _priceRow, _capacityRow), _aircraftRow, departureRow, activeHost
+            }, save, cancel);
         Theme.Apply(this);
-        AcceptButton = save;
-        CancelButton = cancel;
     }
 
     private AircraftChoice SelectedAircraft => (AircraftChoice)_aircraft.SelectedItem!;

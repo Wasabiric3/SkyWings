@@ -45,7 +45,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         set { _title = value; AccessibleName = value; Invalidate(); }
     }
 
-    /// <summary>The colour of the header band. <see cref="Theme.Primary"/> keeps other screens as they were; the booking wizard uses <see cref="Theme.Brand"/>.</summary>
+    /// <summary>The colour of the header band. The deep green (<see cref="Theme.Brand"/>) everywhere now.</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Color BandColor
     {
@@ -53,7 +53,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         set { _bandColor = value; Invalidate(); }
     }
 
-    private Color _bandColor = Theme.Primary;
+    private Color _bandColor = Theme.Brand;
 
     /// <summary>The amount shown in the light-green "Total paid" band under the details, or null for no band.</summary>
     internal string? TotalPaid { get; private set; }
@@ -223,11 +223,11 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         {
             bool done = _copyLabel == CopyDone;
             using var pill = Gfx.RoundedRect(_copyRect, Gfx.S(this, 9f));
-            using (var pillFill = new SolidBrush(done ? Theme.SoftFill : _copyHover ? Theme.BgMuted : Color.White))
+            using (var pillFill = new SolidBrush(done ? Theme.BrandSoft : _copyHover ? Theme.BgMuted : Color.White))
                 g.FillPath(pillFill, pill);
-            using (var pillBorder = new Pen(_copyHover || done ? Theme.Primary : Theme.Border, 1f))
+            using (var pillBorder = new Pen(_copyHover || done ? Theme.Brand : Theme.Border, 1f))
                 g.DrawPath(pillBorder, pill);
-            using var pillText = new SolidBrush(Theme.Accent);
+            using var pillText = new SolidBrush(Theme.Brand);
             using var centered = Gfx.Format(StringAlignment.Center);
             g.DrawString(_copyLabel, PillFont, pillText, _copyRect, centered);
         }

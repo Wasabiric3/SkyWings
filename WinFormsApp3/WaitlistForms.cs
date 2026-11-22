@@ -24,13 +24,6 @@ public sealed class WaitlistEntryForm : GlassForm
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(620), D(640));
-
-        var title = new Label
-        {
-            Text = $"{entry.FlightNo} · {entry.FlightDate:ddd, d MMM yyyy} · {entry.ClassName}", Font = Theme.Header,
-            AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft
-        };
         var code = new TextBox { Text = entry.BookingReference, ReadOnly = true };
         var codeRow = new FieldRow("WAITLIST CODE  (SELECT IT, OR USE COPY CODE)", code);
 
@@ -53,26 +46,22 @@ public sealed class WaitlistEntryForm : GlassForm
         };
         var queue = new TextBox
         {
-            Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = D(190), Font = Theme.Small,
+            Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, BorderStyle = BorderStyle.None,
+            BackColor = Theme.BgCard, Font = Theme.Small,
             Text = string.Join(Environment.NewLine, cabinQueue.Select(e =>
                 $"{(e.BookingReference == entry.BookingReference ? "▶" : "  ")} " +
                 $"{(e.Status == BookingStore.WaitlistWaiting ? "#" + e.Position.ToString(CultureInfo.InvariantCulture) : "Offered"),-8}" +
                 $"{e.PassengerName}  ×{e.SeatsWanted}   joined {e.AddedAt.ToString("h:mm tt", CultureInfo.InvariantCulture)}"))
         };
 
-        _copy.Click += (_, _) => CopyCode();
-        var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(close);
-        buttons.Controls.Add(_copy);
+        var queueHost = new Panel { Height = D(190), Padding = new Padding(D(1)), BackColor = Theme.Border };   // a thin outline like the other fields
+        queueHost.Controls.Add(queue);
 
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, codeRow, details, queueTitle, queue, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
+        _copy.Click += (_, _) => CopyCode();
+        var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary };
+        DialogFrame.Create(this, 620, $"{entry.FlightNo} · {entry.FlightDate:ddd, d MMM yyyy} · {entry.ClassName}", "",
+            new Control[] { codeRow, details, queueTitle, queueHost }, _copy, close);
         Theme.Apply(this);
-        AcceptButton = _copy;
-        CancelButton = close;
     }
 
     private void CopyCode()
@@ -100,7 +89,7 @@ public sealed class JoinWaitlistForm : GlassForm
     private readonly string _cabin;
     private readonly TextBox _name = new() { MaxLength = 120 };
     private readonly TextBox _email = new() { MaxLength = 200 };
-    private readonly NumericUpDown _party = new() { Minimum = 1, Maximum = 9, Value = 1 };
+    private readonly ComboBox _party = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly FieldRow _nameRow, _emailRow, _partyRow;
 
     public JoinWaitlistForm(BookingStore store, Flight flight, DateTime date, string cabin)
@@ -112,7 +101,8 @@ public sealed class JoinWaitlistForm : GlassForm
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(560), D(470));
+        _party.Items.AddRange(Enumerable.Range(1, 9).Select(n => (object)n.ToString()).ToArray());
+        _party.SelectedIndex = 0;
 
         _nameRow = new FieldRow("TRAVELLER NAME", _name);
         _emailRow = new FieldRow("EMAIL  (THE OFFER IS SENT HERE)", _email);
@@ -120,30 +110,13 @@ public sealed class JoinWaitlistForm : GlassForm
         foreach (var row in new[] { _nameRow, _emailRow })
             if (row.Input is TextBox box) { var r = row; box.TextChanged += (_, _) => r.ClearMessage(); }
 
-        var title = new Label
-        {
-            Text = $"{flight.FlightNo} · {date:ddd, d MMM yyyy} · {cabin} is sold out", Font = Theme.Header,
-            AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft
-        };
-        var note = new Label
-        {
-            Text = $"Join the waitlist and we will email you the moment seats free up. You then have up to {AppData.WaitlistOfferHours} hours to book them (less if the flight is close to departure; bookings close {AppData.BookingCutoffHours} hours before it leaves).",
-            AutoSize = false, Height = D(48), ForeColor = Theme.TextSecondary
-        };
         var save = new GlassButton { Text = "Join waitlist" };
         save.Click += (_, _) => Join();
-        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(save);
-        buttons.Controls.Add(cancel);
-
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, note, _nameRow, _emailRow, _partyRow, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
+        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary };
+        DialogFrame.Create(this, 560, $"{flight.FlightNo} · {date:ddd, d MMM yyyy} · {cabin} is sold out",
+            $"Join the waitlist and we will email you the moment seats free up. You then have up to {AppData.WaitlistOfferHours} hours to book them (less if the flight is close to departure; bookings close {AppData.BookingCutoffHours} hours before it leaves).",
+            new Control[] { _nameRow, _emailRow, _partyRow }, save, cancel);
         Theme.Apply(this);
-        AcceptButton = save;
-        CancelButton = cancel;
     }
 
     private void Join()
@@ -152,7 +125,7 @@ public sealed class JoinWaitlistForm : GlassForm
         if (!BookingRules.IsValidEmail(_email.Text)) { _emailRow.SetMessage("Enter a valid email address."); return; }
         try
         {
-            WaitlistEntry? entry = _store.JoinWaitlist(_flight.FlightNo, _date, _cabin, _name.Text, _email.Text, (int)_party.Value);
+            WaitlistEntry? entry = _store.JoinWaitlist(_flight.FlightNo, _date, _cabin, _name.Text, _email.Text, _party.SelectedIndex + 1);
             if (entry is null)
             {
                 MessageBox.Show(this,
@@ -198,29 +171,19 @@ public sealed class WaitlistStatusForm : GlassForm
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(720), D(400));   // wide enough for all four buttons on one line (Look up, Leave, Book now, Close)
         _result.Height = D(90);
 
         _codeRow = new FieldRow("WAITLIST CODE", _code);
-        var title = new Label { Text = "Check your waitlist spot", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleCenter };
         var find = new GlassButton { Text = "Look up" };
         find.Click += (_, _) => Lookup();
         _book.Click += (_, _) => { OfferToBook = _entry; DialogResult = DialogResult.OK; Close(); };
         _leave.Click += (_, _) => Leave();
-        var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(close);
-        buttons.Controls.Add(_book);
-        buttons.Controls.Add(_leave);
-        buttons.Controls.Add(find);
-
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, _codeRow, _result, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
+        var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary };
+        DialogFrame frame = DialogFrame.Create(this, 720, "Check your waitlist spot",
+            "Enter the waitlist code you were given when you joined.", new Control[] { _codeRow, _result }, find, close);
+        frame.Buttons.Controls.Add(_book);    // shown only while there is a live offer
+        frame.Buttons.Controls.Add(_leave);
         Theme.Apply(this);
-        AcceptButton = find;
-        CancelButton = close;
     }
 
     private void Lookup()

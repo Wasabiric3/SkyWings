@@ -38,17 +38,10 @@ public sealed class FlightResultsForm : GlassForm
             problem = "The flights could not be loaded: " + ex.Message;
         }
 
-        var heading = new Label
+        var header = new PageHeader
         {
-            Text = anywhere ? "All flights from Manila" : $"Flights to {destination}",
-            Font = Theme.Title, ForeColor = Theme.TextPrimary, AutoSize = false, Height = D(48),
-            Dock = DockStyle.Top, TextAlign = ContentAlignment.MiddleLeft
-        };
-        var summary = new Label
-        {
-            Text = $"{date:dddd, MMMM d, yyyy}   ·   {className}   ·   {rows.Count} flight(s)",
-            Font = Theme.Body, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(30),
-            Dock = DockStyle.Top, TextAlign = ContentAlignment.TopLeft
+            Title = anywhere ? "All flights from Manila" : $"Flights to {destination}",
+            Hint = $"{date:dddd, MMMM d, yyyy}   ·   {className}   ·   {rows.Count} flight(s)"
         };
 
         GridStyle.Apply(_grid);
@@ -96,8 +89,7 @@ public sealed class FlightResultsForm : GlassForm
 
         Controls.Add(tableCard);
         Controls.Add(footer);
-        Controls.Add(summary);
-        Controls.Add(heading);
+        Controls.Add(header);
         Theme.Apply(this);
         _note.ForeColor = problem is null ? Theme.TextSecondary : Theme.DangerRed;
         AcceptButton = _choose;

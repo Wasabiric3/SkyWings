@@ -23,7 +23,6 @@ public sealed class ChangePasswordForm : GlassForm
         ControlBox = !forced;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(500), D(470));
 
         _currentRow = new FieldRow(forced ? "CURRENT (TEMPORARY) PASSWORD" : "CURRENT PASSWORD", _current);
         _newRow = new FieldRow($"NEW PASSWORD  (AT LEAST {PasswordPolicy.MinLength} CHARACTERS)", _new);
@@ -31,33 +30,14 @@ public sealed class ChangePasswordForm : GlassForm
         foreach (var row in new[] { _currentRow, _newRow, _repeatRow })
             if (row.Input is TextBox box) { var r = row; box.TextChanged += (_, _) => r.ClearMessage(); }
 
-        var title = new Label
-        {
-            Text = forced ? "Choose a new password" : "Change password", Font = Theme.Header, AutoSize = false,
-            Height = D(44), TextAlign = ContentAlignment.MiddleLeft
-        };
-        var hint = new Label
-        {
-            Text = forced ? "Your password was set by someone else, so you need to replace it before continuing."
-                          : "Pick something you don't use anywhere else.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(40)
-        };
-
         var save = new GlassButton { Text = "Save password" };
         save.Click += (_, _) => Save();
-        var cancel = new GlassButton { Text = forced ? "Sign out" : "Cancel", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(save);
-        buttons.Controls.Add(cancel);
-
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, hint, _currentRow, _newRow, _repeatRow, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
-
+        var cancel = new GlassButton { Text = forced ? "Sign out" : "Cancel", Style = GlassButtonStyle.Secondary };
+        DialogFrame.Create(this, 500, forced ? "Choose a new password" : "Change password",
+            forced ? "Your password was set by someone else, so you need to replace it before continuing."
+                   : "Pick something you don't use anywhere else.",
+            new Control[] { _currentRow, _newRow, _repeatRow }, save, cancel);
         Theme.Apply(this);
-        AcceptButton = save;
-        CancelButton = cancel;
     }
 
     private void Save()

@@ -37,7 +37,7 @@ internal sealed class DatabaseBrowserPage : Panel
         int D(int px) => Gfx.S(this, px);
 
         // ---- top bar: table picker, search, row count (all the same height and centred on one line)
-        int h = _tables.PreferredHeight;
+        int h = D(44);   // the height of a rounded box
         Label Caption(string text)
         {
             var label = new Label
@@ -48,15 +48,17 @@ internal sealed class DatabaseBrowserPage : Panel
             _captions.Add(label);
             return label;
         }
-        _tables.Margin = new Padding(0, 0, D(24), 0);
+        // The wizard's rounded boxes around the picker and the search (they size the inputs, so the widths are set on the boxes).
+        var tablesBox = new RoundedInput(_tables) { Width = D(200), Margin = new Padding(0, 0, D(24), 0) };
+        var searchHost = new RoundedInput(_searchBox) { Width = D(200) };
         _count.Font = Theme.Small;
         _count.ForeColor = Theme.TextSecondary;
-        var pickers = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, D(10), 0, 0) };
+        var pickers = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, D(6), 0, 0) };
         pickers.Controls.Add(Caption("Table"));
-        pickers.Controls.Add(_tables);
+        pickers.Controls.Add(tablesBox);
         pickers.Controls.Add(Caption("Search"));
-        pickers.Controls.Add(_searchBox);
-        var top = new Panel { Dock = DockStyle.Top, Height = D(58) };
+        pickers.Controls.Add(searchHost);
+        var top = new Panel { Dock = DockStyle.Top, Height = D(60) };
         top.Controls.Add(pickers);
         top.Controls.Add(_count);
 

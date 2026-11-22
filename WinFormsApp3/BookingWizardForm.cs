@@ -331,10 +331,10 @@ public sealed class BookingWizardForm : GlassForm
         var page = NewPage();
         _flight.DrawItem += DrawFlightItem;
         _returnFlight.DrawItem += DrawFlightItem;
-        _flightRow = new FieldRow("FLIGHT", _flight, rounded: true);
-        _dateRow = new FieldRow("DEPARTURE DATE", _flightDate, rounded: true);
-        _returnFlightRow = new FieldRow("RETURN FLIGHT", _returnFlight, rounded: true);
-        _returnDateRow = new FieldRow("RETURN DATE", _returnDate, rounded: true);
+        _flightRow = new FieldRow("FLIGHT", _flight);
+        _dateRow = new FieldRow("DEPARTURE DATE", _flightDate);
+        _returnFlightRow = new FieldRow("RETURN FLIGHT", _returnFlight);
+        _returnDateRow = new FieldRow("RETURN DATE", _returnDate);
 
         _flight.SelectedIndexChanged += (_, _) => { UpdateFlightInfo(); UpdateReturnFlightChoice(); SyncSession(); };
         _flightDate.ValueChanged += (_, _) =>
@@ -425,12 +425,12 @@ public sealed class BookingWizardForm : GlassForm
     private Panel BuildPassengerPage()
     {
         var page = NewPage();
-        _nameRow = new FieldRow("FULL NAME", _name, rounded: true);
-        _idRow = new FieldRow("ID NUMBER", _idNumber, rounded: true);
-        _birthdayRow = new FieldRow("BIRTHDAY", _birthday, rounded: true);
-        _addressRow = new FieldRow("ADDRESS", _address, rounded: true);
-        _contactRow = new FieldRow("CONTACT NUMBER", _contact, rounded: true);
-        _emailRow = new FieldRow("EMAIL (OPTIONAL, FOR YOUR RECEIPT)", _email, rounded: true);
+        _nameRow = new FieldRow("FULL NAME", _name);
+        _idRow = new FieldRow("ID NUMBER", _idNumber);
+        _birthdayRow = new FieldRow("BIRTHDAY", _birthday);
+        _addressRow = new FieldRow("ADDRESS", _address);
+        _contactRow = new FieldRow("CONTACT NUMBER", _contact);
+        _emailRow = new FieldRow("EMAIL (OPTIONAL, FOR YOUR RECEIPT)", _email);
         foreach (var row in new[] { _nameRow, _idRow, _birthdayRow, _addressRow, _contactRow, _emailRow }) ClearOnEdit(row);
         _senior.CheckedChanged += (_, _) => _birthdayRow.ClearMessage();
 
@@ -566,8 +566,8 @@ public sealed class BookingWizardForm : GlassForm
         }
         cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        _baggageRow = new FieldRow("BAGGAGE ALLOWANCE", _baggage, rounded: true);
-        _mealRow = new FieldRow("MEAL PREFERENCE", _meal, rounded: true);
+        _baggageRow = new FieldRow("BAGGAGE ALLOWANCE", _baggage);
+        _mealRow = new FieldRow("MEAL PREFERENCE", _meal);
         _baggage.SelectedIndexChanged += (_, _) => SyncSession();
         _meal.SelectedIndexChanged += (_, _) => SyncSession();
 
@@ -586,7 +586,7 @@ public sealed class BookingWizardForm : GlassForm
             addons.Controls.Add(box);
         }
 
-        _promoRow = new FieldRow("PROMO CODE", _promoCode, rounded: true);
+        _promoRow = new FieldRow("PROMO CODE", _promoCode);
         var apply = new GlassButton { Text = "Apply", Pill = true, Dock = DockStyle.Bottom, Height = D(44) };
         apply.Click += (_, _) => ApplyPromoCode();
         var applyHost = new Panel { Padding = new Padding(0, 0, 0, D(24)) };
@@ -815,8 +815,8 @@ public sealed class BookingWizardForm : GlassForm
         var page = new Panel { Dock = DockStyle.Fill, Visible = false };
         _paymentMethod.Items.AddRange(new object[] { "Credit Card", "Debit Card", "E-Wallet" });
         _paymentMethod.SelectedIndex = 0;
-        _methodRow = new FieldRow("PAYMENT METHOD", _paymentMethod, rounded: true);
-        _accountRow = new FieldRow("CARD / ACCOUNT NUMBER (DEMO)", _account, rounded: true);
+        _methodRow = new FieldRow("PAYMENT METHOD", _paymentMethod);
+        _accountRow = new FieldRow("CARD / ACCOUNT NUMBER (DEMO)", _account);
         ClearOnEdit(_accountRow);
         var note = new Label
         {

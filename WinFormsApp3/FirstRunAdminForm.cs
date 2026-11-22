@@ -23,7 +23,6 @@ public sealed class FirstRunAdminForm : GlassForm
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(540), D(520));
 
         _nameRow = new FieldRow("YOUR NAME", _name);
         _usernameRow = new FieldRow("USERNAME", _username);
@@ -32,32 +31,14 @@ public sealed class FirstRunAdminForm : GlassForm
         foreach (var row in new[] { _nameRow, _usernameRow, _passwordRow, _confirmRow })
             if (row.Input is TextBox box) { var r = row; box.TextChanged += (_, _) => r.ClearMessage(); }
 
-        var title = new Label { Text = "Create the first administrator", Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft };
-        var hint = new Label
-        {
-            Text = "No staff accounts exist yet. This account can manage flights, other staff, and backups. " +
-                   "A long phrase works better than a short complicated password.",
-            Font = Theme.Small,
-            ForeColor = Theme.TextSecondary,
-            AutoSize = false,
-            Height = D(54)
-        };
-
         var create = new GlassButton { Text = "Create account" };
         create.Click += (_, _) => Create();
-        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(create);
-        buttons.Controls.Add(cancel);
-
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
-        Layouts.Stack(card, title, hint, _nameRow, _usernameRow, _passwordRow, _confirmRow, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
-
+        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary };
+        DialogFrame.Create(this, 540, "Create the first administrator",
+            "No staff accounts exist yet. This account can manage flights, other staff, and backups. " +
+            "A long phrase works better than a short complicated password.",
+            new Control[] { _nameRow, _usernameRow, _passwordRow, _confirmRow }, create, cancel);
         Theme.Apply(this);
-        AcceptButton = create;
-        CancelButton = cancel;
     }
 
     public string CreatedUsername { get; private set; } = "";

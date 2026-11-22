@@ -123,7 +123,7 @@ internal sealed class RoundedInput : Control, ISelfStyled
         if (e.Index < 0 || sender is not ComboBox combo) return;
         bool edit = (e.State & DrawItemState.ComboBoxEdit) != 0;
         bool highlighted = !edit && (e.State & DrawItemState.Selected) != 0;
-        Color back = !combo.Enabled ? Theme.DisabledBack : highlighted ? Theme.Selection : Color.White;
+        Color back = !combo.Enabled ? Theme.DisabledBack : highlighted ? Theme.BrandSoft : Color.White;
         using (var brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, e.Bounds);
         var bounds = new Rectangle(e.Bounds.X + Gfx.S(combo, 2), e.Bounds.Y, e.Bounds.Width - Gfx.S(combo, 2), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, combo.GetItemText(combo.Items[e.Index]), edit ? BoldFont : Theme.Body, bounds,

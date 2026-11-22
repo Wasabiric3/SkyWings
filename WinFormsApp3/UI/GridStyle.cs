@@ -30,7 +30,7 @@ internal static class GridStyle
         grid.BorderStyle = BorderStyle.None;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         grid.BackgroundColor = Color.White;
-        grid.GridColor = Theme.BorderLight;
+        grid.GridColor = Theme.Border;
         grid.EnableHeadersVisualStyles = false;
         grid.RowHeadersVisible = false;
         grid.AllowUserToAddRows = false;
@@ -46,16 +46,16 @@ internal static class GridStyle
         grid.RowTemplate.Height = Gfx.S(grid, 36);
         grid.Font = Theme.Body;
 
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.BgMuted;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.PageBg;
         grid.ColumnHeadersDefaultCellStyle.ForeColor = Theme.TextSecondary;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.BgMuted;
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.PageBg;
         grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Theme.TextSecondary;
         grid.ColumnHeadersDefaultCellStyle.Font = StatusFont;
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
 
         grid.DefaultCellStyle.BackColor = Color.White;
         grid.DefaultCellStyle.ForeColor = Theme.TextPrimary;
-        grid.DefaultCellStyle.SelectionBackColor = Theme.Selection;
+        grid.DefaultCellStyle.SelectionBackColor = Theme.BrandSoft;
         grid.DefaultCellStyle.SelectionForeColor = Theme.TextPrimary;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
         grid.AlternatingRowsDefaultCellStyle.BackColor = Theme.RowAlt;
@@ -104,13 +104,14 @@ internal static class GridStyle
         string name = grid.Columns[e.ColumnIndex].DataPropertyName;
         if (name is not ("Status" or "PaymentStatus") || StatusStyle(text) is not { } style) return;
 
-        e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+        e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
         Size size = TextRenderer.MeasureText(e.Graphics, text, StatusFont, Size.Empty, TextFormatFlags.NoPadding);
         int padX = Gfx.S(grid, 10), h = size.Height + Gfx.S(grid, 6);
         var pill = new Rectangle(e.CellBounds.Left + Gfx.S(grid, 10), e.CellBounds.Top + (e.CellBounds.Height - h) / 2, size.Width + padX * 2, h);
         Gfx.HighQuality(e.Graphics);
         using var path = Gfx.RoundedRect(pill, pill.Height / 2);
-        using var back = new SolidBrush(style.Back);
+        bool selected = (e.State & DataGridViewElementStates.Selected) != 0;   // on the row highlight the pill turns white, or it would vanish
+        using var back = new SolidBrush(selected ? Color.White : style.Back);
         e.Graphics.FillPath(back, path);
         TextRenderer.DrawText(e.Graphics, text, StatusFont, pill, style.Fore,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

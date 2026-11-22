@@ -149,7 +149,33 @@ public sealed class RoundedInputTests
     public void AnOrdinaryRow_IsLeftAlone() => OnStaThread(() =>
     {
         var input = new TextBox();
-        _ = new FieldRow("NAME", input);   // the caption is still its sibling label, as before
+        _ = new FieldRow("NAME", input, rounded: false);   // the caption is still its sibling label, as before
         Assert.IsTrue(string.IsNullOrEmpty(input.AccessibleName));
+    });
+
+    [TestMethod]
+    public void FieldRow_IsRoundedByDefault() => OnStaThread(() =>
+    {
+        using var row = new FieldRow("NAME", new TextBox());
+        Assert.IsTrue(All(row).OfType<RoundedInput>().Any(), "the Figma look is the default");
+    });
+
+    [TestMethod]
+    public void FieldRow_RoundedFalse_KeepsTheNativeInput() => OnStaThread(() =>
+    {
+        using var row = new FieldRow("NAME", new TextBox(), rounded: false);
+        Assert.IsFalse(All(row).OfType<RoundedInput>().Any());
+    });
+
+    [TestMethod]
+    public void RoundedByDefault_KeepsAccessibleName_ForTextComboAndDate() => OnStaThread(() =>
+    {
+        foreach (Control input in new Control[] { new TextBox(), new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, new DateTimePicker() })
+        {
+            using var row = new FieldRow("TRAVELLER", input);
+            Assert.AreEqual("TRAVELLER", input.AccessibleName, input.GetType().Name);
+            Assert.IsTrue(input.TabStop || input is not TextBox, input.GetType().Name + " stays a tab stop");
+            Assert.IsFalse(row.TabStop, "the row itself is not a tab stop");
+        }
     });
 }

@@ -31,7 +31,7 @@ public sealed class ChangeFlightForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         Padding = new Padding(D(20), D(12), D(20), D(16));
 
-        var title = new Label { Text = "Change flight", Font = Theme.Header, AutoSize = false, Height = D(40), TextAlign = ContentAlignment.MiddleLeft };
+        var header = new PageHeader { Title = "Change flight", Hint = "Move this booking to another flight on the same route." };
         var current = new Label
         {
             Text = $"Now: {booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:ddd, MMM d, yyyy} · {booking.ClassName} · " +
@@ -79,9 +79,10 @@ public sealed class ChangeFlightForm : GlassForm
         card.Controls.Add(_summary);
         card.Controls.Add(footer);
         var top = new Panel { Dock = DockStyle.Top };
-        top.Height = Layouts.Stack(top, title, current, policy, Layouts.Row(D(14), dateRow));
+        top.Height = Layouts.Stack(top, current, policy, Layouts.Row(D(14), dateRow));
         card.Controls.Add(top);
         Controls.Add(card);
+        Controls.Add(header);   // added last, so it docks above the card
 
         Theme.Apply(this);
         CancelButton = close;

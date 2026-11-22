@@ -10,7 +10,7 @@ public partial class HomeForm : GlassForm
     private readonly BookingStore _store;
     private readonly FlowLayoutPanel _destinations = new();
     private readonly ComboBox _to = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly DateTimePicker _date = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
+    private readonly DateField _date = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
     private readonly ComboBox _cabin = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Label _routeCount = new();
     private readonly GlassButton _bookButton = new();
@@ -180,7 +180,7 @@ public partial class HomeForm : GlassForm
 
     private Control BuildHero()
     {
-        var hero = new GlassCard { Dock = DockStyle.Top, Height = D(184), ContentPadding = 8 };
+        var hero = new GlassCard { Dock = DockStyle.Top, Height = D(216), ContentPadding = 8 };
 
         var art = new HeroArt { Dock = DockStyle.Right, Width = D(420) };
         var text = new Panel { Dock = DockStyle.Fill, Padding = new Padding(D(24), D(14), D(8), D(10)), BackColor = Color.Transparent };
@@ -193,7 +193,7 @@ public partial class HomeForm : GlassForm
         // Each label starts at the previous one's bottom edge so transparent labels never overlap.
         var eyebrow = new Label
         {
-            Text = "YOUR NEXT CHAPTER STARTS HERE", Font = new Font(Theme.Small, FontStyle.Bold), ForeColor = Theme.Accent,
+            Text = "YOUR NEXT CHAPTER STARTS HERE", Font = new Font(Theme.Small, FontStyle.Bold), ForeColor = Theme.Brand,
             AutoSize = true, Location = new Point(D(24), D(4)), BackColor = Color.Transparent
         };
         var headline = new Label
@@ -220,45 +220,32 @@ public partial class HomeForm : GlassForm
     private Control BuildSearch()
     {
         // One tidy row: a small caption above each field, and the button level with the fields.
-        var card = new GlassCard { Dock = DockStyle.Top, Height = D(92), ContentPadding = 10 };
+        var card = new GlassCard { Dock = DockStyle.Top, Height = D(118), ContentPadding = 10 };
         _cabin.Items.AddRange(AppData.ClassNames.Cast<object>().ToArray());
         _cabin.SelectedIndex = 0;
-        foreach (Control input in new Control[] { _to, _date, _cabin })
-        {
-            input.Font = Theme.Body;
-            input.BackColor = Color.White;
-            input.Dock = DockStyle.None;
-            input.Anchor = AnchorStyles.Left | AnchorStyles.Right;   // full width, centred in its row
-            input.Margin = new Padding(0, 0, D(14), 0);
-        }
         _to.DropDownWidth = D(360);
 
-        Label Caption(string text) => new()
-        {
-            Text = text, Font = new Font(Theme.Small, FontStyle.Bold), ForeColor = Theme.TextSecondary,
-            AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft, BackColor = Color.Transparent
-        };
+        // The wizard's rounded fields, each with its caption above it; the button is level with the fields.
+        var rows = new[] { new FieldRow("TO  (FROM MANILA)", _to), new FieldRow("DEPARTURE", _date), new FieldRow("CABIN", _cabin) };
+        foreach (FieldRow field in rows) { field.Dock = DockStyle.Top; field.Margin = new Padding(0, 0, D(14), 0); }
 
         _bookSelected.Text = "Book selected  →";
-        _bookSelected.Dock = DockStyle.Fill;
-        _bookSelected.Margin = Padding.Empty;
+        _bookSelected.Dock = DockStyle.Top;
+        _bookSelected.Height = D(44);
+        _bookSelected.Margin = new Padding(0, D(26), 0, 0);   // below the captions, level with the boxes
         _bookSelected.Enabled = false;
         _bookSelected.Click += BookSelectedFlight;
 
-        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, BackColor = Color.Transparent };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18));
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, BackColor = Color.Transparent };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 19));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, D(190)));
-        row.RowStyles.Add(new RowStyle(SizeType.Absolute, D(24)));
         row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        row.Controls.Add(Caption("TO  (FROM MANILA)"), 0, 0);
-        row.Controls.Add(Caption("DEPARTURE"), 1, 0);
-        row.Controls.Add(Caption("CABIN"), 2, 0);
-        row.Controls.Add(_to, 0, 1);
-        row.Controls.Add(_date, 1, 1);
-        row.Controls.Add(_cabin, 2, 1);
-        row.Controls.Add(_bookSelected, 3, 1);
+        row.Controls.Add(rows[0], 0, 0);
+        row.Controls.Add(rows[1], 1, 0);
+        row.Controls.Add(rows[2], 2, 0);
+        row.Controls.Add(_bookSelected, 3, 0);
         card.Controls.Add(row);
 
         // Any change to the fields refreshes the flight list straight away.
@@ -283,7 +270,7 @@ public partial class HomeForm : GlassForm
         // Header: what is shown on the left, a live clock on the right.
         _live.Text = "● LIVE";
         _live.Font = new Font(Theme.Small, FontStyle.Bold);
-        _live.ForeColor = Theme.Accent;
+        _live.ForeColor = Theme.Brand;
         _live.AutoSize = false;
         _live.Width = D(64);
         _live.Dock = DockStyle.Right;
@@ -342,7 +329,7 @@ public partial class HomeForm : GlassForm
     };
 
     /// <summary>Green for a normal load, amber from 90% (nearly full), red from 98% (full).</summary>
-    private static Color LoadColor(int percent) => percent >= 98 ? Theme.DangerRed : percent >= 90 ? Theme.Warning : Theme.Primary;
+    private static Color LoadColor(int percent) => percent >= 98 ? Theme.DangerRed : percent >= 90 ? Theme.Warning : Theme.Brand;
     /// <summary>Text colours for the plain cells; dims flights that have left or can no longer be booked. Status and load are painted below.</summary>
     /// <summary>Text colours for the plain cells; dims flights that have already left. Status and load are painted below.</summary>
     private void FormatBoardCell(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -354,7 +341,7 @@ public partial class HomeForm : GlassForm
         if (column == nameof(FlightRow.FlightNo))
         {
             e.CellStyle!.Font = StatusFont;
-            e.CellStyle.ForeColor = past ? Theme.TextSecondary : Theme.AccentDark;
+            e.CellStyle.ForeColor = past ? Theme.TextSecondary : Theme.Brand;
         }
         else if (column == nameof(FlightRow.EstimatedText) && row.Status.DelayMinutes > 0)
         {
@@ -607,7 +594,7 @@ public partial class HomeForm : GlassForm
         LinkLabel Link(string title) => new()
         {
             Text = title, Font = Theme.Small, AutoSize = true, Margin = new Padding(0, 0, D(10), 0), BackColor = Color.Transparent,
-            LinkColor = Theme.TextSecondary, ActiveLinkColor = Theme.Accent, VisitedLinkColor = Theme.TextSecondary,
+            LinkColor = Theme.TextSecondary, ActiveLinkColor = Theme.Brand, VisitedLinkColor = Theme.TextSecondary,
             LinkBehavior = LinkBehavior.HoverUnderline, Cursor = Cursors.Hand,
             AccessibleName = title, AccessibleRole = AccessibleRole.Link
         };

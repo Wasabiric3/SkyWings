@@ -12,7 +12,8 @@ public static class Theme
     public static readonly Color AccentDark = Color.FromArgb(0x23, 0x47, 0x39);
     public static readonly Color SoftFill = Color.FromArgb(0xDA, 0xEC, 0xE1);
     public static readonly Color AccentLight = Color.FromArgb(0xF3, 0xF7, 0xF4);
-    public static readonly Color BgMain = AccentLight;
+    public static readonly Color PageBg = Color.FromArgb(0xF6, 0xF5, 0xF0);   // declared before BgMain: static fields initialise in order
+    public static readonly Color BgMain = PageBg;
     public static readonly Color BgCard = Color.White;
     public static readonly Color TextPrimary = Color.FromArgb(0x17, 0x1C, 0x1A);
     public static readonly Color TextSecondary = Color.FromArgb(0x77, 0x85, 0x7E);
@@ -33,7 +34,6 @@ public static class Theme
     public static readonly Color DisabledBack = Color.FromArgb(240, 244, 242);
 
     // ===== BOOKING WIZARD LOOK (Figma) =====
-    public static readonly Color PageBg = Color.FromArgb(0xF6, 0xF5, 0xF0);
     public static readonly Color Brand = Color.FromArgb(0x1B, 0x4D, 0x3E);
     public static readonly Color BrandSoft = Color.FromArgb(0xD9, 0xE8, 0xDA);
     public static readonly Color AmberSoft = Color.FromArgb(0xFD, 0xF1, 0xDA);
@@ -79,7 +79,7 @@ public static class Theme
     {
         if (control is SkyWings.UI.ISelfStyled) return;
 
-        if (control is Form or TabPage) control.BackColor = BgMain;
+        if (control is Form or TabPage) control.BackColor = PageBg;
         else ResetIfTransparent(control);
         control.ForeColor = TextPrimary;
 

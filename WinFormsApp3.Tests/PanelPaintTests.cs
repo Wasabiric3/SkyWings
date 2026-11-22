@@ -35,13 +35,13 @@ public class PanelPaintTests
     }
 
     [TestMethod]
-    public void ReceiptPanel_HeaderBand_IsFlatPrimary()
+    public void ReceiptPanel_HeaderBand_IsFlatBrand()
     {
         using var panel = new ReceiptPanel();
         panel.SetReceipt("SW-ABC123", new[] { ("Passenger", "Ana Cruz"), ("Flight", "SW101") });
         using Bitmap bmp = Render(panel, 760, 300);
-        Assert.AreEqual(Theme.Primary.ToArgb(), bmp.GetPixel(380, 8).ToArgb());
-        Assert.AreEqual(Theme.Primary.ToArgb(), bmp.GetPixel(700, 8).ToArgb(), "band must not be a gradient");
+        Assert.AreEqual(Theme.Brand.ToArgb(), bmp.GetPixel(380, 8).ToArgb());
+        Assert.AreEqual(Theme.Brand.ToArgb(), bmp.GetPixel(700, 8).ToArgb(), "band must not be a gradient");
         Assert.AreEqual(255, bmp.GetPixel(0, 0).A, "corner must be painted, not transparent");
     }
 

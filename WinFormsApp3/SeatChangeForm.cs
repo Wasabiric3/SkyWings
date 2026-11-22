@@ -34,7 +34,7 @@ public sealed class SeatChangeForm : GlassForm
         _info.Height = D(28);
         _info.Font = Theme.Small;
 
-        var title = new Label { Text = "Change seats", Font = Theme.Header, AutoSize = false, Height = D(40), TextAlign = ContentAlignment.MiddleLeft };
+        var header = new PageHeader { Title = "Change seats", Hint = "Pick a traveller and a flight, then choose a seat on the map." };
         var legend = new SeatLegend();
 
         _save.Click += (_, _) => Save();
@@ -55,10 +55,11 @@ public sealed class SeatChangeForm : GlassForm
         card.Controls.Add(_mapHost);
         card.Controls.Add(footer);
         var top = new Panel { Dock = DockStyle.Top };
-        int topHeight = Layouts.Stack(top, title, Layouts.Row(D(14), passengerRow, legRow), _info, legend);
+        int topHeight = Layouts.Stack(top, Layouts.Row(D(14), passengerRow, legRow), _info, legend);
         top.Height = topHeight;
         card.Controls.Add(top);
         Controls.Add(card);
+        Controls.Add(header);   // added last, so it docks above the card
 
         FillChoices();
         Theme.Apply(this);

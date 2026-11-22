@@ -31,12 +31,12 @@ public sealed class ReceiptPanelTests
     private static Point InBand(ReceiptPanel panel) => new(panel.Width / 2, 8);
 
     [TestMethod]
-    public void ByDefault_TheHeaderBandIsPrimary_SoOtherScreensLookAsBefore()
+    public void ByDefault_TheHeaderBandIsBrand_LikeTheRestOfTheApp()
     {
         using ReceiptPanel panel = Make();
         using Bitmap bmp = Render(panel);
-        Assert.AreEqual(Theme.Primary.ToArgb(), panel.BandColor.ToArgb());
-        Assert.AreEqual(Theme.Primary.ToArgb(), bmp.GetPixel(InBand(panel).X, InBand(panel).Y).ToArgb());
+        Assert.AreEqual(Theme.Brand.ToArgb(), panel.BandColor.ToArgb());
+        Assert.AreEqual(Theme.Brand.ToArgb(), bmp.GetPixel(InBand(panel).X, InBand(panel).Y).ToArgb());
     }
 
     [TestMethod]

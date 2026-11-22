@@ -44,18 +44,17 @@ public sealed class BookingDetailForm : GlassForm
         // Header: reference, route and a status pill so the state is visible before reading the details.
         Color statusColor = TripColors.For(trip.Phase);
         var header = new Panel { Dock = DockStyle.Top, Height = D(58) };
-        var status = new Label
+        var status = new StatusPill
         {
             // Wide enough for the longest label, "RETURN · CHECK-IN OPEN".
-            Text = trip.Label.ToUpperInvariant(), AutoSize = false, Width = D(190), Dock = DockStyle.Right,
-            TextAlign = ContentAlignment.MiddleCenter, Font = new Font(Theme.Small, FontStyle.Bold),
-            ForeColor = statusColor, BackColor = Color.FromArgb(32, statusColor)
+            Text = trip.Label.ToUpperInvariant(), Width = D(260), Dock = DockStyle.Right,
+            TextColor = statusColor, FillColor = Gfx.Mix(statusColor, Color.White, 0.86f)
         };
         var statusGap = new Panel { Dock = DockStyle.Right, Width = D(10) };
         var heading = new Label
         {
             Text = $"{booking.Reference}   {booking.Origin} → {booking.Destination}", Dock = DockStyle.Fill,
-            Font = Theme.Header, ForeColor = Theme.TextPrimary, TextAlign = ContentAlignment.MiddleLeft
+            Font = Theme.Title, ForeColor = Theme.Brand, TextAlign = ContentAlignment.MiddleLeft
         };
         header.Controls.Add(heading);
         header.Controls.Add(statusGap);
@@ -84,7 +83,7 @@ public sealed class BookingDetailForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         bool open = request.Status == BookingStore.RequestOpen;
 
-        var panel = new Panel { Dock = DockStyle.Top, Height = height, Padding = new Padding(D(14), D(10), D(14), D(10)), BackColor = Theme.BgMuted };
+        var panel = new Panel { Dock = DockStyle.Top, Height = height, Padding = new Padding(D(14), D(10), D(14), D(10)), BackColor = Theme.PageBg };
 
         var note = new TextBox
         {
