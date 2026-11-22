@@ -111,6 +111,12 @@ public sealed class AdminForm : GlassForm
     private readonly TextBox _auditSearch = new() { PlaceholderText = "Search who, what or which item" };
     private readonly System.Windows.Forms.Timer _auditTimer = new() { Interval = 300 };
     private List<AuditEntry> _auditEntries = new();
+    private static readonly IReadOnlyDictionary<string, SortKey<AuditEntry>> AuditSortKeys = new Dictionary<string, SortKey<AuditEntry>>
+    {
+        ["When"] = new(e => e.AtUtc, FirstDescending: true), ["Who"] = new(e => e.Actor), ["Role"] = new(e => e.Role),
+        ["Action"] = new(e => e.Action), ["Item"] = new(e => e.Target), ["Detail"] = new(e => e.Detail),
+    };
+    private readonly GridSorter<AuditEntry> _auditSorter = new(AuditSortKeys);   // no sort chosen: newest first, as the log is loaded
 
     private StaffSession Session => _service.Session;
 
@@ -1241,6 +1247,15 @@ public sealed class AdminForm : GlassForm
     private readonly DataGridView _waitlist = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
 
     private List<WaitlistEntry> _waitlistEntries = new();
+    private static readonly IReadOnlyDictionary<string, SortKey<WaitlistEntry>> WaitlistSortKeys = new Dictionary<string, SortKey<WaitlistEntry>>
+    {
+        ["Flight"] = new(e => e.FlightNo), ["Date"] = new(e => e.FlightDate), ["Cabin"] = new(e => e.ClassName),
+        ["Traveller"] = new(e => e.PassengerName), ["Seats"] = new(e => e.SeatsWanted),
+        ["Joined"] = new(e => e.AddedAt, FirstDescending: true),   // the text is a date without a year: sort by the moment
+        ["Status"] = new(e => e.Status == BookingStore.WaitlistWaiting ? e.Position : long.MaxValue),
+        ["Offer"] = new(e => e.OfferExpiresAt), ["Code"] = new(e => e.BookingReference),
+    };
+    private readonly GridSorter<WaitlistEntry> _waitlistSorter = new(WaitlistSortKeys);
 
     private readonly Label _waitlistInfo = new()
     {
@@ -1260,6 +1275,7 @@ public sealed class AdminForm : GlassForm
             toolbar.Controls.Add(ToolButton("Remove selected", (_, _) => RemoveSelectedWaitlist(), GlassButtonStyle.Danger));
         }
         GridStyle.Apply(_waitlist);
+        WireSorter(_waitlistSorter, _waitlist, "view_waitlist_sort", LoadWaitlist);
         _waitlist.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowWaitlistDetails(); };
         _waitlist.DefaultCellStyle.Font = Theme.Small;
         _waitlist.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
@@ -1280,7 +1296,7 @@ public sealed class AdminForm : GlassForm
         List<WaitlistEntry> entries = new();
         if (!Try("Unable to load the waitlist", () => entries = _service.LoadWaitlist())) return;
         _waitlistEntries = entries;
-        _waitlist.DataSource = entries.Select(e => new WaitlistRow(
+        _waitlist.DataSource = _waitlistSorter.Sort(entries).Select(e => new WaitlistRow(
             e.FlightNo, e.FlightDate.ToString("ddd, d MMM yyyy", CultureInfo.InvariantCulture), e.ClassName, e.PassengerName,
             e.SeatsWanted.ToString(CultureInfo.InvariantCulture),
             e.AddedAt.ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture),
@@ -1381,6 +1397,7 @@ public sealed class AdminForm : GlassForm
         toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportAudit()));
 
         GridStyle.Apply(_audit);
+        WireSorter(_auditSorter, _audit, "view_audit_sort", LoadAudit);
         _audit.DefaultCellStyle.Font = Theme.Small;
         _audit.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _audit.DataBindingComplete += (_, _) =>
@@ -1397,7 +1414,7 @@ public sealed class AdminForm : GlassForm
     private void LoadAudit()
     {
         if (!Try("Unable to load the audit log", () => _auditEntries = _service.LoadAudit(_auditSearch.Text))) return;
-        _audit.DataSource = _auditEntries.Select(e => new AuditRow(AuditTime(e), e.Actor, e.Role, e.Action, e.Target, e.Detail)).ToList();
+        _audit.DataSource = _auditSorter.Sort(_auditEntries).Select(e => new AuditRow(AuditTime(e), e.Actor, e.Role, e.Action, e.Target, e.Detail)).ToList();
     }
 
     private void ExportAudit()
