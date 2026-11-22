@@ -14,6 +14,8 @@ public sealed class CheckInForm : GlassForm
     private readonly GlassButton _find = new() { Text = "Find booking" };
     private readonly Panel _lookupPage = new() { Dock = DockStyle.Fill };
     private readonly Panel _checkInPage = new() { Dock = DockStyle.Fill, Visible = false };
+    private const string LookupHint = "Check-in is open from the moment you book until departure. Enter your booking reference.";
+    private readonly PageHeader _header = new() { Title = "Online check-in", Hint = LookupHint };
     private readonly Label _title = new();
     private readonly Label _banner = new();
     private readonly ComboBox _leg = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -45,6 +47,7 @@ public sealed class CheckInForm : GlassForm
         card.Controls.Add(_lookupPage);
         card.Controls.Add(_checkInPage);
         Controls.Add(card);
+        Controls.Add(_header);   // added last, so it docks above the card
 
         Theme.Apply(this);
         _title.ForeColor = Theme.TextPrimary;
@@ -52,12 +55,6 @@ public sealed class CheckInForm : GlassForm
 
     private void BuildLookupPage(Func<int, int> D)
     {
-        var heading = new Label { Text = "Online check-in", Font = Theme.Title, AutoSize = false, Height = D(52), TextAlign = ContentAlignment.MiddleCenter };
-        var hint = new Label
-        {
-            Text = "Check-in is open from the moment you book until departure. Enter your booking reference.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.TopCenter
-        };
         _find.Height = D(44);
         _find.Click += (_, _) => Find();
         var findHost = new Panel { Height = D(64), Padding = new Padding(0, D(12), 0, 0) };
@@ -69,7 +66,7 @@ public sealed class CheckInForm : GlassForm
 
         // The lookup is one field, so it sits in the middle of the card instead of the left.
         var column = new Panel();
-        column.Height = Layouts.Stack(column, heading, hint, _referenceRow, findHost);
+        column.Height = Layouts.Stack(column, _referenceRow, findHost);
         Layouts.CenterColumn(_lookupPage, column, D(480), D(30));
     }
 
@@ -127,6 +124,7 @@ public sealed class CheckInForm : GlassForm
 
         _title.Text = $"Check-in · {result.Booking!.Reference}";
         _lookupPage.Visible = false;
+        _header.Hint = "Choose the flight and tick the travellers to check in.";
         _checkInPage.Visible = true;
         AcceptButton = null;
         RebuildTravellers();
@@ -137,6 +135,7 @@ public sealed class CheckInForm : GlassForm
         _controller.Clear();
         _checkInPage.Visible = false;
         _lookupPage.Visible = true;
+        _header.Hint = LookupHint;
         AcceptButton = _find;
         _reference.Focus();
     }
@@ -166,7 +165,7 @@ public sealed class CheckInForm : GlassForm
         _banner.ForeColor = view.Banner switch
         {
             CheckInBannerKind.NotYetOpen => Theme.TextSecondary,
-            CheckInBannerKind.Open => Theme.Accent,
+            CheckInBannerKind.Open => Theme.Brand,
             _ => Theme.DangerRed
         };
         _banner.Text = view.BannerText;
@@ -182,7 +181,7 @@ public sealed class CheckInForm : GlassForm
                 rows.Add(new Label
                 {
                     Text = $"✓  {traveller.Name}   ·   seat {record.SeatCode}   ·   checked in {record.CheckedInAt:MMM d, h:mm tt}",
-                    Font = Theme.Body, ForeColor = Theme.Accent, AutoSize = false, Height = D(38), TextAlign = ContentAlignment.MiddleLeft
+                    Font = Theme.Body, ForeColor = Theme.Brand, AutoSize = false, Height = D(38), TextAlign = ContentAlignment.MiddleLeft
                 });
             }
             else
@@ -201,7 +200,7 @@ public sealed class CheckInForm : GlassForm
         int total = Layouts.Stack(_travellers, rows.ToArray());
         _travellers.AutoScrollMinSize = new Size(0, total);
         Theme.Apply(_travellers);
-        foreach (var label in rows.OfType<Label>()) { label.ForeColor = Theme.Accent; label.Font = Theme.Body; }
+        foreach (var label in rows.OfType<Label>()) { label.ForeColor = Theme.Brand; label.Font = Theme.Body; }
 
         _passes.Enabled = anyCheckedIn;
         _emailPasses.Enabled = anyCheckedIn;
