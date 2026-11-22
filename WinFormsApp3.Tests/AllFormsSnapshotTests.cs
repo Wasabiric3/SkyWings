@@ -34,4 +34,36 @@ public sealed class AllFormsSnapshotTests
         }
         Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
     });
+
+    /// <summary>Every admin tab, opened by its section button, at the default and the minimum window size.</summary>
+    [TestMethod]
+    public void EveryAdminTab_FitsAtDefaultAndMinimumSize() => FormHarness.OnStaThread(() =>
+    {
+        using var harness = new FormHarness();
+        harness.SampleBooking();
+        var problems = new List<string>();
+        using var form = new AdminForm(harness.Admin) { StartPosition = FormStartPosition.Manual, Location = new Point(20, 20) };
+        form.Show();
+        Application.DoEvents();
+        foreach (string tab in new[] { "Flights", "Bookings", "Refunds", "Waitlist", "Reports", "Staff", "Audit", "Database" })
+        {
+            Control? button = null;
+            void Find(Control root) { foreach (Control c in root.Controls) { if (c is UI.GlassButton b && b.Text.StartsWith(tab, StringComparison.Ordinal) && b.Parent is FlowLayoutPanel) button ??= b; Find(c); } }
+            Find(form);
+            Assert.IsNotNull(button, tab);
+            ((UI.GlassButton)button).PerformClick();
+            Application.DoEvents();
+            foreach ((string size, Size target) in new[] { ("default", form.Size), ("min", form.MinimumSize) })
+            {
+                form.Size = target;
+                Application.DoEvents();
+                using Bitmap bmp = FormHarness.Snapshot(form);
+                Directory.CreateDirectory(FormHarness.Folder);
+                bmp.Save(Path.Combine(FormHarness.Folder, $"admin-tab-{tab.ToLowerInvariant()}-{size}.png"));
+                problems.AddRange(FormHarness.Clipped(form).Select(c => $"{tab}-{size}: {c}"));
+            }
+            form.Size = new Size(1120, 640);
+        }
+        Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
+    });
 }

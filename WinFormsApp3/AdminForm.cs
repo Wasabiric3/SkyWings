@@ -35,7 +35,7 @@ public sealed class AdminForm : GlassForm
     private readonly TextBox _bookingSearch = new() { PlaceholderText = "Search reference, flight or passenger" };
     private readonly ComboBox _bookingStatus = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     // ShowCheckBox pickers start checked, which would silently filter to today's date; start unchecked.
-    private readonly DateTimePicker _bookingDate = new() { Format = DateTimePickerFormat.Short, Value = DateTime.Today };   // the flight date shown
+    private readonly DateField _bookingDate = new() { Value = DateTime.Today };   // the flight date shown
     private readonly Label _bookingCount = new() { AutoSize = true };
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 250 };
     private List<BookingRecord> _allBookings = new();
@@ -266,6 +266,18 @@ public sealed class AdminForm : GlassForm
 
     private FlowLayoutPanel Toolbar() => new() { Dock = DockStyle.Top, Height = D(54), WrapContents = false, Padding = new Padding(0, D(6), 0, D(6)) };
 
+    /// <summary>A toolbar row for the filter boxes: a little taller than the button rows, because a rounded box is 44px high.</summary>
+    private FlowLayoutPanel FilterRow() => new() { Dock = DockStyle.Top, Height = D(58), WrapContents = false, Padding = new Padding(0, D(2), 0, D(2)) };
+
+    /// <summary>Puts a filter box (text box, drop-down or date) in the wizard's rounded field. It keeps the input's width and right margin; use the returned box where the input would go.</summary>
+    private RoundedInput Rounded(Control input)
+    {
+        int width = input.Width, gap = input.Margin.Right;   // read first: wrapping resizes the input
+        var host = new RoundedInput(input) { Width = width, Margin = new Padding(0, 0, gap, 0) };
+        input.Margin = Padding.Empty;
+        return host;
+    }
+
     /// <summary>Runs a staff action and turns the expected failures into a message instead of a crash.</summary>
     private bool Try(string failureTitle, Action action)
     {
@@ -450,9 +462,9 @@ public sealed class AdminForm : GlassForm
     private Panel BuildBookingsPage()
     {
         // Two toolbar rows, like the Refunds tab: the actions on top, "which bookings to show" below.
-        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(108) };
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(112) };
         FlowLayoutPanel actions = Toolbar();
-        FlowLayoutPanel view = Toolbar();
+        FlowLayoutPanel view = FilterRow();
         toolbar.Controls.Add(view);       // docked first = lower row
         toolbar.Controls.Add(actions);
 
@@ -460,9 +472,9 @@ public sealed class AdminForm : GlassForm
         _bookingSearch.Margin = new Padding(0, D(5), D(8), 0);
         _bookingStatus.Items.AddRange(TripStatus.Filters.Cast<object>().ToArray());
         _bookingStatus.SelectedIndex = 0;
-        _bookingStatus.Width = D(130);
+        _bookingStatus.Width = D(160);
         _bookingStatus.Margin = new Padding(0, D(5), D(8), 0);
-        _bookingDate.Width = D(128);
+        _bookingDate.Width = D(170);
         _bookingDate.Margin = new Padding(0, D(5), D(8), 0);
         FillChoices(_bookingView, BookingViewChoices, D(230), new Padding(0, D(5), D(8), 0));
         _bookingCount.Margin = new Padding(D(4), D(12), 0, 0);
@@ -492,10 +504,10 @@ public sealed class AdminForm : GlassForm
             ApplyBookingFilter();
         };
 
-        view.Controls.Add(_bookingView);
-        view.Controls.Add(_bookingDate);
-        view.Controls.Add(_bookingStatus);
-        view.Controls.Add(_bookingSearch);
+        view.Controls.Add(Rounded(_bookingView));
+        view.Controls.Add(Rounded(_bookingDate));
+        view.Controls.Add(Rounded(_bookingStatus));
+        view.Controls.Add(Rounded(_bookingSearch));
         actions.Controls.Add(ToolButton("Details", (_, _) => ShowBookingDetails()));
         if (Session.Has(Permission.CancelBookings))
             actions.Controls.Add(ToolButton("Cancel booking", (_, _) => CancelSelectedBooking(), GlassButtonStyle.Danger));
@@ -521,7 +533,10 @@ public sealed class AdminForm : GlassForm
         var content = new Panel { Dock = DockStyle.Fill };
         _bookings.Dock = DockStyle.Fill;
         content.Controls.Add(_bookings);
-        content.Controls.Add(new TripLegend { Dock = DockStyle.Bottom });
+        var legend = new TripLegend { Dock = DockStyle.Bottom };
+        content.Controls.Add(legend);
+        // On a small window the legend would crowd the list out (and, at the minimum size, cover the filters): show it only when the list keeps room.
+        content.Resize += (_, _) => legend.Visible = content.Height >= legend.GetPreferredSize(new Size(content.Width, 0)).Height + D(180);
         return Section(toolbar, content);
     }
 
@@ -773,22 +788,22 @@ public sealed class AdminForm : GlassForm
     private Panel BuildRefundsPage()
     {
         // Two toolbar rows: actions on top, "how to see the list" below.
-        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(108) };
-        FlowLayoutPanel actions = Toolbar();
-        FlowLayoutPanel view = Toolbar();
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(116) };
+        FlowLayoutPanel actions = FilterRow();
+        FlowLayoutPanel view = FilterRow();
         toolbar.Controls.Add(view);       // docked first = lower row
         toolbar.Controls.Add(actions);
 
         _refundView.Items.AddRange(new object[] { "Refunded bookings", "Refund requests" });
         _refundView.SelectedIndex = 0;
-        _refundView.Width = D(170);
+        _refundView.Width = D(210);
         _refundView.Margin = new Padding(0, D(5), D(8), 0);
         _refundView.SelectedIndexChanged += (_, _) => { ApplyRefundView(); ReloadRefundsView(); };
 
         var gap = new Padding(0, D(5), D(8), 0);
-        FillChoices(_refundPeriod, PeriodChoices, D(130), gap);
-        FillChoices(_refundSort, SortChoices, D(140), gap);
-        FillChoices(_refundHandled, HandledChoices, D(150), gap);
+        FillChoices(_refundPeriod, PeriodChoices, D(140), gap);
+        FillChoices(_refundSort, SortChoices, D(160), gap);
+        FillChoices(_refundHandled, HandledChoices, D(180), gap);
         _loadingViewSettings = true;
         SelectByKey(_refundPeriod, PeriodChoices, _service.GetViewSetting("view_refund_period", "all"));
         SelectByKey(_refundSort, SortChoices, _service.GetViewSetting("view_refund_sort", RefundSort.Newest));
@@ -798,7 +813,7 @@ public sealed class AdminForm : GlassForm
         _refundSort.SelectedIndexChanged += (_, _) => ViewSettingChanged("view_refund_sort", KeyOf(_refundSort, SortChoices));
         _refundHandled.SelectedIndexChanged += (_, _) => ViewSettingChanged("view_refund_handled", KeyOf(_refundHandled, HandledChoices));
 
-        _refundSearch.Width = D(220);
+        _refundSearch.Width = D(130);
         _refundSearch.Margin = gap;
         _refundSearch.TextChanged += (_, _) => { _refundTimer.Stop(); _refundTimer.Start(); };
         _refundShowAll.Margin = new Padding(D(4), D(10), D(8), 0);
@@ -809,7 +824,7 @@ public sealed class AdminForm : GlassForm
 
         GlassButton logRequest = ToolButton("Log request", (_, _) => LogRefundRequest(), GlassButtonStyle.Secondary);
 
-        actions.Controls.Add(_refundView);
+        actions.Controls.Add(Rounded(_refundView));
         actions.Controls.Add(logRequest);
         // Approve and Decline live in the request dialog, next to the customer's note.
         actions.Controls.Add(ToolButton("Details", (_, _) => ShowRefundBooking()));
@@ -817,13 +832,15 @@ public sealed class AdminForm : GlassForm
         actions.Controls.Add(ToolButton("Export CSV", (_, _) => ExportRefundsView(), GlassButtonStyle.Secondary));
         actions.Controls.Add(_refundCount);
 
-        view.Controls.Add(_refundPeriod);
-        view.Controls.Add(_refundSort);
-        view.Controls.Add(_refundHandled);
-        view.Controls.Add(_refundSearch);
+        // The rounded boxes are what show and hide with the view (hiding only the input would leave an empty box).
+        RoundedInput sortBox = Rounded(_refundSort), handledBox = Rounded(_refundHandled), searchBox = Rounded(_refundSearch);
+        view.Controls.Add(Rounded(_refundPeriod));
+        view.Controls.Add(sortBox);
+        view.Controls.Add(handledBox);
+        view.Controls.Add(searchBox);
         view.Controls.Add(_refundShowAll);
         view.Controls.Add(_requestShowClosed);
-        _refundOnlyControls.AddRange(new Control[] { _refundSort, _refundHandled, _refundSearch, _refundShowAll });
+        _refundOnlyControls.AddRange(new Control[] { sortBox, handledBox, searchBox, _refundShowAll });
         _requestOnlyControls.AddRange(new Control[] { logRequest, _requestShowClosed });
 
         GridStyle.Apply(_refunds);
@@ -1400,11 +1417,11 @@ public sealed class AdminForm : GlassForm
 
     private Panel BuildAuditPage()
     {
-        var toolbar = Toolbar();
+        var toolbar = FilterRow();
         _auditSearch.Width = D(280);
         _auditSearch.Margin = new Padding(0, D(5), D(8), 0);
         _auditSearch.TextChanged += (_, _) => { _auditTimer.Stop(); _auditTimer.Start(); };
-        toolbar.Controls.Add(_auditSearch);
+        toolbar.Controls.Add(Rounded(_auditSearch));
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadAudit(), GlassButtonStyle.Ghost));
         toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportAudit()));
 

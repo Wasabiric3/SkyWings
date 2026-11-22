@@ -192,8 +192,10 @@ public sealed class RefundsTabTests
                     foreach (ComboBox box in new[] { period, sort, handled })
                     {
                         Assert.IsTrue(box.Visible, box.Name);
-                        Assert.IsGreaterThanOrEqualTo(0, box.Left);
-                        Assert.IsLessThanOrEqualTo(box.Parent!.ClientSize.Width, box.Right, "the view row fits");
+                        // the visible box is the rounded one around the drop-down (the drop-down itself is inset inside it)
+                        Control shown = box.Parent!.Parent is SkyWings.UI.RoundedInput host ? host : box;
+                        Assert.IsGreaterThanOrEqualTo(0, shown.Left);
+                        Assert.IsLessThanOrEqualTo(shown.Parent!.ClientSize.Width, shown.Right, "the view row fits");
                     }
 
                     period.SelectedIndex = 2;   // Last 7 days
