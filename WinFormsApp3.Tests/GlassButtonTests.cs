@@ -47,4 +47,48 @@ public class GlassButtonTests
         button.DrawToBitmap(bmp, new Rectangle(0, 0, 120, 40));
         Assert.AreEqual(255, bmp.GetPixel(0, 0).A, "corner pixel must be painted, not transparent");
     }
+
+    private static Bitmap Render(GlassButtonStyle style, bool pill)
+    {
+        using var button = new GlassButton { Style = style, Pill = pill, Width = 120, Height = 40 };
+        var bmp = new Bitmap(120, 40);
+        button.DrawToBitmap(bmp, new Rectangle(0, 0, 120, 40));
+        return bmp;
+    }
+
+    [TestMethod]
+    public void Brand_WhiteText_ContrastAtLeast4_5()
+        => Assert.IsGreaterThanOrEqualTo(4.5, Contrast.Ratio(Color.White, Theme.Brand));
+
+    [TestMethod]
+    public void Brand_OnBrandSoft_ContrastAtLeast4_5()
+        => Assert.IsGreaterThanOrEqualTo(4.5, Contrast.Ratio(Theme.Brand, Theme.BrandSoft));
+
+    [TestMethod]
+    public void PillPrimary_FillsWithBrand()
+    {
+        using Bitmap bmp = Render(GlassButtonStyle.Primary, pill: true);
+        Assert.AreEqual(Theme.Brand.ToArgb(), bmp.GetPixel(14, 20).ToArgb());
+    }
+
+    [TestMethod]
+    public void Pill_CornerShowsSurface()
+    {
+        using Bitmap bmp = Render(GlassButtonStyle.Primary, pill: true);
+        Assert.AreEqual(Theme.BgMain.ToArgb(), bmp.GetPixel(2, 2).ToArgb(), "a pill's corner is outside the shape");
+    }
+
+    [TestMethod]
+    public void Outline_FillsWhite()
+    {
+        using Bitmap bmp = Render(GlassButtonStyle.Outline, pill: true);
+        Assert.AreEqual(Color.White.ToArgb(), bmp.GetPixel(14, 20).ToArgb());
+    }
+
+    [TestMethod]
+    public void NonPillPrimary_StillFillsWithPrimary()
+    {
+        using Bitmap bmp = Render(GlassButtonStyle.Primary, pill: false);
+        Assert.AreEqual(Theme.Primary.ToArgb(), bmp.GetPixel(14, 20).ToArgb());
+    }
 }

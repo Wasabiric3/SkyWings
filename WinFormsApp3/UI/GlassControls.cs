@@ -63,7 +63,8 @@ public class GlassCard : Control
     }
 }
 
-public enum GlassButtonStyle { Primary, Secondary, Ghost, Danger }
+/// <summary><see cref="Outline"/> (white with a border) is the Figma look's secondary button; it is appended so the older values keep their numbers.</summary>
+public enum GlassButtonStyle { Primary, Secondary, Ghost, Danger, Outline }
 
 /// <summary>Rounded button with hover/pressed/focus states. Behaves like a normal button (AcceptButton, DialogResult).</summary>
 public sealed class GlassButton : Control, IButtonControl, ISelfStyled
@@ -91,6 +92,16 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
     {
         get => _style;
         set { _style = value; Invalidate(); }
+    }
+
+    private bool _pill;
+
+    /// <summary>The Figma look: fully rounded ends, and a deep-green (<see cref="Theme.Brand"/>) primary button.</summary>
+    [DefaultValue(false)]
+    public bool Pill
+    {
+        get => _pill;
+        set { _pill = value; Invalidate(); }
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -149,11 +160,16 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
         using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var bounds = new RectangleF(1, 1, Width - 3, Height - 3);
-        float radius = Height * 0.27f;   // the brand kit's buttons round to ~27% of their height
+        float radius = _pill ? bounds.Height / 2 : Height * 0.27f;   // the brand kit's buttons round to ~27% of their height
 
         Color fill, border = Color.Transparent, text;
         switch (_style)
         {
+            case GlassButtonStyle.Outline:
+                fill = _pressed ? Theme.BrandSoft : Color.White;
+                border = _hover || _pressed ? Theme.Brand : Theme.Border;
+                text = Theme.Brand;
+                break;
             case GlassButtonStyle.Secondary:
                 fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.12f) : Theme.SoftFill;
                 text = Theme.Accent;
@@ -167,7 +183,10 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
                 text = Color.White;
                 break;
             default:
-                fill = _pressed ? Theme.AccentDark : _hover ? Theme.Accent : Theme.Primary;
+                if (_pill)
+                    fill = _pressed ? Gfx.Mix(Theme.Brand, Color.Black, 0.3f) : _hover ? Gfx.Mix(Theme.Brand, Color.Black, 0.15f) : Theme.Brand;
+                else
+                    fill = _pressed ? Theme.AccentDark : _hover ? Theme.Accent : Theme.Primary;
                 text = Color.White;
                 break;
         }
