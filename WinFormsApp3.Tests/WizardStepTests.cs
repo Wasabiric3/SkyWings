@@ -224,4 +224,53 @@ public sealed class WizardStepTests
         int cardRight = wizard.InForm(below).Right - Gfx.S(below, below.ShadowSize);
         Assert.AreEqual(cardRight, wizard.InForm(cards[3]).Right - 3, 2, "right edges line up");
     });
+
+    // ------------------------------------------------------------------ step 4: seats
+
+    [TestMethod]
+    public void Seats_ThePageShowsTheMapTheLegendAndTheSelectedSeats() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.Call("PrepareSeatStep");
+        wizard.GoTo(3);
+        Assert.AreEqual("Outbound: 0 of 1 selected", wizard.Field<Label>("_seatInfo").Text);
+        Assert.IsTrue(All(wizard.Form).OfType<SeatLegend>().Any(l => l.Visible && l.Grid), "a grid legend is shown");
+        var card = wizard.Field<GlassCard>("_seatCard");
+        StringAssert.Contains(card.Heading, "·", "the card heading is the aircraft summary");
+        Assert.IsTrue(wizard.Field<SeatMap>("_outboundMap").Visible);
+    });
+
+    [TestMethod]
+    public void Seats_PickingASeat_UpdatesTheSelectedSeatsCard() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.Call("PrepareSeatStep");
+        wizard.GoTo(3);
+        var map = wizard.Field<SeatMap>("_outboundMap");
+        map.SetSelected(new[] { SeatLayout.Code("Economy", 1, 'A') });
+        StringAssert.StartsWith(wizard.Field<Label>("_seatInfo").Text, "Outbound: 1 of 1 selected");
+    });
+
+    [TestMethod]
+    public void Seats_AtMinimumSize_TheFooterAndSummaryStillFit_OneWayAndRoundTrip() => WizardHarness.OnStaThread(() =>
+    {
+        foreach (bool roundTrip in new[] { false, true })
+        {
+            using var wizard = new WizardHarness();
+            wizard.Form.Size = wizard.Form.MinimumSize;
+            wizard.AddTraveller();
+            wizard.Field<CheckBox>("_roundTrip").Checked = roundTrip;
+            Application.DoEvents();
+            wizard.Call("PrepareSeatStep");
+            wizard.GoTo(3);
+            Application.DoEvents();
+            Rectangle client = wizard.Form.ClientRectangle;
+            Assert.IsTrue(client.Contains(wizard.InForm(wizard.Field<GlassButton>("_next"))), $"round trip {roundTrip}: next button");
+            Assert.IsTrue(client.Contains(wizard.InForm(wizard.Field<GlassButton>("_back"))), $"round trip {roundTrip}: back button");
+            Assert.IsTrue(client.Contains(wizard.InForm(wizard.Field<PriceSummaryPanel>("_price"))), $"round trip {roundTrip}: summary");
+            Assert.AreEqual(roundTrip, wizard.Field<FlowLayoutPanel>("_seatTabs").Visible, "the Outbound/Return tabs show only for a round trip");
+        }
+    });
 }

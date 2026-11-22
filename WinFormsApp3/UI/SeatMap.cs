@@ -273,6 +273,22 @@ public sealed class SeatMap : Control, ISelfStyled
     /// <summary>Short on-seat label: row and letter only. The full code carries a class prefix (ECO12A) that cannot fit a seat.</summary>
     internal static string SeatLabel(int rowIndex, char letter) => $"{rowIndex + 1}{letter}";
 
+    /// <summary>
+    /// What a seat shows: row and letter when free, ✕ when taken, ••• when held by someone else. A selected seat shows its code and a
+    /// tick when there is only one traveller, and the traveller's order number (1, 2, ...) when there are several.
+    /// </summary>
+    internal string SeatText(int row, int col)
+    {
+        string code = CodeAt(row, col);
+        return StateOf(code) switch
+        {
+            SeatState.Taken => "✕",
+            SeatState.Held => "•••",
+            SeatState.Selected => MaxSelection == 1 ? SeatLabel(row, _letters[col]) + "✓" : (_selected.IndexOf(code) + 1).ToString(),
+            _ => SeatLabel(row, _letters[col])
+        };
+    }
+
     private void DrawSeat(Graphics g, int row, int col, float radius, Font font, StringFormat center)
     {
         string code = CodeAt(row, col);
@@ -282,13 +298,7 @@ public sealed class SeatMap : Control, ISelfStyled
         var bounds = new RectangleF(rect.X + 0.5f, rect.Y + 0.5f, rect.Width - 1, rect.Height - 1);
 
         var (fill, border, text) = SeatPalette.For(state, hover);
-        string label = state switch
-        {
-            SeatState.Taken => "✕",
-            SeatState.Held => "•••",
-            SeatState.Selected => (_selected.IndexOf(code) + 1).ToString(),
-            _ => SeatLabel(row, _letters[col])   // free seats show row + letter (12A), as in the brand kit
-        };
+        string label = SeatText(row, col);
 
         using var path = Gfx.RoundedRect(bounds, radius);
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
@@ -299,7 +309,7 @@ public sealed class SeatMap : Control, ISelfStyled
 
         if (Focused && _cursor == (row, col) && ShowFocusCues)
         {
-            using var ring = new Pen(Color.FromArgb(200, Theme.Primary), 2f);
+            using var ring = new Pen(Color.FromArgb(200, Theme.Brand), 2f);
             using var ringPath = Gfx.RoundedRect(RectangleF.Inflate(bounds, 2.5f, 2.5f), radius + 2);
             g.DrawPath(ring, ringPath);
         }
@@ -312,9 +322,14 @@ public sealed class SeatMap : Control, ISelfStyled
     }
 }
 
-/// <summary>Colour key for the seat map.</summary>
+/// <summary>
+/// Colour key for the seat map. By default one row ("Available, Selected, Held by someone, Taken"); with <see cref="Grid"/> a 2x2 grid
+/// ("Available, Selected / Held, Taken") that fits the wizard's legend card.
+/// </summary>
 public sealed class SeatLegend : Control, ISelfStyled
 {
+    private bool _grid;
+
     public SeatLegend()
     {
         SetStyle(ControlStyles.UserPaint |
@@ -323,12 +338,48 @@ public sealed class SeatLegend : Control, ISelfStyled
         Font = Theme.Small;
     }
 
+    [System.ComponentModel.DefaultValue(false)]
+    public bool Grid
+    {
+        get => _grid;
+        set { _grid = value; Invalidate(); }
+    }
+
+    private static readonly SeatState[] Order = { SeatState.Free, SeatState.Selected, SeatState.Held, SeatState.Taken };
+    private static readonly string[] GridLabels = { "Available", "Selected", "Held", "Taken" };
+
+    /// <summary>The colour swatch of the item at <paramref name="index"/> (Available, Selected, Held, Taken) in grid mode.</summary>
+    internal Rectangle SwatchBounds(int index)
+    {
+        int size = Gfx.S(this, 20), pad = Gfx.S(this, 4);
+        int colWidth = Math.Max(1, (Width - 2 * pad) / 2), rowHeight = Math.Max(1, Height / 2);
+        int col = index % 2, row = index / 2;
+        return new Rectangle(pad + col * colWidth, row * rowHeight + (rowHeight - size) / 2, size, size);
+    }
+
+    private void PaintGrid(Graphics g)
+    {
+        using var textBrush = new SolidBrush(Theme.TextPrimary);
+        using var format = Gfx.Format(StringAlignment.Near);
+        for (int i = 0; i < Order.Length; i++)
+        {
+            Rectangle swatch = SwatchBounds(i);
+            var (fill, border, _) = SeatPalette.For(Order[i], false);
+            using var path = Gfx.RoundedRect(new RectangleF(swatch.X + 0.5f, swatch.Y + 0.5f, swatch.Width - 1, swatch.Height - 1), Gfx.S(this, 6f));
+            using (var fillBrush = new SolidBrush(fill)) g.FillPath(fillBrush, path);
+            using (var pen = new Pen(border, 1f)) g.DrawPath(pen, path);
+            g.DrawString(GridLabels[i], Font, textBrush,
+                new RectangleF(swatch.Right + Gfx.S(this, 12f), swatch.Y, Width / 2f - swatch.Width - Gfx.S(this, 16f), swatch.Height), format);
+        }
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var g = e.Graphics;
         using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
+        if (_grid) { PaintGrid(g); return; }
         var items = new (string Label, Color Fill, Color Border)[]
         {
             ("Available", SeatPalette.For(SeatState.Free, false).Fill, SeatPalette.For(SeatState.Free, false).Border),

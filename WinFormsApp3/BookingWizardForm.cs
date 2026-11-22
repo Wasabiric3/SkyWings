@@ -27,7 +27,7 @@ public sealed class BookingWizardForm : GlassForm
         "Your booking is confirmed. Keep the receipt for your records."
     };
     /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
-    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions };
+    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions, StepSeats };
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -87,8 +87,9 @@ public sealed class BookingWizardForm : GlassForm
     private readonly SeatMap _returnMap = new() { Visible = false };
     private readonly Panel _mapHost = new() { Dock = DockStyle.Fill, AutoScroll = true };
     private readonly FlowLayoutPanel _seatTabs = new();
-    private readonly GlassButton _seatTabOut = new() { Text = "Outbound", Style = GlassButtonStyle.Primary };
-    private readonly GlassButton _seatTabBack = new() { Text = "Return", Style = GlassButtonStyle.Secondary };
+    private readonly GlassButton _seatTabOut = new() { Text = "Outbound", Style = GlassButtonStyle.Primary, Pill = true };
+    private readonly GlassButton _seatTabBack = new() { Text = "Return", Style = GlassButtonStyle.Outline, Pill = true };
+    private readonly GlassCard _seatCard = new() { ContentPadding = 16, Dock = DockStyle.Fill };   // its heading is the aircraft summary
     private readonly Label _seatInfo = new() { AutoSize = false, Dock = DockStyle.Top };
     private readonly Label _seatAircraft = new() { AutoSize = false, Dock = DockStyle.Top };   // "Airbus A320 · Economy cabin 3-3 · 28 rows"
     private string _seatSignature = "";
@@ -262,8 +263,8 @@ public sealed class BookingWizardForm : GlassForm
         _pageTitle.ForeColor = Theme.Brand;   // Theme.Apply sets every label to the body colour, so this is set after it
         _travellerHeading.Font = new Font(Theme.Small, FontStyle.Bold);
         _travellerHeading.ForeColor = Theme.Brand;
-        _seatInfo.Font = Theme.Small;
-        _seatInfo.ForeColor = Theme.TextSecondary;
+        _seatInfo.Font = new Font(Theme.Body, FontStyle.Bold);
+        _seatInfo.ForeColor = Theme.TextPrimary;
         _seatAircraft.Font = Theme.Small;
         _seatAircraft.ForeColor = Theme.Accent;
         _review.Font = Theme.Body;
@@ -674,8 +675,7 @@ public sealed class BookingWizardForm : GlassForm
 
     private Panel BuildSeatPage()
     {
-        var page = NewPage();
-        page.AutoScroll = false;
+        var page = new Panel { Dock = DockStyle.Fill, Visible = false };
 
         _outboundMap.SelectionChanged += (_, _) => UpdateSeatInfo();
         _returnMap.SelectionChanged += (_, _) => UpdateSeatInfo();
@@ -695,12 +695,22 @@ public sealed class BookingWizardForm : GlassForm
         _seatTabOut.Visible = true;
         _seatTabBack.Visible = true;
 
-        var legend = new SeatLegend { Dock = DockStyle.Top };
-        page.Controls.Add(_mapHost);
-        page.Controls.Add(_seatInfo);
-        page.Controls.Add(legend);
-        page.Controls.Add(_seatAircraft);
-        page.Controls.Add(_seatTabs);
+        // Left: one card, titled with the aircraft summary, holding the Outbound/Return tabs (round trips) and the seat map.
+        _seatCard.Controls.Add(_mapHost);
+        _seatCard.Controls.Add(_seatTabs);
+
+        // Right: the seats picked so far, and the colour key.
+        _seatInfo.Dock = DockStyle.Fill;
+        var selectedCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = "Selected seats" };
+        selectedCard.Controls.Add(_seatInfo);
+        var legendCard = new GlassCard { Dock = DockStyle.Bottom, Height = D(140), ContentPadding = 16 };
+        legendCard.Controls.Add(new SeatLegend { Grid = true, Dock = DockStyle.Fill });
+        var side = new Panel { Dock = DockStyle.Right, Width = D(300), Padding = new Padding(D(8), 0, 0, 0) };
+        side.Controls.Add(selectedCard);
+        side.Controls.Add(legendCard);
+
+        page.Controls.Add(_seatCard);
+        page.Controls.Add(side);
         return page;
     }
 
@@ -714,8 +724,8 @@ public sealed class BookingWizardForm : GlassForm
     {
         _outboundMap.Visible = !returnLeg;
         _returnMap.Visible = returnLeg;
-        _seatTabOut.Style = returnLeg ? GlassButtonStyle.Secondary : GlassButtonStyle.Primary;
-        _seatTabBack.Style = returnLeg ? GlassButtonStyle.Primary : GlassButtonStyle.Secondary;
+        _seatTabOut.Style = returnLeg ? GlassButtonStyle.Outline : GlassButtonStyle.Primary;
+        _seatTabBack.Style = returnLeg ? GlassButtonStyle.Primary : GlassButtonStyle.Outline;
         _mapHost.AutoScrollPosition = Point.Empty;
         CenterMaps();
     }
@@ -745,6 +755,7 @@ public sealed class BookingWizardForm : GlassForm
         }
         _seatSignature = signature;
         _seatAircraft.Text = _controller.AircraftSummary(s.SelectedFlight!, s.ReturnFlight);
+        _seatCard.Heading = _seatAircraft.Text;
         UpdateSeatInfo();
         return true;
     }
@@ -767,7 +778,7 @@ public sealed class BookingWizardForm : GlassForm
         string text = $"Outbound: {_outboundMap.Selected.Count} of {need} selected" +
                       (_outboundMap.Selected.Count > 0 ? $" ({string.Join(", ", _outboundMap.Selected)})" : "");
         if (_session.ReturnFlight is not null)
-            text += $"   ·   Return: {_returnMap.Selected.Count} of {need} selected" +
+            text += Environment.NewLine + $"Return: {_returnMap.Selected.Count} of {need} selected" +
                     (_returnMap.Selected.Count > 0 ? $" ({string.Join(", ", _returnMap.Selected)})" : "");
         _seatInfo.Text = text;
     }
