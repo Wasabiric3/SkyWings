@@ -118,7 +118,7 @@ internal sealed class RoundedInput : Control, ISelfStyled
         var bounds = new Rectangle(e.Bounds.X + Gfx.S(combo, 2), e.Bounds.Y, e.Bounds.Width - Gfx.S(combo, 2), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, combo.GetItemText(combo.Items[e.Index]), edit ? BoldFont : Theme.Body, bounds,
             combo.Enabled ? Theme.TextPrimary : Theme.DisabledText,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
     private static readonly Font BoldFont = new(Theme.Body, FontStyle.Bold);

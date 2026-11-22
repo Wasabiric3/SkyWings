@@ -57,6 +57,6 @@ public sealed class GlassCheckBox : CheckBox, ISelfStyled
 
         var textBounds = new Rectangle(BoxLeft + BoxSize + Gfx.S(this, 8), 0, Math.Max(0, Width - BoxLeft - BoxSize - Gfx.S(this, 8)), Height);
         TextRenderer.DrawText(g, Text, Font, textBounds, Enabled ? Theme.TextPrimary : Theme.DisabledText,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 }

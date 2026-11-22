@@ -14,17 +14,20 @@ public sealed class BookingWizardForm : GlassForm
     private static readonly string[] StepNames = { "Flight", "Passengers", "Class & extras", "Seats", "Payment", "Receipt" };
     private static readonly string[] StepTitles =
     {
-        "Where are you flying?", "Who is travelling?", "Choose your cabin", "Pick your seats", "Review and pay", "You're all set"
+        "Where are you flying?", "Who is travelling?", "Choose your cabin", "Pick your seats", "Review and pay", "You're all set!"
     };
     private static readonly string[] StepHints =
     {
-        "Choose a flight and your travel dates.",
-        "Add every traveller. Senior citizen discount requires age 60 or older.",
-        "Class sets your baggage and meal options.",
+        "Choose your destination, travel date, and preferred flight.",
+        "Enter the traveller details exactly as shown on a valid identification document.",
+        "Select the level of comfort and travel add-ons for your flight.",
+        // These two state rules (the seat hold, the demo payment), so they keep their wording.
         "Select one seat per traveller. Seats are held for 10 minutes once you continue.",
         "This is a demo payment. Never enter real card details.",
-        "Your booking is confirmed."
+        "Your booking is confirmed. Keep the receipt for your records."
     };
+    /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
+    private static readonly HashSet<int> OwnCards = new();
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -34,16 +37,16 @@ public sealed class BookingWizardForm : GlassForm
     private BookingSession _session => _controller.Session;
 
     // frame
-    private readonly StepBar _stepBar = new(StepNames);
-    private readonly GlassCard _card = new() { ContentPadding = 22 };
+    private readonly StepBar _stepBar = new(StepNames) { ShowLogo = true };
     private readonly PriceSummaryPanel _price = new() { Title = "Your trip" };
     private readonly Label _pageTitle = new();
     private readonly Label _pageHint = new();
     private readonly Panel _pageHost = new() { Dock = DockStyle.Fill };
     private readonly Panel[] _pages = new Panel[6];
-    private readonly GlassButton _back = new() { Text = "Back", Style = GlassButtonStyle.Secondary };
-    private readonly GlassButton _next = new() { Text = "Continue" };
-    private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Secondary, Visible = false };
+    private readonly Control[] _pageRoots = new Control[6];   // the page itself, or the white card it sits on (see OwnCards)
+    private readonly GlassButton _back = new() { Text = "← Back", Style = GlassButtonStyle.Outline, Pill = true };
+    private readonly GlassButton _next = new() { Text = "Continue →", Pill = true };
+    private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Outline, Pill = true, Visible = false };
 
     // step 1: flight
     private readonly ComboBox _flight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, DropDownWidth = 560 };
@@ -112,8 +115,8 @@ public sealed class BookingWizardForm : GlassForm
         _controller = new BookingWizardController(store);
         Text = "New booking · SkyWings";
         StartPosition = FormStartPosition.CenterParent;
-        SizeForScreen(1120, 660, 960, 580);
-        Padding = new Padding(D(24), D(10), D(24), D(16));
+        SizeForScreen(1280, 800, 960, 580);
+        Padding = new Padding(D(24), 0, D(24), 0);
         ApplyMetrics();
 
         BuildFrame();
@@ -123,9 +126,14 @@ public sealed class BookingWizardForm : GlassForm
         _pages[StepSeats] = BuildSeatPage();
         _pages[StepPayment] = BuildPaymentPage();
         _pages[StepReceipt] = BuildReceiptPage();
-        foreach (var page in _pages) _pageHost.Controls.Add(page);
+        for (int i = 0; i < _pages.Length; i++)
+        {
+            _pageRoots[i] = PageRoot(i);
+            _pageHost.Controls.Add(_pageRoots[i]);
+        }
 
         Theme.Apply(this);
+        BackColor = Theme.PageBg;
         StyleLabels();
         LoadFlights();
         PopulateCabinOptions();
@@ -173,56 +181,72 @@ public sealed class BookingWizardForm : GlassForm
             GoTo(index);
         };
 
-        _pageTitle.Font = Theme.Header;
-        _pageTitle.ForeColor = Theme.TextPrimary;
+        _pageTitle.Font = Theme.Title;
+        _pageTitle.ForeColor = Theme.Brand;
         _pageTitle.AutoSize = false;
-        _pageTitle.Height = D(38);
+        _pageTitle.Height = D(46);
         _pageTitle.Dock = DockStyle.Top;
         _pageTitle.TextAlign = ContentAlignment.MiddleLeft;
 
         _pageHint.Font = Theme.Small;
         _pageHint.ForeColor = Theme.TextSecondary;
         _pageHint.AutoSize = false;
-        _pageHint.Height = D(26);
+        _pageHint.Height = D(30);
         _pageHint.Dock = DockStyle.Top;
         _pageHint.TextAlign = ContentAlignment.TopLeft;
 
-        var footer = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom, Height = D(54), FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false, Padding = new Padding(0, D(10), 0, 0)
-        };
-        _next.Margin = new Padding(D(10), 0, 0, 0);
+        // Footer: a hairline, then Back (and Print receipt) at the left and the main action at the right.
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = D(78) };
+        var buttons = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, D(18), 0, D(12)) };
+        _next.Dock = DockStyle.Right;
+        _back.Dock = DockStyle.Left;
+        _print.Dock = DockStyle.Left;
         _next.Click += (_, _) => Next();
-        _back.Click += (_, _) => { if (_stepIndex > 0) GoTo(_stepIndex - 1); };
+        _back.Click += (_, _) => { if (_stepIndex > 0) GoTo(_stepIndex - 1); else Close(); };
         _print.Click += (_, _) => PrintReceipt();
-        footer.Controls.Add(_next);
-        footer.Controls.Add(_back);
-        footer.Controls.Add(_print);
+        // Docking is applied from the last-added control backwards, so Back ends up leftmost.
+        buttons.Controls.Add(_next);
+        buttons.Controls.Add(_print);
+        buttons.Controls.Add(_back);
+        footer.Controls.Add(buttons);
+        footer.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
 
-        // Fill first, then edges: docking is applied from the last-added control backwards.
-        _card.Controls.Add(_pageHost);
-        _card.Controls.Add(footer);
-        _card.Controls.Add(_pageHint);
-        _card.Controls.Add(_pageTitle);
+        // The left column: title, hint and the page. The summary card sits to its right.
+        var left = new Panel { Dock = DockStyle.Fill };
+        left.Controls.Add(_pageHost);
+        left.Controls.Add(_pageHint);
+        left.Controls.Add(_pageTitle);
 
-        _card.ContentPadding = 16;
-        var gap = new Panel { Dock = DockStyle.Right, Width = D(4) };
+        var gap = new Panel { Dock = DockStyle.Right, Width = D(20) };
         _price.Dock = DockStyle.Right;
-        _card.Dock = DockStyle.Fill;
-
-        var body = new Panel { Dock = DockStyle.Fill };
-        body.Controls.Add(_card);
+        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, D(14), 0, D(8)) };
+        body.Controls.Add(left);
         body.Controls.Add(gap);
         body.Controls.Add(_price);
 
         Controls.Add(body);
+        Controls.Add(footer);
         Controls.Add(_stepBar);
         AcceptButton = _next;
     }
 
+    /// <summary>The control that goes into the page host for a step: the page itself, or a white card around it.</summary>
+    private Control PageRoot(int step)
+    {
+        if (OwnCards.Contains(step)) return _pages[step];
+        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Visible = false };
+        _pages[step].Visible = true;
+        card.Controls.Add(_pages[step]);
+        return card;
+    }
+
+    /// <summary>Sizes a footer button to its text (docked buttons keep the width they are given).</summary>
+    private void FitButton(GlassButton button)
+        => button.Width = Math.Max(D(150), TextRenderer.MeasureText(button.Text, button.Font).Width + D(60));
+
     private void StyleLabels()
     {
+        _pageTitle.ForeColor = Theme.Brand;   // Theme.Apply sets every label to the body colour, so this is set after it
         _flightInfo.Font = Theme.Small;
         _flightInfo.ForeColor = Theme.Accent;
         _seatInfo.Font = Theme.Small;
@@ -840,22 +864,21 @@ public sealed class BookingWizardForm : GlassForm
     private void GoTo(int step)
     {
         _stepIndex = step;
-        for (int i = 0; i < _pages.Length; i++) _pages[i].Visible = i == step;
+        for (int i = 0; i < _pageRoots.Length; i++) _pageRoots[i].Visible = i == step;
         _stepBar.Current = step;
         _pageTitle.Text = StepTitles[step];
         _pageHint.Text = StepHints[step];
-        _back.Visible = step > 0 && step < StepReceipt;
+        _back.Visible = step < StepReceipt;
+        _back.Text = step == 0 ? "← Back" : $"← Back to {StepNames[step - 1]}";
         _print.Visible = step == StepReceipt;
         _next.Text = step switch
         {
-            StepOptions => "Continue to seats",
-            StepSeats => "Continue to payment",
-            StepPayment => "Confirm and pay",
-            StepReceipt => "Done",
-            _ => "Continue"
+            StepPayment => "Confirm and pay →",
+            StepReceipt => "Done →",
+            _ => $"Continue to {StepNames[step + 1]} →"
         };
+        foreach (GlassButton button in new[] { _back, _print, _next }) FitButton(button);
         if (step == StepPayment) UpdateReview();
-        _next.Style = GlassButtonStyle.Primary;
         // Enter adds the traveller while typing on the passenger step; everywhere else it continues.
         AcceptButton = step == StepPassengers ? _addTraveller : _next;
         if (step == StepSeats) CenterMaps();
@@ -947,13 +970,6 @@ public sealed class BookingWizardForm : GlassForm
         RefreshPrice();
     }
 
-    private static string Code(string place)
-    {
-        int open = place.IndexOf('(');
-        int close = place.IndexOf(')');
-        return open >= 0 && close > open ? place[(open + 1)..close] : place;
-    }
-
     private static string Php(decimal value) => $"PHP {value:N2}";
 
     private void RefreshPrice()
@@ -962,22 +978,18 @@ public sealed class BookingWizardForm : GlassForm
         var lines = new List<PriceLine>();
         if (s.SelectedFlight is { } flight)
         {
-            lines.Add(new("Outbound", "", PriceLineKind.Heading));
-            lines.Add(new(flight.FlightNo, $"{Code(flight.Origin)} → {Code(flight.Destination)}"));
-            lines.Add(new("Date", s.FlightDate.ToString("MMM d, yyyy")));
+            lines.Add(new(flight.FlightNo, $"{flight.Origin} → {flight.Destination}", PriceLineKind.Hero));
+            lines.Add(new("Departure", s.FlightDate.ToString("MMM d, yyyy"), PriceLineKind.Stat));
             if (s.ReturnFlight is { } back)
             {
-                lines.Add(new("Return", "", PriceLineKind.Heading));
-                lines.Add(new(back.FlightNo, $"{Code(back.Origin)} → {Code(back.Destination)}"));
-                lines.Add(new("Date", s.ReturnDate?.ToString("MMM d, yyyy") ?? "—"));
+                lines.Add(new(back.FlightNo, $"{back.Origin} → {back.Destination}", PriceLineKind.Hero));
+                lines.Add(new("Return", s.ReturnDate?.ToString("MMM d, yyyy") ?? "—", PriceLineKind.Stat));
             }
         }
 
-        lines.Add(new("Travellers", "", PriceLineKind.Heading));
-        lines.Add(new("Class", s.ClassName));
-        lines.Add(new("Travellers", s.Passengers.Count == 0 ? "Not added yet" : s.Passengers.Count.ToString()));
+        lines.Add(new("Travellers", s.Passengers.Count switch { 0 => "Not added yet", 1 => "1 traveller", var n => $"{n} travellers" }, PriceLineKind.Stat));
+        lines.Add(new("Cabin", s.ClassName, PriceLineKind.Stat));
 
-        lines.Add(new("Fare", "", PriceLineKind.Heading));
         if (s.Passengers.Count == 0)
         {
             lines.Add(new("Per traveller", Php(s.BaseFarePerPassenger)));

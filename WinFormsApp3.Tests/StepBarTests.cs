@@ -77,6 +77,31 @@ public sealed class StepBarTests
     }
 
     [TestMethod]
+    public void Wordmark_IsShownWhenWide_AndDroppedForGoodOnceTheBarGetsTooNarrow()
+    {
+        using (var wide = Make(width: 1264)) Assert.IsTrue(wide.WordmarkShown);
+        bool dropped = false;
+        for (int width = 1290; width >= 700; width -= 10)
+        {
+            using var bar = Make(width);
+            if (!bar.WordmarkShown) dropped = true;
+            else Assert.IsFalse(dropped, $"the wordmark came back at {width}px after being dropped");
+        }
+        Assert.IsTrue(dropped, "a narrow bar drops the wordmark so the pills keep their room");
+    }
+
+    [TestMethod]
+    public void NoLogo_NoWordmark()
+    {
+        using var bar = Make(width: 1264, logo: false);
+        Assert.IsFalse(bar.WordmarkShown);
+    }
+
+    [TestMethod]
+    public void PillText_DoesNotTreatAmpersandAsAMnemonic()
+        => Assert.IsTrue(StepBar.TextFlags.HasFlag(TextFormatFlags.NoPrefix), "\"Class & extras\" must not draw an underscore");
+
+    [TestMethod]
     public void CurrentPill_FillsWithBrand()
     {
         using var bar = Make();

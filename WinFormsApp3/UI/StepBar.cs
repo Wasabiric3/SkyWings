@@ -57,19 +57,35 @@ public sealed class StepBar : Control, ISelfStyled
 
     private static string PillText(int index, string name) => $"{index + 1}. {name}";
 
-    /// <summary>The pill rectangles, left to right. When the window is narrow the padding inside each pill shrinks so they all fit.</summary>
-    private List<Rectangle> Layout()
+    internal const TextFormatFlags TextFlags =
+        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
+    private static readonly Font WordmarkFont = new("Segoe UI", 17f, FontStyle.Bold);
+    private static readonly Font TaglineFont = new("Segoe UI", 6.75f, FontStyle.Bold);
+    private const string Tagline = "AIRLINE  •  RESERVATIONS";
+
+    private int WordmarkWidth()
+        => Math.Max(TextRenderer.MeasureText("SkyWings", WordmarkFont, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width,
+                    TextRenderer.MeasureText(Tagline, TaglineFont, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width);
+
+    /// <summary>
+    /// Arranges the pills left to right after the logo (and, when asked, the wordmark). When the window is narrow the padding inside
+    /// each pill shrinks, down to <paramref name="minPad"/>; <c>Fits</c> says whether they all fit then.
+    /// </summary>
+    private (List<Rectangle> Pills, bool Fits, int MarkRight) Arrange(bool wordmark, int minPad)
     {
         int left = Gfx.S(this, 4);
         Size logo = LogoSize();
-        int start = logo.IsEmpty ? left : left + logo.Width + Gfx.S(this, 40);
+        int markRight = logo.IsEmpty ? left : left + logo.Width;
+        int start = logo.IsEmpty ? left : markRight + Gfx.S(this, 40);
+        if (wordmark) start = markRight + Gfx.S(this, 10) + WordmarkWidth() + Gfx.S(this, 36);
         int available = Math.Max(0, Width - start - Gfx.S(this, 4));
 
         int[] textWidths = _steps.Select((name, i) => TextRenderer.MeasureText(PillText(i, name), BoldFont, Size.Empty,
-            TextFormatFlags.NoPadding).Width).ToArray();
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width).ToArray();
         int pad = Gfx.S(this, 18);
-        int minPad = Gfx.S(this, 8);
         while (pad > minPad && textWidths.Sum() + _steps.Length * 2 * pad + (_steps.Length - 1) * PillGap > available) pad--;
+        bool fits = textWidths.Sum() + _steps.Length * 2 * pad + (_steps.Length - 1) * PillGap <= available;
 
         int y = (Height - PillHeight) / 2 - Gfx.S(this, 1);
         var result = new List<Rectangle>(_steps.Length);
@@ -80,8 +96,24 @@ public sealed class StepBar : Control, ISelfStyled
             result.Add(new Rectangle(x, y, w, PillHeight));
             x += w + PillGap;
         }
-        return result;
+        return (result, fits, markRight);
     }
+
+    /// <summary>The wordmark is shown only when the pills still fit comfortably beside it; otherwise the pills win and only the mark stays.</summary>
+    private (List<Rectangle> Pills, bool Wordmark, int MarkRight) Compute()
+    {
+        if (_showLogo && !LogoSize().IsEmpty)
+        {
+            var withWordmark = Arrange(wordmark: true, minPad: Gfx.S(this, 12));
+            if (withWordmark.Fits) return (withWordmark.Pills, true, withWordmark.MarkRight);
+        }
+        var plain = Arrange(wordmark: false, minPad: Gfx.S(this, 8));
+        return (plain.Pills, false, plain.MarkRight);
+    }
+
+    private List<Rectangle> Layout() => Compute().Pills;
+
+    internal bool WordmarkShown => Compute().Wordmark;
 
     internal Rectangle PillBounds(int index) => Layout()[index];
 
@@ -125,7 +157,15 @@ public sealed class StepBar : Control, ISelfStyled
             g.DrawImageUnscaled(scaled, Gfx.S(this, 4), (Height - logoSize.Height) / 2 - Gfx.S(this, 1));
         }
 
-        List<Rectangle> pills = Layout();
+        var (pills, wordmark, markRight) = Compute();
+        if (wordmark)
+        {
+            int x = markRight + Gfx.S(this, 10), mid = Height / 2 - Gfx.S(this, 1);
+            TextRenderer.DrawText(g, "SkyWings", WordmarkFont, new Rectangle(x, mid - Gfx.S(this, 26), WordmarkWidth() + Gfx.S(this, 4), Gfx.S(this, 30)),
+                Theme.Brand, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, Tagline, TaglineFont, new Rectangle(x + Gfx.S(this, 2), mid + Gfx.S(this, 3), WordmarkWidth() + Gfx.S(this, 4), Gfx.S(this, 14)),
+                Theme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        }
         for (int i = 0; i < pills.Count; i++)
         {
             bool current = i == _current, done = i < _current;
@@ -137,8 +177,7 @@ public sealed class StepBar : Control, ISelfStyled
                 g.DrawPath(outline, path);
             }
             Color text = current ? Color.White : done ? Theme.Brand : Theme.TextPrimary;
-            TextRenderer.DrawText(g, PillText(i, _steps[i]), current ? BoldFont : Font, pills[i], text,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, PillText(i, _steps[i]), current ? BoldFont : Font, pills[i], text, TextFlags);
         }
     }
 

@@ -124,6 +124,6 @@ public sealed class DateField : Control, ISelfStyled
         base.OnPaint(e);
         using (var back = new SolidBrush(BackColor)) e.Graphics.FillRectangle(back, ClientRectangle);
         TextRenderer.DrawText(e.Graphics, DisplayText, TextFont, ClientRectangle, Enabled ? Theme.TextPrimary : Theme.DisabledText,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 }

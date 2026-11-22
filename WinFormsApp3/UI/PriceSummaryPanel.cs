@@ -15,7 +15,7 @@ public sealed class PriceSummaryPanel : GlassCard
     private static readonly Font TitleFont = new(Theme.Subtitle, FontStyle.Bold);
     private static readonly Font BoldFont = new(Theme.Body, FontStyle.Bold);
     private static readonly Font SmallBold = new(Theme.Small, FontStyle.Bold);
-    private const TextFormatFlags Flags = TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter;
+    private const TextFormatFlags Flags = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter;
 
     private List<PriceLine> _lines = new();
 
@@ -27,6 +27,9 @@ public sealed class PriceSummaryPanel : GlassCard
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string Title { get; set; } = "Your trip";
+
+    /// <summary>The lines currently shown (read by tests).</summary>
+    internal IReadOnlyList<PriceLine> Lines => _lines;
 
     public void SetLines(IEnumerable<PriceLine> lines)
     {
@@ -44,7 +47,7 @@ public sealed class PriceSummaryPanel : GlassCard
         while (true)
         {
             var font = new Font(start.FontFamily, size, start.Style);
-            if (size <= 8f || TextRenderer.MeasureText(text, font, Size.Empty, TextFormatFlags.NoPadding).Width <= maxWidth) return font;
+            if (size <= 8f || TextRenderer.MeasureText(text, font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width <= maxWidth) return font;
             font.Dispose();
             size -= 0.5f;
         }
