@@ -60,6 +60,8 @@ internal sealed class FormHarness : IDisposable
         yield return ("reset-password", () => new ResetPasswordForm(Admin, account));
         yield return ("backup-password", () => new BackupPasswordForm());
         yield return ("restore-credentials", () => new RestoreCredentialsForm("skywings-backup.zip"));
+        yield return ("flight-editor", () => (Form)Activator.CreateInstance(typeof(FlightEditorForm),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new object?[] { Admin, Admin.LoadFlights().First(), 0 }, null)!);
         yield return ("staff-login", () => (Form)Activator.CreateInstance(typeof(StaffLoginForm),
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new object?[] { Store, "admin", true }, null)!);
     }

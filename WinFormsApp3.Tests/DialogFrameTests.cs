@@ -120,4 +120,25 @@ public sealed class DialogFrameTests
             Assert.AreEqual(DialogResult.Cancel, form.DialogResult, name);
         }
     });
+
+    [TestMethod]
+    public void Create_MeasuresSideBySideRowsToo() => FormHarness.OnStaThread(() =>
+    {
+        using var form = new GlassForm { FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.Manual, Location = new Point(20, 20) };
+        var combo = new FieldRow("TYPE", new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList });
+        var rows = new Control[]
+        {
+            Layouts.Row(14, new FieldRow("FLIGHT", new TextBox()), combo),
+            Layouts.Row(14, new FieldRow("FARE", new TextBox()), new FieldRow("SEATS", new TextBox())),
+            new FieldRow("TIME", new DateTimePicker())
+        };
+        DialogFrame frame = DialogFrame.Create(form, 560, "Edit flight", "", rows, new GlassButton { Text = "Save" }, new GlassButton { Text = "Cancel" });
+        form.Show();
+        Application.DoEvents();
+        GlassCard card = frame.Content.Controls.OfType<GlassCard>().Single();
+        Assert.IsLessThanOrEqualTo(card.DisplayRectangle.Bottom, rows[^1].Bottom, "the last row is inside the card");
+        foreach (Control row in rows.OfType<TableLayoutPanel>())
+            Assert.IsGreaterThanOrEqualTo(row.Controls.Cast<Control>().Max(c => c.Height), row.Height, "a side-by-side row is as tall as its tallest field");
+        Assert.IsEmpty(FormHarness.Clipped(form));
+    });
 }
