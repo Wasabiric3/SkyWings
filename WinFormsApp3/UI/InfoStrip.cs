@@ -19,6 +19,23 @@ public sealed class InfoStrip : Control, ISelfStyled
         set { base.Text = value; Invalidate(); }
     }
 
+    private Color _fill = Theme.BrandSoft, _textColor = Theme.Brand;
+
+    /// <summary>The strip's colour; light green by default, amber for the demo-payment notice.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Color FillColor
+    {
+        get => _fill;
+        set { _fill = value; Invalidate(); }
+    }
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Color TextColor
+    {
+        get => _textColor;
+        set { _textColor = value; Invalidate(); }
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -28,10 +45,10 @@ public sealed class InfoStrip : Control, ISelfStyled
         // A little space above and below, so the strip does not touch the rows around it.
         var bounds = new RectangleF(0, Gfx.S(this, 4f), Width - 1, Height - Gfx.S(this, 8f) - 1);
         using (var path = Gfx.RoundedRect(bounds, Gfx.S(this, 12f)))
-        using (var fill = new SolidBrush(Theme.BrandSoft))
+        using (var fill = new SolidBrush(_fill))
             g.FillPath(fill, path);
         int pad = Gfx.S(this, 16);
-        TextRenderer.DrawText(g, Text, TextFont, new Rectangle(pad, (int)bounds.Y, Math.Max(0, Width - 2 * pad), (int)bounds.Height), Theme.Brand,
+        TextRenderer.DrawText(g, Text, TextFont, new Rectangle(pad, (int)bounds.Y, Math.Max(0, Width - 2 * pad), (int)bounds.Height), _textColor,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 }

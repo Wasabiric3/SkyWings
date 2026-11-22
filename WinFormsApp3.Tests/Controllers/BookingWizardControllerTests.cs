@@ -317,4 +317,95 @@ public sealed class BookingWizardControllerTests
         DateTime today = new(2027, 4, 5);
         StringAssert.Contains(_controller.DescribeFlight(Pr103(), today, "Economy", today.AddHours(12)), "bookings closed");
     }
+
+    // ---- the structured review rows (the wizard's Booking summary card) ----
+
+    /// <summary>The review text as it was written before <c>ReviewRows</c> existed; the confirmation dialog still shows this text.</summary>
+    private static string ReferenceReviewText(BookingSession s)
+    {
+        var lines = new List<string>
+        {
+            $"{s.SelectedFlight?.Origin} → {s.SelectedFlight?.Destination}   ·   {s.SelectedFlight?.FlightNo}   ·   {s.FlightDate:ddd, MMM d, yyyy}"
+        };
+        if (s.ReturnFlight is not null)
+            lines.Add($"{s.ReturnFlight.Origin} → {s.ReturnFlight.Destination}   ·   {s.ReturnFlight.FlightNo}   ·   {s.ReturnDate:ddd, MMM d, yyyy}");
+        lines.Add("");
+        foreach (var p in s.Passengers)
+        {
+            string seat = s.SeatAssignments.GetValueOrDefault(p.Name, "—");
+            string back = s.ReturnFlight is null ? "" : $"  ·  return {s.ReturnSeatAssignments.GetValueOrDefault(p.Name, "—")}";
+            lines.Add($"{p.Name}   ·   seat {seat}{back}");
+        }
+        lines.Add("");
+        lines.Add($"{s.ClassName}   ·   {s.BaggageOption}   ·   {s.MealOption}");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    [TestMethod]
+    public void BuildReviewText_IsUnchanged_ForOneWayAndRoundTrip()
+    {
+        PrepareOneWayBooking(2);
+        _controller.HoldSeats(new[] { "ECO1A", "ECO1B" }, Array.Empty<string>());
+        Assert.AreEqual(ReferenceReviewText(_controller.Session), _controller.BuildReviewText());
+
+        MakeRoundTrip();
+        _controller.HoldSeats(new[] { "ECO1A", "ECO1B" }, new[] { "ECO2A", "ECO2B" });
+        Assert.AreEqual(ReferenceReviewText(_controller.Session), _controller.BuildReviewText());
+    }
+
+    private void MakeRoundTrip()
+    {
+        Flight outbound = _controller.Session.SelectedFlight!;
+        _controller.Session.ReturnFlight = _controller.LoadFlights().First(f => f.Origin == outbound.Destination && f.Destination == outbound.Origin);
+        _controller.Session.ReturnDate = _controller.Session.FlightDate.AddDays(3);
+    }
+
+    [TestMethod]
+    public void ReviewRows_OneWay_AreFlightDepartureTravellerCabinBaggageMealSeat()
+    {
+        PrepareOneWayBooking();
+        _controller.HoldSeats(new[] { "ECO1A" }, Array.Empty<string>());
+        var rows = _controller.ReviewRows();
+        BookingSession s = _controller.Session;
+
+        CollectionAssert.AreEqual(new[] { "Flight", "Departure", "Traveller", "Cabin", "Baggage", "Meal", "Selected seat" }, rows.Select(r => r.Label).ToArray());
+        static string Code(string place) => System.Text.RegularExpressions.Regex.Match(place, @"\((.+)\)").Groups[1].Value;
+        Assert.AreEqual($"PR-101 · {Code(s.SelectedFlight!.Origin)} → {Code(s.SelectedFlight.Destination)}", rows[0].Value);
+        Assert.IsLessThan(24, rows[0].Value.Length, "short enough to fit the summary card");
+        StringAssert.StartsWith(rows[1].Value, s.FlightDate.ToString("MMM d, yyyy"));
+        Assert.AreEqual("Traveller 0", rows[2].Value);
+        Assert.AreEqual(s.ClassName, rows[3].Value);
+        Assert.AreEqual(s.BaggageOption, rows[4].Value);
+        Assert.AreEqual(s.MealOption, rows[5].Value);
+        Assert.AreEqual("ECO1A", rows[6].Value);
+    }
+
+    [TestMethod]
+    public void ReviewRows_SeveralTravellers_AreNumbered_AndTheirSeatsListed()
+    {
+        PrepareOneWayBooking(2);
+        _controller.HoldSeats(new[] { "ECO1A", "ECO1B" }, Array.Empty<string>());
+        var rows = _controller.ReviewRows();
+        CollectionAssert.AreEqual(new[] { "Flight", "Departure", "Traveller 1", "Traveller 2", "Cabin", "Baggage", "Meal", "Selected seats" }, rows.Select(r => r.Label).ToArray());
+        Assert.AreEqual("ECO1A, ECO1B", rows[^1].Value);
+    }
+
+    [TestMethod]
+    public void ReviewRows_RoundTrip_AddsTheReturnRows()
+    {
+        PrepareOneWayBooking();
+        MakeRoundTrip();
+        _controller.HoldSeats(new[] { "ECO1A" }, new[] { "ECO2A" });
+        var rows = _controller.ReviewRows();
+        CollectionAssert.AreEqual(new[] { "Flight", "Departure", "Return", "Return departure", "Traveller", "Cabin", "Baggage", "Meal", "Selected seat", "Return seat" },
+            rows.Select(r => r.Label).ToArray());
+        Assert.AreEqual("ECO2A", rows[^1].Value);
+    }
+
+    [TestMethod]
+    public void ReviewRows_ASeatNotPickedYet_ShowsADash()
+    {
+        PrepareOneWayBooking();
+        Assert.AreEqual("—", _controller.ReviewRows().Last(r => r.Label == "Selected seat").Value);
+    }
 }

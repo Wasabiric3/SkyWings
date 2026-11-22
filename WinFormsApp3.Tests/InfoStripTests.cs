@@ -18,6 +18,21 @@ public sealed class InfoStripTests
     }
 
     [TestMethod]
+    public void CustomColours_ArePainted_AndTheDefaultsAreBrandSoftAndBrand()
+    {
+        using var plain = new InfoStrip();
+        Assert.AreEqual(Theme.BrandSoft.ToArgb(), plain.FillColor.ToArgb());
+        Assert.AreEqual(Theme.Brand.ToArgb(), plain.TextColor.ToArgb());
+
+        using var amber = new InfoStrip { Width = 400, FillColor = Theme.AmberSoft, TextColor = Theme.AmberText, Text = "DEMO ONLY — No real payment will be processed." };
+        amber.CreateControl();
+        using var bmp = new Bitmap(amber.Width, amber.Height);
+        amber.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        Assert.AreEqual(Theme.AmberSoft.ToArgb(), bmp.GetPixel(amber.Width - 20, amber.Height / 2).ToArgb());
+        Assert.IsGreaterThanOrEqualTo(4.5, Contrast.Ratio(Theme.AmberText, Theme.AmberSoft), "the notice text is readable");
+    }
+
+    [TestMethod]
     public void IsOneLineTall_AndAShortTextLeavesTheRightSideClear()
     {
         using var strip = new InfoStrip { Width = 400, Text = "Hi" };

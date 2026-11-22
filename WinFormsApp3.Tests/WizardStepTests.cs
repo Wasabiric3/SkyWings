@@ -1,3 +1,4 @@
+using SkyWings.Controllers;
 using SkyWings.UI;
 
 namespace SkyWings.Tests;
@@ -272,5 +273,55 @@ public sealed class WizardStepTests
             Assert.IsTrue(client.Contains(wizard.InForm(wizard.Field<PriceSummaryPanel>("_price"))), $"round trip {roundTrip}: summary");
             Assert.AreEqual(roundTrip, wizard.Field<FlowLayoutPanel>("_seatTabs").Visible, "the Outbound/Return tabs show only for a round trip");
         }
+    });
+
+    // ------------------------------------------------------------------ step 5: review and pay
+
+    [TestMethod]
+    public void Payment_ShowsTheDemoNotice_AndTwoHeadedCards() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.GoTo(4);
+        InfoStrip notice = All(wizard.Form).OfType<InfoStrip>().Single(s => s.Visible && s.Text.Contains("DEMO ONLY"));
+        Assert.AreEqual(Theme.AmberSoft.ToArgb(), notice.FillColor.ToArgb());
+        var headings = All(wizard.Form).OfType<GlassCard>().Where(c => c.Visible).Select(c => c.Heading.ToUpperInvariant()).ToList();
+        CollectionAssert.Contains(headings, "BOOKING SUMMARY");
+        CollectionAssert.Contains(headings, "PAYMENT DETAILS");
+    });
+
+    [TestMethod]
+    public void Payment_BookingSummary_ListsTheControllersRows() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller("Brisias G. Labuson");
+        wizard.GoTo(4);
+        var list = wizard.Field<SummaryList>("_reviewList");
+        CollectionAssert.AreEqual(wizard.Controller.ReviewRows().ToArray(), list.Rows.ToArray());
+        Assert.IsTrue(list.Rows.Any(r => r.Value == "Brisias G. Labuson"));
+    });
+
+    [TestMethod]
+    public void Payment_ShortAccount_ShowsTheMessage_WithARedOutline() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.Call("PrepareSeatStep");
+        Assert.AreEqual(SeatHoldOutcome.Held, wizard.Controller.HoldSeats(new[] { SeatLayout.Code("Economy", 1, 'A') }, Array.Empty<string>()).Outcome);
+        wizard.GoTo(4);
+        wizard.Field<TextBox>("_account").Text = "12";
+        Assert.IsFalse((bool)typeof(BookingWizardForm).GetMethod("ConfirmBooking", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(wizard.Form, null)!);
+        var row = wizard.Field<FieldRow>("_accountRow");
+        Assert.AreEqual("Enter at least 4 characters (demo account).", row.Message);
+        Assert.IsTrue(All(row).OfType<RoundedInput>().Single().HasError);
+    });
+
+    [TestMethod]
+    public void Payment_FieldsAreRounded_AndTheCardNumberStaysMasked() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        foreach (string name in new[] { "_methodRow", "_accountRow" })
+            Assert.IsNotNull(All(wizard.Field<FieldRow>(name)).OfType<RoundedInput>().SingleOrDefault(), name + " is a rounded field");
+        Assert.IsTrue(wizard.Field<TextBox>("_account").UseSystemPasswordChar, "card digits are not readable over a shoulder");
     });
 }

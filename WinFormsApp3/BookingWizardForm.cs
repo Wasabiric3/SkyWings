@@ -27,7 +27,7 @@ public sealed class BookingWizardForm : GlassForm
         "Your booking is confirmed. Keep the receipt for your records."
     };
     /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
-    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions, StepSeats };
+    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions, StepSeats, StepPayment };
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -98,7 +98,8 @@ public sealed class BookingWizardForm : GlassForm
     private readonly ComboBox _paymentMethod = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     // Shown as dots, like a password, so card digits are not readable over someone's shoulder.
     private readonly TextBox _account = new() { UseSystemPasswordChar = true, MaxLength = 40 };
-    private readonly Label _review = new() { AutoSize = false, Dock = DockStyle.Top };
+    private readonly Label _review = new() { AutoSize = false, Dock = DockStyle.Top };   // not shown; its text feeds the confirmation dialog
+    private readonly SummaryList _reviewList = new() { Dock = DockStyle.Fill };
     private FieldRow _methodRow = null!, _accountRow = null!;
 
     // step 6: receipt
@@ -811,24 +812,50 @@ public sealed class BookingWizardForm : GlassForm
 
     private Panel BuildPaymentPage()
     {
-        var page = NewPage();
+        var page = new Panel { Dock = DockStyle.Fill, Visible = false };
         _paymentMethod.Items.AddRange(new object[] { "Credit Card", "Debit Card", "E-Wallet" });
         _paymentMethod.SelectedIndex = 0;
-        _methodRow = new FieldRow("PAYMENT METHOD", _paymentMethod);
-        _accountRow = new FieldRow("ACCOUNT OR CARD (DEMO)", _account);
+        _methodRow = new FieldRow("PAYMENT METHOD", _paymentMethod, rounded: true);
+        _accountRow = new FieldRow("CARD / ACCOUNT NUMBER (DEMO)", _account, rounded: true);
         ClearOnEdit(_accountRow);
         var note = new Label
         {
             Text = "Demo only: enter any 4 or more characters. Only the last four are kept, masked.",
-            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(28)
+            Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(44)
         };
-        AddStack(page, _review, Row(_methodRow, _accountRow), note);
+        var payFields = NewPage();
+        AddStack(payFields, _methodRow, _accountRow, note);
+        payFields.Dock = DockStyle.Fill;
+        payFields.Visible = true;
+
+        // An amber notice across the top, then two cards side by side: what is being booked, and how it is paid.
+        var summaryCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = "Booking summary", Margin = Padding.Empty };
+        summaryCard.Controls.Add(_reviewList);
+        var payCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = "Payment details", Margin = Padding.Empty };
+        payCard.Controls.Add(payFields);
+        var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = Padding.Empty };
+        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        cards.Controls.Add(summaryCard, 0, 0);
+        cards.Controls.Add(payCard, 1, 0);
+
+        // Padded so the notice lines up with the cards, which draw their border a few pixels inside their bounds.
+        var noticeHost = new Panel { Dock = DockStyle.Top, Height = D(54), Padding = new Padding(D(8), D(2), D(8), 0) };
+        noticeHost.Controls.Add(new InfoStrip
+        {
+            Dock = DockStyle.Fill, FillColor = Theme.AmberSoft, TextColor = Theme.AmberText,
+            Text = "DEMO ONLY — No real payment will be processed."
+        });
+        page.Controls.Add(cards);
+        page.Controls.Add(noticeHost);
         return page;
     }
 
     private void UpdateReview()
     {
-        _review.Text = _controller.BuildReviewText();
+        _reviewList.SetRows(_controller.ReviewRows());
+        _review.Text = _controller.BuildReviewText();   // the confirmation dialog still shows this text
     }
 
     private bool ConfirmBooking()

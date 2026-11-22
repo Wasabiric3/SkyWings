@@ -321,6 +321,46 @@ public sealed class BookingWizardController
     }
 
     /// <summary>
+    /// The same booking as label / value rows for the payment step's summary card: the flight and when it leaves, the return leg
+    /// (round trips), each traveller, the cabin, baggage, meal and the seats ("—" while one is not picked yet).
+    /// </summary>
+    public IReadOnlyList<(string Label, string Value)> ReviewRows()
+    {
+        var s = Session;
+        var rows = new List<(string Label, string Value)>();
+        if (s.SelectedFlight is { } flight)
+        {
+            rows.Add(("Flight", $"{flight.FlightNo} · {Code(flight.Origin)} → {Code(flight.Destination)}"));
+            rows.Add(("Departure", DepartureText(flight.FlightNo, s.FlightDate)));
+            if (s.ReturnFlight is { } back)
+            {
+                rows.Add(("Return", $"{back.FlightNo} · {Code(back.Origin)} → {Code(back.Destination)}"));
+                rows.Add(("Return departure", DepartureText(back.FlightNo, s.ReturnDate ?? s.FlightDate)));
+            }
+        }
+        for (int i = 0; i < s.Passengers.Count; i++)
+            rows.Add((s.Passengers.Count == 1 ? "Traveller" : $"Traveller {i + 1}", s.Passengers[i].Name));
+        rows.Add(("Cabin", s.ClassName));
+        rows.Add(("Baggage", s.BaggageOption));
+        rows.Add(("Meal", s.MealOption));
+        bool several = s.Passengers.Count > 1;
+        rows.Add((several ? "Selected seats" : "Selected seat", string.Join(", ", s.Passengers.Select(p => s.SeatAssignments.GetValueOrDefault(p.Name, "—")))));
+        if (s.ReturnFlight is not null)
+            rows.Add((several ? "Return seats" : "Return seat", string.Join(", ", s.Passengers.Select(p => s.ReturnSeatAssignments.GetValueOrDefault(p.Name, "—")))));
+        return rows;
+    }
+
+    /// <summary>The airport code in "Manila (MNL)", or the whole text when it has none.</summary>
+    private static string Code(string place)
+    {
+        int open = place.IndexOf('('), close = place.IndexOf(')');
+        return open >= 0 && close > open ? place[(open + 1)..close] : place;
+    }
+
+    private static string DepartureText(string flightNo, DateTime date)
+        => date.ToString("MMM d, yyyy") + (AppData.FlightScheduledTimes.TryGetValue(flightNo, out TimeOnly time) ? " · " + time.ToString("h:mm tt") : "");
+
+    /// <summary>
     /// Records the (demo) payment and saves the booking in one transaction. Only the last four characters of the account are kept.
     /// On success the seat holds are released and the session holds the booking reference. Call only when
     /// <see cref="IsReadyForPayment"/> is true and the account has at least four characters.
