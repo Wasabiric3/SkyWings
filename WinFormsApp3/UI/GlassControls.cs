@@ -37,12 +37,25 @@ public class GlassCard : Control
         return new RectangleF(s, s, Width - 2 * s - 1, Height - 2 * s - 1);
     }
 
+    private string _heading = "";
+
+    /// <summary>Optional small title at the top of the card, drawn in capitals in the brand green; the content starts below it.</summary>
+    [DefaultValue("")]
+    public string Heading
+    {
+        get => _heading;
+        set { _heading = value ?? ""; PerformLayout(); Invalidate(); }
+    }
+
+    private int HeadingHeight => _heading.Length == 0 ? 0 : Gfx.S(this, 30);
+
     public override Rectangle DisplayRectangle
     {
         get
         {
             int inset = Gfx.S(this, ShadowSize) + Gfx.S(this, _contentPadding);
-            return new Rectangle(inset, inset, Math.Max(0, Width - 2 * inset), Math.Max(0, Height - 2 * inset));
+            int head = HeadingHeight;
+            return new Rectangle(inset, inset + head, Math.Max(0, Width - 2 * inset), Math.Max(0, Height - 2 * inset - head));
         }
     }
 
@@ -60,7 +73,18 @@ public class GlassCard : Control
         using (var fill = new SolidBrush(BackColor)) g.FillPath(fill, path);
         using var edge = new Pen(Theme.BorderLight, 1f);
         g.DrawPath(edge, path);
+
+        if (_heading.Length > 0)
+        {
+            Rectangle area = DisplayRectangle;
+            var line = new RectangleF(area.X, area.Y - HeadingHeight, area.Width, HeadingHeight);
+            using var brush = new SolidBrush(Theme.Brand);
+            using var left = Gfx.Format(StringAlignment.Near);
+            g.DrawString(_heading.ToUpperInvariant(), HeadingFont, brush, line, left);
+        }
     }
+
+    private static readonly Font HeadingFont = new(Theme.Body, FontStyle.Bold);
 }
 
 /// <summary><see cref="Outline"/> (white with a border) is the Figma look's secondary button; it is appended so the older values keep their numbers.</summary>
