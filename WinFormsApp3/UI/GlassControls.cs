@@ -118,10 +118,10 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
         set { _style = value; Invalidate(); }
     }
 
-    private bool _pill;
+    private bool _pill = true;
 
     /// <summary>The Figma look: fully rounded ends, and a deep-green (<see cref="Theme.Brand"/>) primary button.</summary>
-    [DefaultValue(false)]
+    [DefaultValue(true)]
     public bool Pill
     {
         get => _pill;
@@ -195,12 +195,12 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
                 text = Theme.Brand;
                 break;
             case GlassButtonStyle.Secondary:
-                fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.12f) : Theme.SoftFill;
-                text = Theme.Accent;
+                fill = _pressed ? Gfx.Mix(Theme.BrandSoft, Theme.Brand, 0.25f) : _hover ? Gfx.Mix(Theme.BrandSoft, Theme.Brand, 0.12f) : Theme.BrandSoft;
+                text = Theme.Brand;
                 break;
             case GlassButtonStyle.Ghost:
-                fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Theme.SoftFill : Color.Transparent;
-                text = Theme.Accent;
+                fill = _pressed ? Gfx.Mix(Theme.BrandSoft, Theme.Brand, 0.25f) : _hover ? Theme.BrandSoft : Color.Transparent;
+                text = Theme.Brand;
                 break;
             case GlassButtonStyle.Danger:
                 fill = _pressed ? Color.FromArgb(200, 48, 40) : _hover ? Color.FromArgb(235, 80, 70) : Theme.DangerRed;
@@ -235,7 +235,7 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
         }
         if (Focused && ShowFocusCues)
         {
-            using var ring = new Pen(Color.FromArgb(190, Theme.Primary), 2f);
+            using var ring = new Pen(Color.FromArgb(190, Theme.Brand), 2f);
             RectangleF outer = RectangleF.Inflate(bounds, 1.5f, 1.5f);
             using var ringPath = Gfx.RoundedRect(outer, radius + 2);
             g.DrawPath(ring, ringPath);

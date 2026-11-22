@@ -12,7 +12,7 @@ public class GlassButtonTests
 
     [TestMethod]
     public void PrimaryButton_TextContrastAtLeast4_5()
-        => Assert.IsTrue(Contrast.Ratio(Color.White, Theme.Primary) >= 4.5, "white on Primary is too faint");
+        => Assert.IsTrue(Contrast.Ratio(Color.White, Theme.Brand) >= 4.5, "white on Brand is too faint");
 
     [TestMethod]
     public void DisabledButton_TextContrastAtLeast3()
@@ -28,12 +28,12 @@ public class GlassButtonTests
     }
 
     [TestMethod]
-    public void Primary_FillsWithPrimary()
-        => Assert.AreEqual(Theme.Primary.ToArgb(), FillOf(GlassButtonStyle.Primary, true).ToArgb());
+    public void Primary_FillsWithBrand()
+        => Assert.AreEqual(Theme.Brand.ToArgb(), FillOf(GlassButtonStyle.Primary, true).ToArgb());
 
     [TestMethod]
-    public void Secondary_FillsWithSoftFill()
-        => Assert.AreEqual(Theme.SoftFill.ToArgb(), FillOf(GlassButtonStyle.Secondary, true).ToArgb());
+    public void Secondary_FillsWithBrandSoft()
+        => Assert.AreEqual(Theme.BrandSoft.ToArgb(), FillOf(GlassButtonStyle.Secondary, true).ToArgb());
 
     [TestMethod]
     public void Disabled_FillsWithDisabledBack()
@@ -90,5 +90,22 @@ public class GlassButtonTests
     {
         using Bitmap bmp = Render(GlassButtonStyle.Primary, pill: false);
         Assert.AreEqual(Theme.Primary.ToArgb(), bmp.GetPixel(14, 20).ToArgb());
+    }
+
+    [TestMethod]
+    public void NewButton_IsAPill()
+    {
+        using var button = new GlassButton();
+        Assert.IsTrue(button.Pill, "the Figma look is the default");
+    }
+
+    [TestMethod]
+    public void PillFalse_KeepsTheOldRoundedRectangle()
+    {
+        using Bitmap pill = Render(GlassButtonStyle.Primary, pill: true);
+        using Bitmap square = Render(GlassButtonStyle.Primary, pill: false);
+        // (5,6) is inside the old rectangle's small corner radius but outside a pill's fully round end
+        Assert.AreEqual(Theme.Primary.ToArgb(), square.GetPixel(5, 6).ToArgb());
+        Assert.AreEqual(Theme.BgMain.ToArgb(), pill.GetPixel(5, 6).ToArgb());
     }
 }
