@@ -201,4 +201,16 @@ public sealed class HomeDetailsTests
         Assert.IsTrue(Board(form).Rows.Cast<DataGridViewRow>().All(r => FlightRegions.Of(((FlightRow)r.DataBoundItem!).Flight) == "Europe"));
         Assert.IsNotNull(Board(form).CurrentRow, "the first flight of the region is selected");
     });
+
+    [TestMethod]
+    public void TheBoardArea_IsTallEnoughForAFourCabinPanel() => FormHarness.OnStaThread(() =>
+    {
+        using var harness = new FormHarness();
+        using HomeForm form = OpenOnTomorrow(harness);
+        Assert.IsGreaterThanOrEqualTo(Panel(form).RequiredHeight(4), Panel(form).Height, "the panel is never shorter than four cabins, a reason and the button need");
+        Select(form, AppData.EuropeFlights.First().FlightNo);
+        Rectangle last = Panel(form).CabinRowBounds(3);
+        Assert.IsLessThanOrEqualTo(Panel(form).ReasonBounds.Top, last.Bottom);
+        Assert.IsLessThanOrEqualTo(Panel(form).Height, Panel(form).ActionButton.Bottom);
+    });
 }

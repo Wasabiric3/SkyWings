@@ -161,4 +161,33 @@ public sealed class FlightDetailsPanelTests
         Assert.IsLessThanOrEqualTo(panel.Height, panel.ActionButton.Bottom, "the button is inside the panel");
         Assert.IsGreaterThanOrEqualTo(panel.CabinRowBounds(details.Cabins.Count - 1).Bottom, panel.ActionButton.Top - 1, "the cabins end above the button");
     });
+
+    [TestMethod]
+    public void FourCabinsAndAReason_DoNotOverlap_AtTheHeightThePanelAsksFor() => FormHarness.OnStaThread(() =>
+    {
+        using var harness = new FormHarness();
+        var (details, _, _) = Sample(harness, AppData.EuropeFlights.First().FlightNo);
+        Assert.AreEqual(4, details.Cabins.Count, "a wide-body has all four cabins");
+        using Form host = new() { Width = 420, Height = 700, StartPosition = FormStartPosition.Manual, Location = new Point(20, 20), BackColor = Theme.PageBg };
+        var panel = new FlightDetailsPanel { Location = new Point(10, 10), Size = new Size(340, 100) };
+        panel.Height = panel.RequiredHeight(4);
+        host.Controls.Add(panel);
+        host.Show();
+        Application.DoEvents();
+        panel.ShowFlight(details, 3, new BookingAction(BookAction.None, "Book " + details.Flight.FlightNo + " · First Class →", "This flight has already left."));
+        Application.DoEvents();
+
+        Rectangle last = panel.CabinRowBounds(3), reason = panel.ReasonBounds;
+        Assert.IsLessThanOrEqualTo(reason.Top, last.Bottom, "the last cabin row ends above the reason line");
+        Assert.IsLessThanOrEqualTo(panel.ActionButton.Top, reason.Bottom, "the reason ends above the button");
+        using (Bitmap picture = FormHarness.Snapshot(host)) { Directory.CreateDirectory(FormHarness.Folder); picture.Save(Path.Combine(FormHarness.Folder, "flight-details-panel-four-cabins.png")); }
+        Assert.IsLessThanOrEqualTo(panel.Height, panel.ActionButton.Bottom, "the button is inside the panel");
+    });
+
+    [TestMethod]
+    public void ARequiredHeight_GrowsWithTheCabins() => FormHarness.OnStaThread(() =>
+    {
+        var panel = new FlightDetailsPanel();
+        Assert.IsGreaterThan(panel.RequiredHeight(2), panel.RequiredHeight(4));
+    });
 }

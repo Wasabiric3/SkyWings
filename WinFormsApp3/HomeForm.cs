@@ -316,7 +316,8 @@ public partial class HomeForm : GlassForm
     /// <summary>The board on the left and the selected flight's details on the right.</summary>
     private Control BuildBoardArea()
     {
-        var area = _boardArea = new Panel { Dock = DockStyle.Top, Height = D(476), BackColor = Color.Transparent };
+        // Tall enough for the panel with four cabins, a reason line and the button (a wide-body flight), so nothing in it ever overlaps.
+        var area = _boardArea = new Panel { Dock = DockStyle.Top, Height = Math.Max(D(476), _detailsPanel.RequiredHeight(4)), BackColor = Color.Transparent };
         Control board = BuildFlightList();
         var gap = new Panel { Dock = DockStyle.Right, Width = D(14), BackColor = Color.Transparent };
         _detailsPanel.Dock = DockStyle.Right;

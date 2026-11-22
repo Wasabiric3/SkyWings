@@ -120,6 +120,26 @@ public sealed class FlightDetailsPanel : GlassCard
         return new Rectangle(rc.Left, b.Rows + index * b.RowHeight, rc.Width, b.RowHeight - S(6));
     }
 
+    /// <summary>Where the reason for a switched-off button is written: just above the button, below the cabin rows.</summary>
+    internal Rectangle ReasonBounds
+    {
+        get
+        {
+            Rectangle rc = DisplayRectangle;
+            return new Rectangle(rc.Left, rc.Bottom - S(44) - S(34), rc.Width, S(30));
+        }
+    }
+
+    /// <summary>The height the panel needs to show <paramref name="cabins"/> cabin rows, a reason line and the button without any of them overlapping.</summary>
+    internal int RequiredHeight(int cabins)
+    {
+        int inset = S(ShadowSize) + S(ContentPadding);
+        int aboveRows = S(76) + S(10) + S(74) + S(8) + S(24) + S(22);   // header, timeline, aircraft line and the CABINS caption
+        int rows = cabins * S(54) - S(6);
+        int below = S(34) + S(44);                                     // the reason line and the button
+        return 2 * inset + aboveRows + rows + below + S(8);
+    }
+
     private void PlaceChildren()
     {
         Rectangle rc = DisplayRectangle;
@@ -311,8 +331,7 @@ public sealed class FlightDetailsPanel : GlassCard
     private void DrawReason(Graphics g, Rectangle rc)
     {
         if (_action.Reason.Length == 0) return;
-        var area = new Rectangle(rc.Left, rc.Bottom - S(44) - S(34), rc.Width, S(30));
-        TextRenderer.DrawText(g, _action.Reason, Theme.Small, area, Theme.TextSecondary,
+        TextRenderer.DrawText(g, _action.Reason, Theme.Small, ReasonBounds, Theme.TextSecondary,
             TextFormatFlags.Left | TextFormatFlags.Bottom | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
