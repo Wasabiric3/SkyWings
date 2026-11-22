@@ -37,7 +37,7 @@ public sealed record Dashboard(
 /// Controller for <c>HomeForm</c>: loads the route cards and destination list for the signed-in staff member and records
 /// their sign-out. Has no WinForms dependency.
 /// </summary>
-public sealed class HomeController
+public sealed partial class HomeController
 {
     private readonly BookingStore _store;
 
