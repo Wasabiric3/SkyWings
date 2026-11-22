@@ -256,6 +256,7 @@ public sealed class FieldRow : Control, ISelfStyled
     private readonly Label _message = new();
 
     private readonly RoundedInput? _host;
+    private readonly bool _nameFromCaption;   // the input's accessible name is the caption (not something the caller chose)
 
     /// <param name="rounded">The Figma look: the input sits in a rounded box that draws the focus and error outline.</param>
     public FieldRow(string caption, Control input, bool rounded = false)
@@ -263,7 +264,12 @@ public sealed class FieldRow : Control, ISelfStyled
         // No transparency: the row simply inherits its parent's colour (ambient BackColor), so nothing repaints through it.
         Input = input;
         TabStop = false;   // the row is only a container; Tab goes straight to its input
-        if (rounded) _host = new RoundedInput(input);
+        if (rounded)
+        {
+            _host = new RoundedInput(input);
+            // The caption label is no longer the input's neighbour, so a screen reader cannot pick the name up by position.
+            if (string.IsNullOrEmpty(input.AccessibleName)) { input.AccessibleName = caption; _nameFromCaption = true; }
+        }
 
         _caption.Text = caption;
         _caption.Font = CaptionFont;
@@ -309,7 +315,11 @@ public sealed class FieldRow : Control, ISelfStyled
     public string Caption
     {
         get => _caption.Text;
-        set => _caption.Text = value;
+        set
+        {
+            _caption.Text = value;
+            if (_nameFromCaption) Input.AccessibleName = value;
+        }
     }
 
     private void ApplySizes()
@@ -368,6 +378,12 @@ public sealed class ChoiceCard : Control, ISelfStyled
         Cursor = Cursors.Hand;
         Height = Gfx.S(this, 118);
     }
+
+    /// <summary>The width of the text area inside the card (the same width the title, price and detail are drawn in).</summary>
+    internal int PriceTextWidth => Width - 5 - 2 * Gfx.S(this, 16);
+
+    /// <summary>The price font, shrunk (never below 8 pt) so a long price such as "PHP 336,000" fits a narrow card. The caller disposes it.</summary>
+    internal Font FitPriceFont() => PriceSummaryPanel.FitFont(Subtitle, PriceFont, PriceTextWidth);
 
     /// <summary>The circle that holds the tick, at the top right of the card.</summary>
     internal Rectangle TickBounds
@@ -434,8 +450,9 @@ public sealed class ChoiceCard : Control, ISelfStyled
         Color muted = Enabled ? Theme.TextSecondary : Theme.DisabledText;
         TextRenderer.DrawText(g, Title.ToUpperInvariant(), CapsFont, new Rectangle(x, y, width - Gfx.S(this, 30), Gfx.S(this, 22)), strong, flags);
         // A cabin that is not offered says so in small muted text instead of a price.
-        TextRenderer.DrawText(g, Subtitle, Enabled ? PriceFont : Theme.Small, new Rectangle(x, y + Gfx.S(this, 28), width, Gfx.S(this, 32)),
-            Enabled ? strong : muted, flags);
+        using (Font priceFont = Enabled ? FitPriceFont() : new Font(Theme.Small, FontStyle.Regular))
+            TextRenderer.DrawText(g, Subtitle, priceFont, new Rectangle(x, y + Gfx.S(this, 28), width, Gfx.S(this, 32)),
+                Enabled ? strong : muted, flags);
         TextRenderer.DrawText(g, Detail, Theme.Small, new Rectangle(x, y + Gfx.S(this, 64), width, Gfx.S(this, 22)), muted, flags);
 
         if (_selected && Enabled)

@@ -67,4 +67,42 @@ public sealed class ChoiceCardTests
         using var card = new ChoiceCard();
         Assert.IsGreaterThanOrEqualTo(Gfx.S(card, 110), card.Height);
     }
+
+    private static int Measure(string text, Font font)
+        => TextRenderer.MeasureText(text, font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width;
+
+    [TestMethod]
+    public void ALongPrice_ShrinksToFitANarrowCard_InsteadOfBeingCutOff()
+    {
+        // The wizard's four cards are about 130 px wide at its minimum window width.
+        foreach (string price in new[] { "PHP 168,000", "PHP 336,000", "PHP 1,234,567" })
+        {
+            using var card = new ChoiceCard { Width = 130, Subtitle = price };
+            using Font fit = card.FitPriceFont();
+            Assert.IsLessThanOrEqualTo(card.PriceTextWidth, Measure(price, fit), $"{price} fits the card's text area");
+            Assert.IsGreaterThanOrEqualTo(8f, fit.Size);
+        }
+    }
+
+    [TestMethod]
+    public void AShortPrice_OnAWideCard_KeepsTheFullSize()
+    {
+        using var card = new ChoiceCard { Width = 260, Subtitle = "PHP 42,000" };
+        using Font fit = card.FitPriceFont();
+        Assert.AreEqual(Theme.Subtitle.Size, fit.Size);
+    }
+
+    [TestMethod]
+    public void ANarrowCard_StillPaintsItsPrice_WithoutInkOutsideTheTextArea()
+    {
+        using var card = new ChoiceCard { Width = 130, Title = "First Class", Subtitle = "PHP 168,000", Detail = "3 bags · dining" };
+        card.CreateControl();
+        using var bmp = new Bitmap(card.Width, card.Height);
+        card.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        // Between the price line and the card's right padding there is no text ink (it would mean the price ran past its area).
+        int pad = Gfx.S(card, 16);
+        int y = 2 + Gfx.S(card, 14) + Gfx.S(card, 28) + Gfx.S(card, 16);   // the middle of the price line
+        for (int x = card.Width - 3 - pad + 2; x < card.Width - 6; x++)
+            Assert.AreEqual(Theme.BgCard.ToArgb(), bmp.GetPixel(x, y).ToArgb(), $"ink in the right padding at {x}");
+    }
 }

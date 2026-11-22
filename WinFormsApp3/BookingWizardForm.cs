@@ -99,7 +99,7 @@ public sealed class BookingWizardForm : GlassForm
     // Shown as dots, like a password, so card digits are not readable over someone's shoulder.
     private readonly TextBox _account = new() { UseSystemPasswordChar = true, MaxLength = 40 };
     private readonly Label _review = new() { AutoSize = false, Dock = DockStyle.Top };   // not shown; its text feeds the confirmation dialog
-    private readonly SummaryList _reviewList = new() { Dock = DockStyle.Fill };
+    private readonly SummaryList _reviewList = new() { GrowToFit = true };
     private FieldRow _methodRow = null!, _accountRow = null!;
 
     // step 6: receipt
@@ -830,7 +830,14 @@ public sealed class BookingWizardForm : GlassForm
 
         // An amber notice across the top, then two cards side by side: what is being booked, and how it is paid.
         var summaryCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = "Booking summary", Margin = Padding.Empty };
-        summaryCard.Controls.Add(_reviewList);
+        // The summary list is as tall as its rows and sits in a scrolling panel, so no row is ever dropped when the card is short.
+        var summaryScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        _reviewList.Dock = DockStyle.None;
+        _reviewList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _reviewList.Location = Point.Empty;
+        summaryScroll.Controls.Add(_reviewList);
+        summaryScroll.Resize += (_, _) => _reviewList.Width = summaryScroll.ClientSize.Width;
+        summaryCard.Controls.Add(summaryScroll);
         var payCard = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = "Payment details", Margin = Padding.Empty };
         payCard.Controls.Add(payFields);
         var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = Padding.Empty };

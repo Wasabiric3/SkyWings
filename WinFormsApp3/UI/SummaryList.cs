@@ -17,10 +17,21 @@ public sealed class SummaryList : Control, ISelfStyled
 
     public IReadOnlyList<(string Label, string Value)> Rows => _rows;
 
+    /// <summary>The height of one row.</summary>
+    internal int RowHeight => Gfx.S(this, 38);
+
+    /// <summary>
+    /// When true the list is always exactly as tall as its rows, so none is ever left out; put it in a scrolling panel and what does
+    /// not fit the card is reached by scrolling.
+    /// </summary>
+    [System.ComponentModel.DefaultValue(false)]
+    public bool GrowToFit { get; set; }
+
     public void SetRows(IEnumerable<(string Label, string Value)> rows)
     {
         _rows = rows.ToList();
         AccessibleDescription = string.Join(". ", _rows.Select(r => $"{r.Label}: {r.Value}"));
+        if (GrowToFit) Height = _rows.Count * RowHeight;
         Invalidate();
     }
 
@@ -30,7 +41,7 @@ public sealed class SummaryList : Control, ISelfStyled
         var g = e.Graphics;
         using (var back = new SolidBrush(BackColor)) g.FillRectangle(back, ClientRectangle);
         const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
-        int rowHeight = Gfx.S(this, 38);
+        int rowHeight = RowHeight;
         int labelWidth = (int)(Width * 0.36f);
         int y = 0;
         foreach (var (label, value) in _rows)

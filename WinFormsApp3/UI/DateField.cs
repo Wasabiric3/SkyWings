@@ -27,6 +27,7 @@ public sealed class DateField : Control, ISelfStyled
         BackColor = Color.White;
         AccessibleRole = AccessibleRole.ComboBox;
         Height = TextRenderer.MeasureText("Ag", TextFont).Height + 6;
+        Text = DisplayText;   // a screen reader reads the date as the field's text
     }
 
     public event EventHandler? ValueChanged;
@@ -41,6 +42,7 @@ public sealed class DateField : Control, ISelfStyled
             DateTime day = value.Date < _minDate ? _minDate : value.Date;
             if (day == _value) return;
             _value = day;
+            Text = DisplayText;
             Invalidate();
             ValueChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -62,12 +64,29 @@ public sealed class DateField : Control, ISelfStyled
     public string CustomFormat
     {
         get => _format;
-        set { _format = value; Invalidate(); }
+        set { _format = value; Text = DisplayText; Invalidate(); }
     }
 
     internal string DisplayText => _value.ToString(_format, CultureInfo.InvariantCulture);
 
     internal bool IsOpen => _popup is not null;
+
+    /// <summary>A key pressed inside the open calendar. Enter commits <paramref name="highlighted"/> and closes it; Escape closes it. True when handled.</summary>
+    internal bool HandleCalendarKey(Keys key, DateTime highlighted)
+    {
+        switch (key)
+        {
+            case Keys.Enter:
+                Pick(highlighted);
+                _popup?.Close();
+                return true;
+            case Keys.Escape:
+                _popup?.Close();
+                return true;
+            default:
+                return false;
+        }
+    }
 
     /// <summary>Chooses a day from the calendar (or directly).</summary>
     internal void Pick(DateTime day) => Value = day;
@@ -79,10 +98,19 @@ public sealed class DateField : Control, ISelfStyled
         calendar.SetDate(_value);
         var popup = new ToolStripDropDown { Padding = Padding.Empty };
         calendar.DateSelected += (_, e) => { Pick(e.Start); popup.Close(); };
+        // The arrow keys move the highlighted day inside the calendar; Enter then commits it and Escape cancels.
+        calendar.KeyDown += (_, k) => { if (HandleCalendarKey(k.KeyCode, calendar.SelectionStart)) { k.Handled = true; k.SuppressKeyPress = true; } };
         popup.Items.Add(new ToolStripControlHost(calendar) { Margin = Padding.Empty, Padding = Padding.Empty });
-        popup.Closed += (_, _) => { _popup = null; popup.Dispose(); Invalidate(); };
+        popup.Closed += (_, _) =>
+        {
+            _popup = null;
+            // The calendar may still be inside its own DateSelected/KeyDown handler, so the popup is disposed once that has returned.
+            if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(popup.Dispose)); else popup.Dispose();
+            Invalidate();
+        };
         _popup = popup;
         popup.Show(this, new Point(0, Height));
+        calendar.Select();   // so the keyboard works at once
     }
 
     protected override void OnClick(EventArgs e)
@@ -104,10 +132,24 @@ public sealed class DateField : Control, ISelfStyled
             OpenDropDown();
             e.Handled = true;
         }
+        else if (Enabled && e.KeyCode is Keys.Up or Keys.Down or Keys.PageUp or Keys.PageDown)
+        {
+            // Without the mouse: Up/Down move a day, Page Up/Down a month (never before the minimum date).
+            Value = e.KeyCode switch
+            {
+                Keys.Up => _value.AddDays(1),
+                Keys.Down => _value.AddDays(-1),
+                Keys.PageUp => _value.AddMonths(1),
+                _ => _value.AddMonths(-1)
+            };
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
         base.OnKeyDown(e);
     }
 
-    protected override bool IsInputKey(Keys keyData) => keyData == Keys.Space || base.IsInputKey(keyData);
+    protected override bool IsInputKey(Keys keyData)
+        => keyData is Keys.Space or Keys.Up or Keys.Down or Keys.PageUp or Keys.PageDown || base.IsInputKey(keyData);
 
     protected override void OnEnter(EventArgs e) { Invalidate(); base.OnEnter(e); }
     protected override void OnLeave(EventArgs e) { Invalidate(); base.OnLeave(e); }

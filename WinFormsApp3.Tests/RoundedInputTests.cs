@@ -122,4 +122,34 @@ public sealed class RoundedInputTests
         row.ClearMessage();
         Assert.IsFalse(All(row).OfType<RoundedInput>().Single().HasError);
     });
+
+    [TestMethod]
+    public void ARoundedRow_NamesItsInputAfterItsCaption_ForScreenReaders() => OnStaThread(() =>
+    {
+        // The caption is no longer the input's sibling, so a screen reader cannot find it by position.
+        foreach (Control input in new Control[] { new TextBox(), new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, new DateField() })
+        {
+            var row = new FieldRow("FULL NAME", input, rounded: true);
+            Assert.AreEqual("FULL NAME", input.AccessibleName, input.GetType().Name);
+            row.Caption = "PASSENGER";
+            Assert.AreEqual("PASSENGER", input.AccessibleName, input.GetType().Name + ": follows a changed caption");
+        }
+    });
+
+    [TestMethod]
+    public void AnAccessibleName_TheCallerSetsItself_IsKept() => OnStaThread(() =>
+    {
+        var input = new TextBox { AccessibleName = "Seat holder" };
+        var row = new FieldRow("FULL NAME", input, rounded: true);
+        row.Caption = "PASSENGER";
+        Assert.AreEqual("Seat holder", input.AccessibleName);
+    });
+
+    [TestMethod]
+    public void AnOrdinaryRow_IsLeftAlone() => OnStaThread(() =>
+    {
+        var input = new TextBox();
+        _ = new FieldRow("NAME", input);   // the caption is still its sibling label, as before
+        Assert.IsTrue(string.IsNullOrEmpty(input.AccessibleName));
+    });
 }

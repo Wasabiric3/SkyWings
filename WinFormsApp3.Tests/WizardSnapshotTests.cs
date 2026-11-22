@@ -36,4 +36,29 @@ public sealed class WizardSnapshotTests
             bmp.Save(Path.Combine(Folder, $"step{step + 1}.png"));
         }
     });
+
+    [TestMethod]
+    public void WizardSnapshots_MinimumSize_RoundTripWithThreeTravellers_WriteFiveNonBlankImages() => WizardHarness.OnStaThread(() =>
+    {
+        Directory.CreateDirectory(Folder);
+        using var wizard = new WizardHarness();
+        wizard.Form.Size = wizard.Form.MinimumSize;
+        wizard.AddTraveller("Ana Example", "P1234567A");
+        wizard.AddTraveller("Ben Example", "P2345678B");
+        wizard.AddTraveller("Cara Example", "P3456789C");
+        wizard.Field<CheckBox>("_roundTrip").Checked = true;
+        Application.DoEvents();
+        for (int step = 0; step <= 4; step++)
+        {
+            if (step == 3) wizard.Call("PrepareSeatStep");
+            wizard.GoTo(step);
+            Application.DoEvents();
+            using Bitmap bmp = wizard.Snapshot();
+            var colours = new HashSet<int>();
+            for (int y = 0; y < bmp.Height; y += 7)
+                for (int x = 0; x < bmp.Width; x += 7) colours.Add(bmp.GetPixel(x, y).ToArgb());
+            Assert.IsGreaterThan(5, colours.Count, $"minimum-size step {step + 1} is not blank");
+            bmp.Save(Path.Combine(Folder, $"min-roundtrip-step{step + 1}.png"));
+        }
+    });
 }

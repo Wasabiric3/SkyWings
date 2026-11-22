@@ -350,4 +350,37 @@ public sealed class WizardStepTests
         Assert.IsTrue(wizard.Form.ClientRectangle.Contains(wizard.InForm(wizard.Field<GlassButton>("_next"))));
         Assert.IsFalse(wizard.Field<Panel[]>("_pages")[5].VerticalScroll.Visible, "a one-traveller receipt fits the page at the default window size");
     });
+
+    [TestMethod]
+    public void Payment_EveryRowOfTheSummary_CanBeReached_ForABigRoundTripAtTheMinimumSize() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.Form.Size = wizard.Form.MinimumSize;
+        wizard.AddTraveller("Ana Example", "P1234567A");
+        wizard.AddTraveller("Ben Example", "P2345678B");
+        wizard.AddTraveller("Cara Example", "P3456789C");
+        wizard.Field<CheckBox>("_roundTrip").Checked = true;
+        Application.DoEvents();
+        wizard.GoTo(4);
+        Application.DoEvents();
+
+        var list = wizard.Field<SummaryList>("_reviewList");
+        Assert.AreEqual(wizard.Controller.ReviewRows().Count, list.Rows.Count);
+        Assert.AreEqual(12, list.Rows.Count, "flight, departure, return, return departure, 3 travellers, cabin, baggage, meal, seats, return seats");
+        Assert.AreEqual(list.Rows.Count * list.RowHeight, list.Height, "the list is as tall as all its rows");
+        var host = (Panel)list.Parent!;
+        Assert.IsTrue(host.AutoScroll, "what does not fit is reached by scrolling, not dropped");
+        Assert.IsTrue(host.VerticalScroll.Visible, "at the minimum size the rows exceed the card, so it scrolls");
+    });
+
+    [TestMethod]
+    public void Payment_AFewRows_FitWithoutScrolling_AtTheDefaultSize() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.GoTo(4);
+        Application.DoEvents();
+        var list = wizard.Field<SummaryList>("_reviewList");
+        Assert.IsFalse(((Panel)list.Parent!).VerticalScroll.Visible);
+    });
 }

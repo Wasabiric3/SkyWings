@@ -47,9 +47,9 @@ internal sealed class WizardHarness : IDisposable
     public void Call(string method) => typeof(BookingWizardForm).GetMethod(method, Any)!.Invoke(Form, null);
 
     /// <summary>Adds one valid traveller through the controller (as the Add traveller button does) and refreshes the summary.</summary>
-    public void AddTraveller(string name = "Ana Example")
+    public void AddTraveller(string name = "Ana Example", string idNumber = "P1234567A")
     {
-        var result = Controller.AddPassenger(new PassengerInput(name, "1 Test St, Manila", "09171234567", "P1234567A", "1991-01-01", "", false, false), DateTime.Today);
+        var result = Controller.AddPassenger(new PassengerInput(name, "1 Test St, Manila", "09171234567", idNumber, "1991-01-01", "", false, false), DateTime.Today);
         Assert.IsTrue(result.IsValid, "the sample traveller must be valid");
         Call("RefreshPassengerList");
         Call("SyncSession");

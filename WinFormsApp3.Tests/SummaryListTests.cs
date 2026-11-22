@@ -38,6 +38,24 @@ public sealed class SummaryListTests
     }
 
     [TestMethod]
+    public void WithGrowToFit_TheListIsExactlyAsTallAsItsRows()
+    {
+        using var list = new SummaryList { Width = 300, GrowToFit = true };
+        list.SetRows(Enumerable.Range(0, 7).Select(i => ($"Row {i}", "value")));
+        Assert.AreEqual(7 * list.RowHeight, list.Height);
+        list.SetRows(Enumerable.Range(0, 2).Select(i => ($"Row {i}", "value")));
+        Assert.AreEqual(2 * list.RowHeight, list.Height);
+    }
+
+    [TestMethod]
+    public void WithoutGrowToFit_TheHeightIsLeftToTheCaller()
+    {
+        using var list = new SummaryList { Width = 300, Height = 120 };
+        list.SetRows(Enumerable.Range(0, 7).Select(i => ($"Row {i}", "value")));
+        Assert.AreEqual(120, list.Height);
+    }
+
+    [TestMethod]
     public void RowsThatDoNotFit_AreNotPaintedHalfWay_AndNoRowsPaintsNothing()
     {
         using var list = new SummaryList { Width = 260, Height = 70 };
