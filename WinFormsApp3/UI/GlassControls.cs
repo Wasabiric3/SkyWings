@@ -258,8 +258,8 @@ public sealed class FieldRow : Control, ISelfStyled
     private readonly RoundedInput? _host;
     private readonly bool _nameFromCaption;   // the input's accessible name is the caption (not something the caller chose)
 
-    /// <param name="rounded">The Figma look: the input sits in a rounded box that draws the focus and error outline.</param>
-    public FieldRow(string caption, Control input, bool rounded = false)
+    /// <param name="rounded">The Figma look (the default): the input sits in a rounded box that draws the focus and error outline. False keeps the native square input.</param>
+    public FieldRow(string caption, Control input, bool rounded = true)
     {
         // No transparency: the row simply inherits its parent's colour (ambient BackColor), so nothing repaints through it.
         Input = input;

@@ -23,7 +23,7 @@ public sealed class FirstRunAdminForm : GlassForm
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(540), D(520));
+        ClientSize = new Size(D(540), D(580));   // the rounded fields are taller
 
         _nameRow = new FieldRow("YOUR NAME", _name);
         _usernameRow = new FieldRow("USERNAME", _username);
