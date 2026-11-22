@@ -31,6 +31,33 @@ public sealed class AdminForm : GlassForm
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 250 };
     private List<BookingRecord> _allBookings = new();
     private Dictionary<string, TripStatusInfo> _allTrips = new();
+    // The list can be by flight date (the default) or "recently booked" (whatever the flight date).
+    private readonly ComboBox _bookingView = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private static readonly (string Label, string Key)[] BookingViewChoices =
+    {
+        ("By flight date", "date"), ("Booked in the last 24 hours", "24h"), ("Booked in the last 7 days", "7d"), ("Booked in the last 30 days", "30d")
+    };
+    private const int RecentBookingLimit = 1000;   // the newest this many are listed; the count says how many there were in all
+    private int _recentTotal;                      // bookings made in the window (the list may hold fewer)
+    private string _bookingsLoadKey = "";          // which list the previous load was (view + date)
+    private DateTime? _bookingsLoadedAt;           // when that load ran
+    private DateTime? _newBaseline;                // bookings made after this, in the same list, are marked "new"
+    private DateTime _bookingsNow = DateTime.Now;  // the clock the "12 min ago" wording is worked out from
+    // Click a header to sort; the default (and the first click on Booked) is newest first.
+    private static readonly IReadOnlyDictionary<string, SortKey<BookingAdminRow>> BookingSortKeys = new Dictionary<string, SortKey<BookingAdminRow>>
+    {
+        ["Reference"] = new(r => r.Reference),
+        ["BookedAt"] = new(r => r.BookedAtValue, FirstDescending: true),
+        ["FlightNo"] = new(r => r.FlightNo),
+        ["Route"] = new(r => r.Route),
+        ["FlightDate"] = new(r => r.FlightDateValue, FirstDescending: true),
+        ["Passengers"] = new(r => r.Passengers, FirstDescending: true),
+        ["TotalAmount"] = new(r => r.TotalAmount, FirstDescending: true),
+        ["Status"] = new(r => r.Status),
+        ["PaymentStatus"] = new(r => r.PaymentStatus),
+        ["RefundAmount"] = new(r => r.RefundAmount, FirstDescending: true),
+    };
+    private readonly GridSorter<BookingAdminRow> _bookingSorter = new(BookingSortKeys, "BookedAt", descending: true);
 
     // reports
     private readonly DataGridView _routeGrid = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
@@ -372,7 +399,13 @@ public sealed class AdminForm : GlassForm
 
     private Panel BuildBookingsPage()
     {
-        var toolbar = Toolbar();
+        // Two toolbar rows, like the Refunds tab: the actions on top, "which bookings to show" below.
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = D(108) };
+        FlowLayoutPanel actions = Toolbar();
+        FlowLayoutPanel view = Toolbar();
+        toolbar.Controls.Add(view);       // docked first = lower row
+        toolbar.Controls.Add(actions);
+
         _bookingSearch.Width = D(200);
         _bookingSearch.Margin = new Padding(0, D(5), D(8), 0);
         _bookingStatus.Items.AddRange(TripStatus.Filters.Cast<object>().ToArray());
@@ -381,23 +414,53 @@ public sealed class AdminForm : GlassForm
         _bookingStatus.Margin = new Padding(0, D(5), D(8), 0);
         _bookingDate.Width = D(128);
         _bookingDate.Margin = new Padding(0, D(5), D(8), 0);
+        FillChoices(_bookingView, BookingViewChoices, D(230), new Padding(0, D(5), D(8), 0));
         _bookingCount.Margin = new Padding(D(4), D(12), 0, 0);
+
+        // What the screen remembers from last time: which list, and how it was sorted.
+        _loadingViewSettings = true;
+        SelectByKey(_bookingView, BookingViewChoices, _service.GetViewSetting("view_booking_view", "date"));
+        _bookingSorter.LoadSetting(_service.GetViewSetting("view_booking_sort", ""));
+        _loadingViewSettings = false;
+        _bookingDate.Enabled = KeyOf(_bookingView, BookingViewChoices) == "date";
 
         _bookingSearch.TextChanged += (_, _) => { _searchTimer.Stop(); _searchTimer.Start(); };
         _bookingStatus.SelectedIndexChanged += (_, _) => ApplyBookingFilter();
         _bookingDate.ValueChanged += (_, _) => LoadBookingsFromStore();
+        _bookingView.SelectedIndexChanged += (_, _) =>
+        {
+            string key = KeyOf(_bookingView, BookingViewChoices);
+            _bookingDate.Enabled = key == "date";   // a flight date only means something to the by-date list
+            if (_loadingViewSettings) return;
+            Try("Unable to save the view setting", () => _service.SetViewSetting("view_booking_view", key));
+            LoadBookingsFromStore();
+        };
+        _bookingSorter.Attach(_bookings);
+        _bookingSorter.Changed += (_, _) =>
+        {
+            Try("Unable to save the view setting", () => _service.SetViewSetting("view_booking_sort", _bookingSorter.ToSetting()));
+            ApplyBookingFilter();
+        };
 
-        toolbar.Controls.Add(_bookingSearch);
-        toolbar.Controls.Add(_bookingStatus);
-        toolbar.Controls.Add(_bookingDate);
-        toolbar.Controls.Add(ToolButton("Details", (_, _) => ShowBookingDetails()));
+        view.Controls.Add(_bookingView);
+        view.Controls.Add(_bookingDate);
+        view.Controls.Add(_bookingStatus);
+        view.Controls.Add(_bookingSearch);
+        actions.Controls.Add(ToolButton("Details", (_, _) => ShowBookingDetails()));
         if (Session.Has(Permission.CancelBookings))
-            toolbar.Controls.Add(ToolButton("Cancel booking", (_, _) => CancelSelectedBooking(), GlassButtonStyle.Danger));
-        toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadBookingsFromStore(), GlassButtonStyle.Ghost));
-        toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportBookings(), GlassButtonStyle.Secondary));
-        toolbar.Controls.Add(_bookingCount);
+            actions.Controls.Add(ToolButton("Cancel booking", (_, _) => CancelSelectedBooking(), GlassButtonStyle.Danger));
+        actions.Controls.Add(ToolButton("Refresh", (_, _) => LoadBookingsFromStore(), GlassButtonStyle.Ghost));
+        actions.Controls.Add(ToolButton("Export CSV", (_, _) => ExportBookings(), GlassButtonStyle.Secondary));
+        actions.Controls.Add(_bookingCount);
 
         GridStyle.Apply(_bookings);
+        // Bookings made since the list was last loaded stand out (amber), so a fresh Refresh shows what came in.
+        _bookings.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.CellStyle is null) return;
+            DataGridViewRow row = _bookings.Rows[e.RowIndex];
+            if (row.DataBoundItem is BookingAdminRow { IsNew: true } && !row.Selected) e.CellStyle.BackColor = Theme.AmberSoft;
+        };
         // Nine columns: use the compact font and tighter cell padding so nothing is truncated.
         _bookings.DefaultCellStyle.Font = Theme.Small;
         _bookings.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
@@ -417,7 +480,7 @@ public sealed class AdminForm : GlassForm
     {
         var weights = new Dictionary<string, (float Weight, string? Header)>
         {
-            ["Reference"] = (1.0f, null), ["BookedAt"] = (1.3f, null), ["FlightNo"] = (0.9f, null),
+            ["Reference"] = (1.0f, null), ["BookedAt"] = (1.75f, null), ["FlightNo"] = (0.9f, null),   // BookedAt: "Yesterday, 4:45 PM"
             ["Route"] = (2.8f, null), ["FlightDate"] = (1.3f, null), ["Passengers"] = (0.6f, "Pax"),
             ["TotalAmount"] = (1.0f, null), ["Status"] = (1.6f, null),   // room for the widest pill, "Check-in open"
             ["PaymentStatus"] = (1.4f, null),   // and for "PAID · not used"
@@ -431,27 +494,75 @@ public sealed class AdminForm : GlassForm
         }
     }
 
+    /// <summary>The start of a "booked in the last ..." window (24h, 7d or 30d).</summary>
+    internal static DateTime RecentSince(string view, DateTime now) => view switch
+    {
+        "24h" => now.AddHours(-24),
+        "30d" => now.AddDays(-30),
+        _ => now.AddDays(-7)
+    };
+
     /// <summary>
-    /// Reads the chosen flight date's bookings (a busy day is thousands; all dates together would be far too many to load) and
-    /// where each trip is right now. Filtering then works on this copy.
+    /// Reads the list for the chosen view and where each trip is right now: the chosen flight date's bookings (a busy day is thousands;
+    /// all dates together would be far too many), or the newest bookings made in the chosen window whatever their flight date.
+    /// Filtering and sorting then work on this copy. Bookings made since the previous load of the same list are marked new.
     /// </summary>
     private void LoadBookingsFromStore()
     {
+        DateTime now = DateTime.Now;
         DateTime date = _bookingDate.Value.Date;
-        if (Try("Unable to load bookings", () =>
+        string view = KeyOf(_bookingView, BookingViewChoices);
+        string loadKey = view == "date" ? $"date:{date:yyyyMMdd}" : view;
+        DateTime? baseline = loadKey == _bookingsLoadKey ? _bookingsLoadedAt : null;   // a different list has nothing to compare with
+
+        if (!Try("Unable to load bookings", () =>
             {
-                _allBookings = _service.LoadBookingsForDate(date);
-                _allTrips = _service.LoadTripStatusesForDate(_allBookings, date, DateTime.Now);
+                if (view == "date")
+                {
+                    _allBookings = _service.LoadBookingsForDate(date);
+                    _allTrips = _service.LoadTripStatusesForDate(_allBookings, date, now);
+                    _recentTotal = _allBookings.Count;
+                }
+                else
+                {
+                    (_allBookings, _recentTotal) = _service.LoadRecentBookings(RecentSince(view, now), RecentBookingLimit);
+                    _allTrips = _service.LoadTripStatuses(_allBookings, now);
+                }
             }))
-            ApplyBookingFilter();
+            return;
+        _bookingsLoadKey = loadKey;
+        _bookingsLoadedAt = now;
+        _newBaseline = baseline;
+        _bookingsNow = now;
+        ApplyBookingFilter();
     }
 
     private TripStatusInfo TripOf(BookingRecord b)
         => _allTrips.TryGetValue(b.Reference, out TripStatusInfo? trip) ? trip : TripStatus.Of(b, Array.Empty<CheckInRecord>(), DateTime.Now);
 
-    private static BookingAdminRow ToRow(BookingRecord b, TripStatusInfo trip)
-        => new(b.Reference, b.BookedAtValue.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), b.FlightNo,
-            $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count, b.TotalAmount, trip.Label, BookingSummary.PaymentLabel(b.PaymentStatus, trip.Phase), b.RefundAmount);
+    private BookingAdminRow ToRow(BookingRecord b, TripStatusInfo trip)
+        => new(b.Reference, RecencyFormat.Relative(b.BookedAtValue, _bookingsNow), b.FlightNo,
+            $"{b.Origin} → {b.Destination}", b.FlightDate, b.Passengers.Count, b.TotalAmount, trip.Label, BookingSummary.PaymentLabel(b.PaymentStatus, trip.Phase), b.RefundAmount,
+            b.BookedAtValue, b.FlightDateValue, RecencyFormat.IsNew(b.BookedAtValue, _newBaseline));
+
+    /// <summary>What the count next to the buttons says: how many are shown, of how many, for which list, and how many are new.</summary>
+    internal static string BookingCountText(string view, int shown, int loaded, int total, int fresh, string day)
+    {
+        static string N(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
+        static string Noun(int n) => n == 1 ? "booking" : "bookings";
+        string where = view switch
+        {
+            "24h" => "from the last 24 hours",
+            "7d" => "from the last 7 days",
+            "30d" => "from the last 30 days",
+            _ => $"on {day}"
+        };
+        bool cutShort = view != "date" && loaded < total;   // the newest bookings only; there were more in the window
+        string text = shown == loaded
+            ? cutShort ? $"newest {N(loaded)} of {N(total)} bookings {where}" : $"{N(shown)} {Noun(shown)} {where}"
+            : cutShort ? $"{N(shown)} of {N(loaded)} (newest of {N(total)}) bookings {where}" : $"{N(shown)} of {N(loaded)} bookings {where}";
+        return fresh > 0 ? $"{text} · {N(fresh)} new" : text;
+    }
 
     private void ApplyBookingFilter()
     {
@@ -473,30 +584,30 @@ public sealed class AdminForm : GlassForm
         }
 
         string status = _bookingStatus.SelectedItem?.ToString() ?? "All";
-        var rows = _allBookings
+        var matching = _allBookings
             .Where(b => TripStatus.Matches(TripOf(b).Phase, status))
             .Where(b => search.Length == 0 ||
                         b.Reference.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                         b.FlightNo.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                         b.Passengers.Any(p => p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .Select(b => ToRow(b, TripOf(b)))
-            .ToList();
+            .Select(b => ToRow(b, TripOf(b)));
+        List<BookingAdminRow> rows = _bookingSorter.Sort(matching).ToList();   // newest first unless a header was clicked
         _bookings.DataSource = rows;
-        string day = _bookingDate.Value.ToString("MMM d", CultureInfo.InvariantCulture);
-        _bookingCount.Text = rows.Count == _allBookings.Count
-            ? $"{rows.Count:N0} bookings on {day}"
-            : $"{rows.Count:N0} of {_allBookings.Count:N0} bookings on {day}";
+        _bookingCount.Text = BookingCountText(KeyOf(_bookingView, BookingViewChoices), rows.Count, _allBookings.Count, _recentTotal,
+            rows.Count(r => r.IsNew), _bookingDate.Value.ToString("MMM d", CultureInfo.InvariantCulture));
     }
 
     /// <summary>Saves the bookings currently shown (after the date, status and search filters) as a CSV file.</summary>
     private void ExportBookings()
     {
         if (_bookings.DataSource is not List<BookingAdminRow> shown || shown.Count == 0) { ShowInfo("There are no bookings in the list to export."); return; }
-        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-bookings-{_bookingDate.Value:yyyyMMdd}.csv" };
+        string fileDay = KeyOf(_bookingView, BookingViewChoices) == "date" ? $"{_bookingDate.Value:yyyyMMdd}" : $"booked-{DateTime.Today:yyyyMMdd}";
+        using var dialog = new SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", FileName = $"skywings-bookings-{fileDay}.csv" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         var lines = CsvExport.Build(
             new[] { "Reference", "Booked", "Flight", "Route", "Flight date", "Passengers", "Total", "Status", "Payment", "Refund" },
-            shown.Select(r => new[] { r.Reference, r.BookedAt, r.FlightNo, r.Route, r.FlightDate, r.Passengers.ToString(CultureInfo.InvariantCulture),
+            // The file gets the exact time, not the "12 min ago" wording, and the rows in the order the list shows them.
+            shown.Select(r => new[] { r.Reference, r.BookedAtValue.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), r.FlightNo, r.Route, r.FlightDate, r.Passengers.ToString(CultureInfo.InvariantCulture),
                 CsvExport.Money(r.TotalAmount), r.Status, r.PaymentStatus, CsvExport.Money(r.RefundAmount) }));
         if (Try("Unable to export the bookings", () => File.WriteAllLines(dialog.FileName, lines)))
         {
@@ -1236,7 +1347,11 @@ public sealed class AdminForm : GlassForm
     private void ShowInfo(string message)
         => MessageBox.Show(this, message, "SkyWings Staff", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
+    /// <summary>One row of the Bookings list. The last three are for sorting and marking, not columns, so they are hidden from the grid.</summary>
     private sealed record BookingAdminRow(string Reference, string BookedAt, string FlightNo,
         string Route, string FlightDate, int Passengers, decimal TotalAmount, string Status,
-        string PaymentStatus, decimal RefundAmount);
+        string PaymentStatus, decimal RefundAmount,
+        [property: System.ComponentModel.Browsable(false)] DateTime BookedAtValue,
+        [property: System.ComponentModel.Browsable(false)] DateTime FlightDateValue,
+        [property: System.ComponentModel.Browsable(false)] bool IsNew);
 }
