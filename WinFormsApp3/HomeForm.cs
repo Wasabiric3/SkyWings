@@ -9,12 +9,16 @@ public partial class HomeForm : GlassForm
 {
     private readonly BookingStore _store;
     private readonly FlowLayoutPanel _destinations = new();
-    private readonly ComboBox _to = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly DateField _date = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
-    private readonly ComboBox _cabin = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    // The filter row above the board: region chips, a day selector and a search box (city or flight number).
+    private readonly Dictionary<string, GlassButton> _regionChips = new();
+    private string _region = "";   // "" is every region
+    private readonly DateField _day = new() { CustomFormat = "ddd, MMM d", MinDate = DateTime.Today };
+    private readonly GlassButton _dayPrev = new() { Text = "‹", Style = GlassButtonStyle.Outline };
+    private readonly GlassButton _dayNext = new() { Text = "›", Style = GlassButtonStyle.Outline };
+    private readonly GlassButton _dayToday = new() { Text = "Today", Style = GlassButtonStyle.Ghost };
+    private readonly TextBox _boardSearch = new() { PlaceholderText = "Search flights" };
     private readonly Label _routeCount = new();
     private readonly GlassButton _bookButton = new();
-    private readonly GlassButton _bookSelected = new();
     private readonly DataGridView _flights = new();
     private readonly Label _flightSummary = new();
     private readonly Label _clock = new();
@@ -103,7 +107,7 @@ public partial class HomeForm : GlassForm
         };
 
         Control hero = BuildHero();
-        Control search = BuildSearch();
+        Control filters = BuildFilterRow();
         Control flightList = BuildFlightList();
         Control sectionTitle = BuildSectionTitle();
         _destinations.Dock = DockStyle.Top;
@@ -117,10 +121,13 @@ public partial class HomeForm : GlassForm
         content.Controls.Add(sectionTitle);
         content.Controls.Add(flightList);
         content.Controls.Add(Spacer(D(10)));
-        content.Controls.Add(search);
+        content.Controls.Add(filters);
         content.Controls.Add(hero);
-        content.AutoScrollMinSize = new Size(0,
-            hero.Height + search.Height + flightList.Height + D(10) + sectionTitle.Height + _destinations.Height + D(16));
+        // The filter row grows a second line on a narrow window, so the scrollable height follows what is really there.
+        void FitScroll() => content.AutoScrollMinSize = new Size(0,
+            hero.Height + filters.Height + flightList.Height + D(10) + sectionTitle.Height + _destinations.Height + D(16));
+        FitScroll();
+        filters.SizeChanged += (_, _) => FitScroll();
 
         Controls.Add(content);
         Controls.Add(BuildFooter());
@@ -216,42 +223,81 @@ public partial class HomeForm : GlassForm
         return hero;
     }
 
-    private Control BuildSearch()
+    /// <summary>
+    /// The row above the board: region chips, a day selector (previous day, the day, next day, Today) and a search box. Any change refreshes the
+    /// board straight away. On a narrow window the controls wrap onto a second line.
+    /// </summary>
+    private Control BuildFilterRow()
     {
-        // One tidy row: a small caption above each field, and the button level with the fields.
-        var card = new GlassCard { Dock = DockStyle.Top, Height = D(118), ContentPadding = 10 };
-        _cabin.Items.AddRange(AppData.ClassNames.Cast<object>().ToArray());
-        _cabin.SelectedIndex = 0;
-        _to.DropDownWidth = D(360);
+        var card = new GlassCard { Dock = DockStyle.Top, Height = D(76), ContentPadding = 10 };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = false, BackColor = Color.Transparent };
 
-        // The wizard's rounded fields, each with its caption above it; the button is level with the fields.
-        var rows = new[] { new FieldRow("TO  (FROM MANILA)", _to), new FieldRow("DEPARTURE", _date), new FieldRow("CABIN", _cabin) };
-        foreach (FieldRow field in rows) { field.Dock = DockStyle.Top; field.Margin = new Padding(0, 0, D(14), 0); }
+        foreach (string region in new[] { "" }.Concat(FlightRegions.Names))
+        {
+            string name = region;
+            var chip = new GlassButton { Text = name.Length == 0 ? "All" : name, Style = GlassButtonStyle.Outline, Height = D(40), Margin = new Padding(0, D(2), D(6), D(2)) };
+            chip.Width = Math.Max(D(64), TextRenderer.MeasureText(chip.Text, chip.Font).Width + D(30));
+            chip.Click += (_, _) => SetRegion(name);
+            _regionChips[name] = chip;
+            flow.Controls.Add(chip);
+        }
 
-        _bookSelected.Text = "Book selected  →";
-        _bookSelected.Dock = DockStyle.Top;
-        _bookSelected.Height = D(44);
-        _bookSelected.Margin = new Padding(0, D(26), 0, 0);   // below the captions, level with the boxes
-        _bookSelected.Enabled = false;
-        _bookSelected.Click += BookSelectedFlight;
+        foreach (GlassButton arrow in new[] { _dayPrev, _dayNext })
+        {
+            arrow.Width = D(40); arrow.Height = D(40); arrow.Margin = new Padding(D(8), D(2), D(2), D(2));
+        }
+        _dayNext.Margin = new Padding(D(2), D(2), D(4), D(2));
+        _dayToday.Width = D(70); _dayToday.Height = D(40); _dayToday.Margin = new Padding(0, D(2), D(14), D(2));
+        _day.Width = D(158);
+        var dayBox = new RoundedInput(_day) { Width = D(158), Margin = new Padding(0, D(2), 0, D(2)) };
+        _boardSearch.Width = D(160);
+        var searchBox = new RoundedInput(_boardSearch) { Width = D(160), Margin = new Padding(0, D(2), 0, D(2)) };
+        flow.Controls.Add(_dayPrev);
+        flow.Controls.Add(dayBox);
+        flow.Controls.Add(_dayNext);
+        flow.Controls.Add(_dayToday);   // shown only when the day is not today, so the row stays on one line
+        flow.Controls.Add(searchBox);
+        card.Controls.Add(flow);
 
-        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, BackColor = Color.Transparent };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 19));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, D(190)));
-        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        row.Controls.Add(rows[0], 0, 0);
-        row.Controls.Add(rows[1], 1, 0);
-        row.Controls.Add(rows[2], 2, 0);
-        row.Controls.Add(_bookSelected, 3, 0);
-        card.Controls.Add(row);
+        _dayPrev.AccessibleName = "Previous day"; _dayNext.AccessibleName = "Next day"; _dayToday.AccessibleName = "Today";
+        _dayPrev.Click += (_, _) => _day.Value = _day.Value.Date.AddDays(-1);
+        _dayNext.Click += (_, _) => _day.Value = _day.Value.Date.AddDays(1);
+        _dayToday.Click += (_, _) => _day.Value = DateTime.Today;   // read now: the window may have been open since yesterday
+        _day.ValueChanged += (_, _) =>
+        {
+            _dayPrev.Enabled = _day.Value.Date > DateTime.Today;
+            _dayToday.Visible = _day.Value.Date != DateTime.Today;
+            RefreshFlights();
+        };
+        _dayPrev.Enabled = false;
+        _dayToday.Visible = false;
+        _boardSearch.TextChanged += (_, _) => RefreshFlights();
+        SetChipStyles();
 
-        // Any change to the fields refreshes the flight list straight away.
-        _to.SelectedIndexChanged += (_, _) => RefreshFlights();
-        _date.ValueChanged += (_, _) => RefreshFlights();
-        _cabin.SelectedIndexChanged += (_, _) => RefreshFlights();
+        // Taller when the controls wrap: the card is as high as its rows need.
+        void FitHeight()
+        {
+            int inner = Math.Max(D(60), card.DisplayRectangle.Width);
+            card.Height = flow.GetPreferredSize(new Size(inner, 0)).Height + 2 * (D(card.ShadowSize) + D(card.ContentPadding));
+        }
+        card.SizeChanged += (_, _) => FitHeight();
+        flow.SizeChanged += (_, _) => FitHeight();
+        Shown += (_, _) => FitHeight();
         return card;
+    }
+
+    /// <summary>Chooses a region ("" for all): marks its chip and refreshes the board.</summary>
+    private void SetRegion(string region)
+    {
+        _region = region;
+        SetChipStyles();
+        RefreshFlights();
+    }
+
+    private void SetChipStyles()
+    {
+        foreach ((string name, GlassButton chip) in _regionChips)
+            chip.Style = name == _region ? GlassButtonStyle.Primary : GlassButtonStyle.Outline;
     }
 
     /// <summary>The live list of every flight that matches the fields above.</summary>
@@ -303,7 +349,6 @@ public partial class HomeForm : GlassForm
         AddFlightColumn("Fare", nameof(FlightRow.Price), 1.0f, right: true);
         AddFlightColumn("Seats left", nameof(FlightRow.SeatsLeft), 0.8f, right: true);
         AddFlightColumn("Load", nameof(FlightRow.LoadPercent), 1.3f);
-        _flights.SelectionChanged += (_, _) => UpdateBookButton();
         _flights.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) BookSelectedFlight(null, EventArgs.Empty); };
         _flights.CellFormatting += FormatBoardCell;
         _flights.CellPainting += PaintBoardCell;
@@ -427,23 +472,15 @@ public partial class HomeForm : GlassForm
     private FlightRow? SelectedFlight() => _flights.CurrentRow?.DataBoundItem as FlightRow;
 
     /// <summary>Whether a board row can still be booked: same day included, until the cutoff 2 hours before departure.</summary>
-    private bool CanBook(FlightRow row) => HomeController.CanBook(row.FlightNo, _date.Value.Date, DateTime.Now);
+    private bool CanBook(FlightRow row) => HomeController.CanBook(row.FlightNo, _day.Value.Date, DateTime.Now);
 
-    /// <summary>"Book selected" normally; on a sold-out flight the same button becomes "Join waitlist".</summary>
-    private void UpdateBookButton()
-    {
-        FlightRow? row = SelectedFlight();
-        _bookSelected.Text = row is { SoldOut: true } ? "Join waitlist  →" : "Book selected  →";
-        _bookSelected.Enabled = row is not null && CanBook(row);
-    }
-
-    /// <summary>Reloads the board from the database (seats included) for the current destination, date and cabin.</summary>
+    /// <summary>Reloads the board from the database (seats included) for the chosen region, search text and day.</summary>
     private void RefreshFlights()
     {
-        if (_loadingDashboard || _to.SelectedItem is not DestinationOption option) return;
+        if (_loadingDashboard) return;
         try
         {
-            BindBoard(_controller.SearchFlights(option.Destination, _date.Value.Date, _cabin.Text));
+            BindBoard(_controller.LoadBoard(_region, _boardSearch.Text, _day.Value.Date));
             _lastReload = _lastRestamp = DateTime.Now;
         }
         catch (IOException ex)
@@ -453,7 +490,6 @@ public partial class HomeForm : GlassForm
             _flights.DataSource = null;
             _flightSummary.Text = "The flights could not be loaded: " + ex.Message;
         }
-        UpdateBookButton();
     }
 
     private readonly SimulationService _simulation;
@@ -465,10 +501,10 @@ public partial class HomeForm : GlassForm
     /// </summary>
     private async void ReloadBoardInBackground()
     {
-        if (_reloading || _to.SelectedItem is not DestinationOption option) return;
+        if (_reloading || _loadingDashboard) return;
         _reloading = true;
-        string destination = option.Destination, cabin = _cabin.Text;
-        DateTime date = _date.Value.Date;
+        string region = _region, text = _boardSearch.Text;
+        DateTime date = _day.Value.Date;
         try
         {
             List<FlightRow> rows = await Task.Run(() =>
@@ -479,14 +515,12 @@ public partial class HomeForm : GlassForm
                 catch (Exception ex) { AppLogger.Error("Demo", ex); }
                 try { _store.ExpireWaitlistOffers(DateTime.Now); }
                 catch (Exception ex) { AppLogger.Error("Waitlist", ex); }
-                return _controller.SearchFlights(destination, date, cabin);
+                return _controller.LoadBoard(region, text, date);
             });
-            // The search bar may have changed while loading; the next tick simply tries again.
-            if (IsDisposed || _to.SelectedItem is not DestinationOption now || now.Destination != destination
-                || _date.Value.Date != date || _cabin.Text != cabin) return;
+            // The filter row may have changed while loading; the next tick simply tries again.
+            if (IsDisposed || _region != region || _boardSearch.Text != text || _day.Value.Date != date) return;
             BindBoard(rows);
             _lastReload = _lastRestamp = DateTime.Now;
-            UpdateBookButton();
         }
         catch (IOException ex)
         {
@@ -514,14 +548,14 @@ public partial class HomeForm : GlassForm
 
     private void UpdateSummary()
     {
-        if (_to.SelectedItem is not DestinationOption option) return;
-        string place = option.Destination.Length == 0 ? "All flights from Manila" : $"Flights to {option.Destination}";
-        string tail = _date.Value.Date == DateTime.Today
+        string place = _region.Length == 0 ? "All flights from Manila" : $"{_region} flights from Manila";
+        if (_boardSearch.Text.Trim().Length > 0) place += $"  ·  \"{_boardSearch.Text.Trim()}\"";
+        string tail = _day.Value.Date == DateTime.Today
             ? $"Fares are one-way per traveller. Today's flights can be booked until {AppData.BookingCutoffHours} hours before departure."
             : "Fares are one-way per traveller. Double-click a flight to book it.";
         _flightSummary.Text = _boardRows.Count == 0
             ? $"{place}  ·  no flights match"
-            : $"{place}  ·  {_boardRows.Count} flight(s)  ·  {_date.Value:ddd, MMM d}  ·  {_cabin.Text}  ·  {tail}";
+            : $"{place}  ·  {_boardRows.Count} flight(s)  ·  {_day.Value:ddd, MMM d}  ·  {tail}";
     }
 
     // ------------------------------------------------------------------ live board
@@ -531,7 +565,7 @@ public partial class HomeForm : GlassForm
     {
         DateTime now = DateTime.Now;
         _clock.Text = now.ToString("ddd, MMM d  ·  h:mm:ss tt");
-        if (_loadingDashboard || _boardRows.Count == 0 && _to.SelectedItem is null) return;
+        if (_loadingDashboard) return;
 
         if (now - _lastReload >= TimeSpan.FromSeconds(60))
         {
@@ -541,7 +575,7 @@ public partial class HomeForm : GlassForm
         if (now - _lastRestamp < TimeSpan.FromSeconds(15)) return;
         _lastRestamp = now;
         if (_boardRows.Count == 0) return;
-        List<FlightRow> restamped = HomeController.Restamp(_boardRows, _date.Value.Date, now);
+        List<FlightRow> restamped = HomeController.Restamp(_boardRows, _day.Value.Date, now);
         if (!SameBoardText(_boardRows, restamped)) BindBoard(restamped);   // rebuilding the grid is costly; skip when nothing visible changed
     }
 
@@ -634,15 +668,6 @@ public partial class HomeForm : GlassForm
                     new RouteSummary(route.Title, route.Subtitle, AccentFor(route.Title), route.Flights, route.RouteType)));
             _destinations.ResumeLayout();
 
-            string? selected = (_to.SelectedItem as DestinationOption)?.Destination;   // null on the first load
-            _loadingDashboard = true;   // refill the list once at the end, not once per change
-            try
-            {
-                _to.Items.Clear();
-                foreach (DestinationOption option in dashboard.Destinations) _to.Items.Add(option);
-                if (_to.Items.Count > 0) _to.SelectedIndex = dashboard.DefaultDestinationIndex(selected);
-            }
-            finally { _loadingDashboard = false; }
             _routeCount.Text = dashboard.Summary;
             RefreshFlights();
         }
@@ -681,13 +706,13 @@ public partial class HomeForm : GlassForm
         if (SelectedFlight() is not { } row || !CanBook(row)) return;
         if (row.SoldOut)
         {
-            using var join = new JoinWaitlistForm(_store, row.Flight, _date.Value.Date, _cabin.Text);
+            using var join = new JoinWaitlistForm(_store, row.Flight, _day.Value.Date, "Economy");
             join.ShowDialog(this);
             RefreshFlights();
             return;
         }
         using var wizard = new BookingWizardForm(_store);
-        wizard.Prefill(row.Flight.FlightNo, null, _date.Value.Date, _cabin.Text);
+        wizard.Prefill(row.Flight.FlightNo, null, _day.Value.Date, "Economy");
         wizard.ShowDialog(this);
         LoadDashboard();
     }

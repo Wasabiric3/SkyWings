@@ -30,11 +30,11 @@ public sealed class HomeLookTests
     }
 
     [TestMethod]
-    public void SearchFields_AreRounded_AndTheDateIsADateField() => FormHarness.OnStaThread(() =>
+    public void FilterRow_IsRounded_AndTheDayIsADateField() => FormHarness.OnStaThread(() =>
     {
         using var harness = new FormHarness();
         using HomeForm form = Open(harness);
-        Assert.IsGreaterThanOrEqualTo(3, All(form).OfType<RoundedInput>().Count(), "destination, date and cabin sit in rounded boxes");
+        Assert.IsGreaterThanOrEqualTo(2, All(form).OfType<RoundedInput>().Count(), "the day and the search box sit in rounded boxes");
         Assert.IsTrue(All(form).OfType<DateField>().Any(), "the native date picker is replaced");
         Assert.IsFalse(All(form).OfType<DateTimePicker>().Any());
     });
@@ -50,15 +50,12 @@ public sealed class HomeLookTests
     });
 
     [TestMethod]
-    public void Changing_TheDestination_StillRefreshesTheBoard() => FormHarness.OnStaThread(() =>
+    public void TheBoard_IsFilledAtTheStart() => FormHarness.OnStaThread(() =>
     {
         using var harness = new FormHarness();
         using HomeForm form = Open(harness);
-        var to = (ComboBox)typeof(HomeForm).GetField("_to", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
         var board = (DataGridView)typeof(HomeForm).GetField("_flights", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
-        to.SelectedIndex = Math.Min(2, to.Items.Count - 1);
-        Application.DoEvents();
-        Assert.IsGreaterThan(0, board.Rows.Count, "a destination with flights fills the board");
+        Assert.IsGreaterThan(0, board.Rows.Count, "today's flights fill the board");
     });
 
     [TestMethod]
