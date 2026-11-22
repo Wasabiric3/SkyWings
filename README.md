@@ -6,6 +6,8 @@ Staff sign in with their own accounts, then can search flights, run the six-step
 
 The booking wizard follows the Figma design: the six steps are pills at the top (a step already visited can be clicked to go back), a trip summary with the running total stays at the right, and the footer has Back (on the first step it closes the wizard) and the main action. Fields are rounded and dates open a month calendar. Every other screen uses the same look: a warm page colour, a large green page title above white cards, green pill buttons, rounded fields and drop-downs, and tables with soft-green selection and status pills. Small dialogs share one frame (title, fields, buttons at the bottom right) and size themselves to their content.
 
+The home screen shows the departures board for a day. A filter row above it narrows the board by region (All, Domestic, Southeast Asia, Europe, North America), by day (previous and next day, Today) and by a search for a city or flight number; the region cards below the board set the same region filter. Selecting a flight shows its details beside the board: its status and a timeline (scheduled, check-in open, boarding, departed, landed), the aircraft, and each cabin with its fare, seats left and how full it is. One button there books the chosen cabin, or joins that cabin's waitlist when it is sold out, and it is switched off, with the reason written under it, once a flight has left or bookings have closed.
+
 ## Requirements
 
 - Windows

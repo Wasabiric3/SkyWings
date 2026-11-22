@@ -86,4 +86,17 @@ public sealed class HelpContentTests
         Assert.AreEqual(4, rows.Count(r => r.Area == "Baggage"));
         Assert.IsTrue(rows.All(r => r.Area.Length > 0 && r.Rule.Length > 0 && r.Value.Length > 0));
     }
+
+    [TestMethod]
+    public void TheHomeScreenTopics_DescribeTheFilterRowAndTheDetailsPanel_NotTheOldSearchCard()
+    {
+        string book = HelpContent.Topics().Single(t => t.Title == "Book a flight").Body;
+        StringAssert.Contains(book, "region", "the filter row");
+        StringAssert.Contains(book, "details panel", "the panel with the cabins and the one Book button");
+        Assert.DoesNotContain("search for a flight", book, "the search card is gone");
+
+        string waitlist = HelpContent.Topics().Single(t => t.Title == "Waitlist for a sold-out flight").Body;
+        StringAssert.Contains(waitlist, "details panel");
+        Assert.DoesNotContain("select the flight on the home screen and choose", waitlist);
+    }
 }
