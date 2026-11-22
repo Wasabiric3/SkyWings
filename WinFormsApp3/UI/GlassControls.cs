@@ -345,10 +345,15 @@ public sealed class FieldRow : Control, ISelfStyled
     private readonly Label _caption = new();
     private readonly Label _message = new();
 
-    public FieldRow(string caption, Control input)
+    private readonly RoundedInput? _host;
+
+    /// <param name="rounded">The Figma look: the input sits in a rounded box that draws the focus and error outline.</param>
+    public FieldRow(string caption, Control input, bool rounded = false)
     {
         // No transparency: the row simply inherits its parent's colour (ambient BackColor), so nothing repaints through it.
         Input = input;
+        TabStop = false;   // the row is only a container; Tab goes straight to its input
+        if (rounded) _host = new RoundedInput(input);
 
         _caption.Text = caption;
         _caption.Font = CaptionFont;
@@ -359,8 +364,10 @@ public sealed class FieldRow : Control, ISelfStyled
 
         input.Font = Theme.Body;
         if (input is TextBox or ComboBox or DateTimePicker or NumericUpDown) input.BackColor = Color.White;
-        input.Dock = DockStyle.Top;
         input.Margin = Padding.Empty;
+        // The box that holds the input is what docks in the row, so it takes the input's place in the stack.
+        Control body = _host ?? input;
+        if (_host is not null) _host.Dock = DockStyle.Top; else input.Dock = DockStyle.Top;
 
         _message.Font = Theme.Small;
         _message.AutoSize = false;
@@ -368,7 +375,7 @@ public sealed class FieldRow : Control, ISelfStyled
         _message.TextAlign = ContentAlignment.TopLeft;
 
         // Owner-drawn combo boxes only reach their final height once their handle exists.
-        input.SizeChanged += (_, _) => ApplySizes();
+        body.SizeChanged += (_, _) => ApplySizes();
 
         // Room for the focus / error outline painted around the input (native boxes can't draw their own).
         Padding = new Padding(2, 0, 2, 0);
@@ -377,7 +384,7 @@ public sealed class FieldRow : Control, ISelfStyled
         input.EnabledChanged += (_, _) => Invalidate();
 
         Controls.Add(_message);
-        Controls.Add(input);
+        Controls.Add(body);
         Controls.Add(_caption);
         Dock = DockStyle.Top;
         ApplySizes();
@@ -399,7 +406,7 @@ public sealed class FieldRow : Control, ISelfStyled
     {
         _caption.Height = Gfx.S(this, 24);
         _message.Height = Gfx.S(this, 22);
-        Height = _caption.Height + Input.Height + _message.Height + Gfx.S(this, 2);
+        Height = _caption.Height + (_host ?? Input).Height + _message.Height + Gfx.S(this, 2);
     }
 
     protected override void OnDpiChangedAfterParent(EventArgs e)
@@ -413,7 +420,7 @@ public sealed class FieldRow : Control, ISelfStyled
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        if (!Input.Visible || !Input.Enabled) return;
+        if (_host is not null || !Input.Visible || !Input.Enabled) return;   // the rounded box draws its own outline
         bool focused = Input.ContainsFocus;
         if (!focused && !_hasError) return;
         Gfx.HighQuality(e.Graphics);
@@ -428,6 +435,7 @@ public sealed class FieldRow : Control, ISelfStyled
         _message.Text = text ?? "";
         _message.ForeColor = isError ? Theme.DangerRed : Theme.Accent;
         _hasError = isError && !string.IsNullOrEmpty(text);
+        if (_host is not null) _host.HasError = _hasError;
         Invalidate();
     }
 
