@@ -29,11 +29,25 @@ internal static class Assets
 
     public static Bitmap? Watermark(int dpi) => Load($"watermark_{Bucket(dpi)}");
 
-    private static Bitmap? Load(string key) => Cache.GetOrAdd(key, static k =>
+    /// <summary>A photograph (the home banner or a region card): "hero", "domestic", "southeast_asia", "europe" or "north_america". One size, scaled when drawn.</summary>
+    public static Bitmap? Photo(string key) => Load("photo_" + key, "jpg");
+
+    /// <summary>The part of a photograph that matters (0..1 across and down), kept in view when it is cropped to a different shape.</summary>
+    public static PointF PhotoFocus(string key) => key switch
+    {
+        "hero" => new PointF(0.5f, 0.45f),            // the plane
+        "domestic" => new PointF(0.5f, 0.45f),        // the rocks, beach and boats
+        "southeast_asia" => new PointF(0.5f, 0.55f),  // the floating villages
+        "europe" => new PointF(0.5f, 0.5f),           // the dome and the rooftops
+        "north_america" => new PointF(0.5f, 0.52f),   // the skyline
+        _ => new PointF(0.5f, 0.5f)
+    };
+
+    private static Bitmap? Load(string key, string extension = "png") => Cache.GetOrAdd(key + "." + extension, static k =>
     {
         try
         {
-            using Stream? stream = Source.GetManifestResourceStream($"Assets/{k}.png");
+            using Stream? stream = Source.GetManifestResourceStream($"Assets/{k}");
             if (stream is null) return null;
             using var decoded = new Bitmap(stream);
             return new Bitmap(decoded);   // independent copy: the decoded bitmap needs its stream open

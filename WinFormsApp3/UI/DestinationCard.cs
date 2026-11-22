@@ -32,6 +32,16 @@ public sealed class DestinationCard : GlassCard
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Color Accent { get; set; } = Theme.Primary;
 
+    /// <summary>The photograph that goes with a region card, named after the region ("Southeast Asia" is "southeast_asia"); null for any other title.</summary>
+    internal static string? PhotoKeyFor(string title) => title switch
+    {
+        "Domestic" => "domestic",
+        "Southeast Asia" => "southeast_asia",
+        "Europe" => "europe",
+        "North America" => "north_america",
+        _ => null
+    };
+
     protected override void OnMouseEnter(EventArgs e) { _hover = true; BackColor = Gfx.Mix(Theme.BgCard, Theme.SoftFill, 0.5f); Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { _hover = false; BackColor = Theme.BgCard; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
@@ -53,13 +63,28 @@ public sealed class DestinationCard : GlassCard
         if (area.Width < 40 || area.Height < 40) return;
 
         float inset = Gfx.S(this, 8f);
-        float artH = area.Height * 0.46f;
+        // About half the card; a taller card gives the extra height to the picture (the text below keeps a fixed 84px).
+        float artH = Math.Max(area.Height * 0.46f, area.Height - Gfx.S(this, 84f));
         var art = new RectangleF(area.Left + inset, area.Top + inset, area.Width - 2 * inset, artH - inset);
-        // Flat accent band with the kit's map-pin icon, instead of a gradient landscape.
+        // The region's photograph, cropped to the band; without one (an unknown region, a missing file) a flat accent band with the map pin.
+        string? photoKey = PhotoKeyFor(Title);
+        Bitmap? photo = photoKey is null ? null : Assets.Photo(photoKey);
         using (var path = Gfx.RoundedRect(art, Gfx.S(this, 12f)))
-        using (var band = new SolidBrush(Accent))
-            g.FillPath(band, path);
-        Bitmap? pin = Assets.Icon("Map_Pin", white: true, DeviceDpi);
+        {
+            if (photo is not null)
+            {
+                GraphicsState saved = g.Save();
+                g.SetClip(path);
+                BrandArt.DrawCover(g, photo, art, Assets.PhotoFocus(photoKey!));
+                g.Restore(saved);
+            }
+            else
+            {
+                using var band = new SolidBrush(Accent);
+                g.FillPath(band, path);
+            }
+        }
+        Bitmap? pin = photo is null ? Assets.Icon("Map_Pin", white: true, DeviceDpi) : null;
         if (pin is not null)
         {
             int iconSize = Gfx.S(this, 24);   // the icon's native logical size: drawn 1:1, never resampled
