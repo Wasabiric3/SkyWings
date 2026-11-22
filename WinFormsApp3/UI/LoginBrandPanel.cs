@@ -46,8 +46,8 @@ public sealed class LoginBrandPanel : Control, ISelfStyled
         float w = r.Width, h = r.Height;
         float pad = Gfx.S(this, 32f);
         using var near = Gfx.Format(StringAlignment.Near, StringAlignment.Near);
-        using var eyebrow = new SolidBrush(Theme.Primary);
-        using var heading = new SolidBrush(Theme.AccentDark);
+        using var eyebrow = new SolidBrush(Theme.Brand);
+        using var heading = new SolidBrush(Theme.Brand);
         using var tagline = new SolidBrush(Theme.TextSecondary);
 
         float textWidth = w - 2 * pad;

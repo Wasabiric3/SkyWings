@@ -60,6 +60,8 @@ internal sealed class FormHarness : IDisposable
         yield return ("reset-password", () => new ResetPasswordForm(Admin, account));
         yield return ("backup-password", () => new BackupPasswordForm());
         yield return ("restore-credentials", () => new RestoreCredentialsForm("skywings-backup.zip"));
+        yield return ("staff-login", () => (Form)Activator.CreateInstance(typeof(StaffLoginForm),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new object?[] { Store, "admin", true }, null)!);
     }
 
     /// <summary>The forms that need a saved booking, a trip status or a waitlist entry.</summary>

@@ -46,10 +46,16 @@ public sealed class StaffLoginForm : GlassForm
         {
             _password.UseSystemPasswordChar = !_password.UseSystemPasswordChar;
             showToggle.Text = _password.UseSystemPasswordChar ? "Show" : "Hide";
+            PlaceToggle();   // a button resizes itself to its caption; keep it at the row's right edge
         };
         _passwordRow.Controls.Add(showToggle);
         showToggle.BringToFront();
-        _passwordRow.Resize += (_, _) => showToggle.Location = new Point(_passwordRow.Width - showToggle.Width, 0);
+        void PlaceToggle()
+        {
+            showToggle.Width = D(56);
+            showToggle.Location = new Point(_passwordRow.Width - showToggle.Width, 0);
+        }
+        _passwordRow.Resize += (_, _) => PlaceToggle();
 
         _password.KeyUp += (_, _) => UpdateCapsWarning();
         _password.GotFocus += (_, _) => UpdateCapsWarning();
@@ -86,6 +92,7 @@ public sealed class StaffLoginForm : GlassForm
         Controls.Add(brand);
 
         Theme.Apply(this);
+        title.ForeColor = Theme.Brand;
         AcceptButton = _signInButton;
         CancelButton = cancel;
         Shown += (_, _) => (_username.Text.Length == 0 ? _username : _password).Focus();
