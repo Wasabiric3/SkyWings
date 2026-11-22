@@ -311,41 +311,85 @@ public sealed partial class BookingStore
             try
             {
                 using var con = OpenConnection();
-                const string ofDate = "booking_ref IN (SELECT reference FROM bookings WHERE flight_date = @d)";
-                (string, object?) d = ("@d", flightDate.Date);
-
-                var headers = new List<BookingHeader>();
-                using (var cmd = Cmd(con, "SELECT * FROM bookings WHERE flight_date = @d ORDER BY booked_at DESC", null, d))
-                using (var rs = cmd.ExecuteReader())
-                    while (rs.Read()) headers.Add(ReadHeader(rs));
-                if (headers.Count == 0) return new List<BookingRecord>();
-
-                var passengers = new Dictionary<string, List<PassengerRecord>>(StringComparer.Ordinal);
-                using (var cmd = Cmd(con, $"SELECT * FROM passengers WHERE {ofDate} ORDER BY id", null, d))
-                using (var rs = cmd.ExecuteReader())
-                    while (rs.Read())
-                    {
-                        string reference = Str(rs, "booking_ref");
-                        if (!passengers.TryGetValue(reference, out List<PassengerRecord>? list)) passengers[reference] = list = new List<PassengerRecord>();
-                        list.Add(ReadPassenger(rs));
-                    }
-
-                var legs = new Dictionary<string, ReturnLeg>(StringComparer.Ordinal);
-                using (var cmd = Cmd(con, $"SELECT {ReturnLegColumns} FROM booking_legs WHERE leg_order = 2 AND {ofDate}", null, d))
-                using (var rs = cmd.ExecuteReader())
-                    while (rs.Read()) legs[Str(rs, "booking_ref")] = ReadReturnLeg(rs);
-
-                var options = new Dictionary<string, BookingOptions>(StringComparer.Ordinal);
-                using (var cmd = Cmd(con, $"SELECT {OptionColumns} FROM booking_options WHERE {ofDate}", null, d))
-                using (var rs = cmd.ExecuteReader())
-                    while (rs.Read()) options[Str(rs, "booking_ref")] = ReadOptions(rs);
-
-                return headers.Select(h => AssembleBooking(h,
-                    passengers.GetValueOrDefault(h.Reference) ?? new List<PassengerRecord>(),
-                    legs.GetValueOrDefault(h.Reference), options.GetValueOrDefault(h.Reference))).ToList();
+                return LoadBookingSet(con, "SELECT * FROM bookings WHERE flight_date = @d ORDER BY booked_at DESC",
+                    "SELECT reference FROM bookings WHERE flight_date = @d", ("@d", flightDate.Date));
             }
             catch (Exception e) { LogError(e); throw; }
         }
+    }
+
+    /// <summary>
+    /// The bookings made since <paramref name="since"/> (their flights can be on any date), newest first, at most <paramref name="limit"/>
+    /// of them (a limit below one gives none). Simulated ones included, as in <see cref="LoadBookingsForDate"/>.
+    /// </summary>
+    public List<BookingRecord> LoadRecentBookings(DateTime since, int limit)
+    {
+        if (limit < 1) return new List<BookingRecord>();
+        lock (_lock)
+        {
+            try
+            {
+                using var con = OpenConnection();
+                return LoadBookingSet(con, "SELECT * FROM bookings WHERE booked_at >= @since ORDER BY booked_at DESC LIMIT @limit",
+                    "SELECT reference FROM bookings WHERE booked_at >= @since ORDER BY booked_at DESC LIMIT @limit",
+                    ("@since", since), ("@limit", limit));
+            }
+            catch (Exception e) { LogError(e); throw; }
+        }
+    }
+
+    /// <summary>How many bookings were made since <paramref name="since"/> (what <see cref="LoadRecentBookings"/> would return without a limit).</summary>
+    public int CountBookingsBookedSince(DateTime since)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                using var con = OpenConnection();
+                using var cmd = Cmd(con, "SELECT COUNT(*) FROM bookings WHERE booked_at >= @since", null, ("@since", since));
+                return Convert.ToInt32(cmd.ExecuteScalar());
+            }
+            catch (Exception e) { LogError(e); throw; }
+        }
+    }
+
+    /// <summary>
+    /// Builds whole bookings from one query per table for a set of them (not one per booking: a busy day is thousands).
+    /// <paramref name="headerSql"/> lists the bookings in order; <paramref name="refsSql"/> selects the same references for the other tables.
+    /// </summary>
+    private static List<BookingRecord> LoadBookingSet(SqliteConnection con, string headerSql, string refsSql, params (string, object?)[] args)
+    {
+        string ofSet = $"booking_ref IN ({refsSql})";
+
+        var headers = new List<BookingHeader>();
+        using (var cmd = Cmd(con, headerSql, null, args))
+        using (var rs = cmd.ExecuteReader())
+            while (rs.Read()) headers.Add(ReadHeader(rs));
+        if (headers.Count == 0) return new List<BookingRecord>();
+
+        var passengers = new Dictionary<string, List<PassengerRecord>>(StringComparer.Ordinal);
+        using (var cmd = Cmd(con, $"SELECT * FROM passengers WHERE {ofSet} ORDER BY id", null, args))
+        using (var rs = cmd.ExecuteReader())
+            while (rs.Read())
+            {
+                string reference = Str(rs, "booking_ref");
+                if (!passengers.TryGetValue(reference, out List<PassengerRecord>? list)) passengers[reference] = list = new List<PassengerRecord>();
+                list.Add(ReadPassenger(rs));
+            }
+
+        var legs = new Dictionary<string, ReturnLeg>(StringComparer.Ordinal);
+        using (var cmd = Cmd(con, $"SELECT {ReturnLegColumns} FROM booking_legs WHERE leg_order = 2 AND {ofSet}", null, args))
+        using (var rs = cmd.ExecuteReader())
+            while (rs.Read()) legs[Str(rs, "booking_ref")] = ReadReturnLeg(rs);
+
+        var options = new Dictionary<string, BookingOptions>(StringComparer.Ordinal);
+        using (var cmd = Cmd(con, $"SELECT {OptionColumns} FROM booking_options WHERE {ofSet}", null, args))
+        using (var rs = cmd.ExecuteReader())
+            while (rs.Read()) options[Str(rs, "booking_ref")] = ReadOptions(rs);
+
+        return headers.Select(h => AssembleBooking(h,
+            passengers.GetValueOrDefault(h.Reference) ?? new List<PassengerRecord>(),
+            legs.GetValueOrDefault(h.Reference), options.GetValueOrDefault(h.Reference))).ToList();
     }
 
     public List<BookingRecord> LoadBookings()

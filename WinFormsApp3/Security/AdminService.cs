@@ -50,6 +50,16 @@ public sealed class AdminService
             b => Controllers.TripStatus.Of(b, checkIns.GetValueOrDefault(b.Reference) ?? none, now), StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// The newest bookings made since <paramref name="since"/> (whatever their flight dates) and how many were made in that window in
+    /// all, so the screen can say "newest 1,000 of 3,412" when <paramref name="limit"/> cuts the list short.
+    /// </summary>
+    public (List<BookingRecord> Bookings, int Total) LoadRecentBookings(DateTime since, int limit)
+    {
+        Session.Require(Permission.ViewBookings);
+        return (_store.LoadRecentBookings(since, limit), _store.CountBookingsBookedSince(since));
+    }
+
     private static readonly System.Text.RegularExpressions.Regex ReferencePattern =
         new("^SKY-[0-9A-F]{12}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
@@ -71,12 +81,14 @@ public sealed class AdminService
         return Controllers.TripStatus.Of(booking, _store.LoadCheckIns(booking.Reference), now);
     }
 
-    /// <summary>The live trip status of each booking (by reference), with every check-in read in one query.</summary>
+    /// <summary>
+    /// The live trip status of each booking (by reference), on any flight dates, reading only the check-ins of those bookings
+    /// (what the "Recently booked" view needs: its bookings are spread over many dates).
+    /// </summary>
     public Dictionary<string, Controllers.TripStatusInfo> LoadTripStatuses(IReadOnlyList<BookingRecord> bookings, DateTime now)
     {
         Session.Require(Permission.ViewBookings);
-        // Demo check-ins are only needed when the Bookings tab shows demo bookings.
-        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsByBooking(_store.IncludeSimulatedInReports);
+        Dictionary<string, List<CheckInRecord>> checkIns = _store.LoadCheckInsForRefs(bookings.Select(b => b.Reference));
         var none = new List<CheckInRecord>();
         return bookings.ToDictionary(b => b.Reference,
             b => Controllers.TripStatus.Of(b, checkIns.GetValueOrDefault(b.Reference) ?? none, now), StringComparer.Ordinal);

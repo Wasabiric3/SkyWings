@@ -231,6 +231,23 @@ public sealed partial class BookingStore
         }
     }
 
+    /// <summary>
+    /// The check-ins (both legs) of exactly these bookings, by reference. Done in chunks, so any number of references is fine
+    /// (SQLite limits how many values one query can take).
+    /// </summary>
+    public Dictionary<string, List<CheckInRecord>> LoadCheckInsForRefs(IEnumerable<string> references)
+    {
+        var all = new Dictionary<string, List<CheckInRecord>>(StringComparer.Ordinal);
+        foreach (string[] chunk in references.Distinct(StringComparer.Ordinal).Chunk(400))
+        {
+            var names = chunk.Select((_, i) => "@r" + i).ToArray();
+            var args = chunk.Select((r, i) => ("@r" + i, (object?)r)).ToArray();
+            foreach (var (reference, list) in LoadCheckInsGrouped($"SELECT * FROM check_ins WHERE booking_ref IN ({string.Join(",", names)})", args))
+                all[reference] = list;
+        }
+        return all;
+    }
+
     public bool ValidatePromoCode(string code, DateTime date, decimal subtotal, out decimal discount)
     {
         discount = 0;
