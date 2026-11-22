@@ -164,7 +164,6 @@ public partial class HomeForm : GlassForm
         links.Controls.Add(Link($"Sign out · {_controller.FirstName}", (_, _) => SignOut("Signed out"), GlassButtonStyle.Secondary));
         links.Controls.Add(Link("Staff", OpenAdmin));
         links.Controls.Add(Link("Help", ShowHelp));
-        links.Controls.Add(Link("Rewards", ShowRewards));
         links.Controls.Add(Link("Check-in", ShowCheckIn));
         links.Controls.Add(Link("Waitlist", ShowWaitlist));
         links.Controls.Add(Link("Manage booking", ShowBookingLookupMessage));
@@ -731,7 +730,6 @@ public partial class HomeForm : GlassForm
         wizard.ShowDialog(this);
         LoadDashboard();
     }
-    private void ShowRewards(object? sender, EventArgs e) => MessageBox.Show(this, "Rewards information is coming soon.", "Rewards", MessageBoxButtons.OK, MessageBoxIcon.Information);
     private void ShowHelp(object? sender, EventArgs e)
     {
         using var help = new HelpForm(_session);

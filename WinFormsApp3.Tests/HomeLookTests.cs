@@ -60,4 +60,15 @@ public sealed class HomeLookTests
         Application.DoEvents();
         Assert.IsGreaterThan(0, board.Rows.Count, "a destination with flights fills the board");
     });
+
+    [TestMethod]
+    public void TheTopMenu_HasNoRewardsLink_AndKeepsTheOthers() => FormHarness.OnStaThread(() =>
+    {
+        using var harness = new FormHarness();
+        using HomeForm form = Open(harness);
+        string[] links = All(form).OfType<GlassButton>().Select(b => b.Text).ToArray();
+        CollectionAssert.DoesNotContain(links, "Rewards");
+        foreach (string expected in new[] { "Manage booking", "Waitlist", "Check-in", "Help", "Staff" })
+            CollectionAssert.Contains(links, expected);
+    });
 }
