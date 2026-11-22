@@ -55,7 +55,7 @@ public sealed class BookingDetailForm : GlassForm
         var heading = new Label
         {
             Text = $"{booking.Reference}   {booking.Origin} → {booking.Destination}", Dock = DockStyle.Fill,
-            Font = Theme.Header, ForeColor = Theme.TextPrimary, TextAlign = ContentAlignment.MiddleLeft
+            Font = Theme.Title, ForeColor = Theme.Brand, TextAlign = ContentAlignment.MiddleLeft
         };
         header.Controls.Add(heading);
         header.Controls.Add(statusGap);
@@ -84,7 +84,7 @@ public sealed class BookingDetailForm : GlassForm
         int D(int px) => Gfx.S(this, px);
         bool open = request.Status == BookingStore.RequestOpen;
 
-        var panel = new Panel { Dock = DockStyle.Top, Height = height, Padding = new Padding(D(14), D(10), D(14), D(10)), BackColor = Theme.BgMuted };
+        var panel = new Panel { Dock = DockStyle.Top, Height = height, Padding = new Padding(D(14), D(10), D(14), D(10)), BackColor = Theme.PageBg };
 
         var note = new TextBox
         {

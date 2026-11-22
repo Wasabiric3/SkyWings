@@ -13,7 +13,7 @@ public sealed class AllFormsSnapshotTests
     {
         using var harness = new FormHarness();
         var problems = new List<string>();
-        foreach ((string name, Func<Form> create) in harness.Forms())
+        foreach ((string name, Func<Form> create) in harness.Forms().Concat(harness.BookingForms()))
         {
             using Form form = create();
             form.StartPosition = FormStartPosition.Manual;

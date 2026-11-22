@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using SkyWings.Controllers;
 
 namespace SkyWings.Tests;
 
@@ -24,6 +25,19 @@ internal sealed class FormHarness : IDisposable
     public StaffSession Session { get; }
     public AdminService Admin { get; }
 
+    /// <summary>A paid booking Manila to Cebu with two travellers, saved in the store (the reference is returned in the record).</summary>
+    public BookingRecord SampleBooking(string reference = "SKY-FORM0001")
+    {
+        DateTime day = DateTime.Today.AddDays(30);
+        PassengerRecord Person(string name, string seat) => new(name, "1 Example St", "09171234567", 35, "1991-01-01", "P1234567A", false, false,
+            new SeatAssignment(name, seat), Array.Empty<string>(), 3500m);
+        var booking = new BookingRecord(reference, DateTime.Now, "PR-101", "Manila (MNL)", "Cebu (CEB)", day, true, "Economy", "Credit Card",
+            "**** 4521", 7000m, "Scheduled", new[] { Person("Ana Example", "ECO1A"), Person("Ben Example", "ECO1B") }, AppData.StatusConfirmed, "PAID",
+            "TXN-" + reference, DateTime.Now, 0m);
+        Store.SaveConfirmedBooking(booking, false, 7000m, "Credit Card", "**** 4521", "TXN-" + reference, DateTime.Now);
+        return booking;
+    }
+
     /// <summary>One entry per form that can be created from the store alone.</summary>
     public IEnumerable<(string Name, Func<Form> Create)> Forms()
     {
@@ -46,6 +60,26 @@ internal sealed class FormHarness : IDisposable
         yield return ("reset-password", () => new ResetPasswordForm(Admin, account));
         yield return ("backup-password", () => new BackupPasswordForm());
         yield return ("restore-credentials", () => new RestoreCredentialsForm("skywings-backup.zip"));
+    }
+
+    /// <summary>The forms that need a saved booking, a trip status or a waitlist entry.</summary>
+    public IEnumerable<(string Name, Func<Form> Create)> BookingForms()
+    {
+        BookingRecord booking = SampleBooking();
+        DateTime day = booking.FlightDateValue;
+        var trip = new TripStatusInfo(TripPhase.Upcoming, "Upcoming", false, null, "Cebu (CEB)");
+        var checkIns = booking.Passengers.Select(p => new CheckInRecord(booking.Reference, p.Name, "PR-101", day, p.SeatCode, DateTime.Now)).ToList();
+        WaitlistEntry entry = Store.AddToWaitlist("WL-FORM0001", "PR-101", day);
+        yield return ("booking-detail", () => new BookingDetailForm(booking, trip));
+        yield return ("change-flight", () =>
+        {
+            var controller = new ManageBookingController(Store, "desk");
+            controller.Find(booking.Reference);
+            return new ChangeFlightForm(controller);
+        });
+        yield return ("change-seats", () => new SeatChangeForm(Store, booking));
+        yield return ("boarding-pass", () => new BoardingPassForm(booking, false, checkIns));
+        yield return ("waitlist-entry", () => new WaitlistEntryForm(entry, new[] { entry }));
     }
 
     public static void OnStaThread(Action action)
