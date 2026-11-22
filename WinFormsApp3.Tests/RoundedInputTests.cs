@@ -63,6 +63,15 @@ public sealed class RoundedInputTests
     });
 
     [TestMethod]
+    public void AnInputThatIsAlreadyDisabled_PaintsTheDisabledColourThroughout() => OnStaThread(() =>
+    {
+        using var host = new RoundedInput(new DateField { Enabled = false }) { Width = 260 };
+        using Bitmap bmp = Render(host);
+        Assert.AreEqual(Theme.DisabledBack.ToArgb(), bmp.GetPixel(host.Width - 8, host.Height / 2).ToArgb(), "inside the box, right of the chevron");
+        Assert.AreEqual(Theme.DisabledBack.ToArgb(), bmp.GetPixel(host.Width - 60, host.Height / 2).ToArgb(), "inside the field itself, right of its text");
+    });
+
+    [TestMethod]
     public void DateField_InsideTheBox_IsAsTallAsOtherFields() => OnStaThread(() =>
     {
         using var text = new RoundedInput(new TextBox());

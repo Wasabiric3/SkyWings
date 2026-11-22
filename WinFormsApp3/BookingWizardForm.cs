@@ -27,7 +27,7 @@ public sealed class BookingWizardForm : GlassForm
         "Your booking is confirmed. Keep the receipt for your records."
     };
     /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
-    private static readonly HashSet<int> OwnCards = new();
+    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers };
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -51,11 +51,11 @@ public sealed class BookingWizardForm : GlassForm
     // step 1: flight
     private readonly ComboBox _flight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, DropDownWidth = 560 };
     // Same-day bookings are fine until the cutoff (AppData.IsBookable); the flight step checks the chosen flight.
-    private readonly DateTimePicker _flightDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
-    private readonly CheckBox _roundTrip = new() { Text = "Add a return flight", AutoSize = false, Dock = DockStyle.Top };
+    private readonly DateField _flightDate = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
+    private readonly GlassCheckBox _roundTrip = new() { Text = "Add a return flight", AutoSize = false, Dock = DockStyle.Top };
     private readonly ComboBox _returnFlight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, Enabled = false };
-    private readonly DateTimePicker _returnDate = new() { Format = DateTimePickerFormat.Custom, CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(1), Enabled = false };
-    private readonly Label _flightInfo = new() { AutoSize = false, Dock = DockStyle.Top };
+    private readonly DateField _returnDate = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(1), Enabled = false };
+    private readonly InfoStrip _flightInfo = new() { Dock = DockStyle.Top };
     private FieldRow _flightRow = null!, _dateRow = null!, _returnFlightRow = null!, _returnDateRow = null!;
 
     // step 2: passengers
@@ -64,12 +64,13 @@ public sealed class BookingWizardForm : GlassForm
     private readonly TextBox _contact = new() { MaxLength = BookingRules.MaxContactLength };
     private readonly TextBox _idNumber = new() { MaxLength = BookingRules.MaxIdNumberLength };
     private readonly TextBox _birthday = new() { PlaceholderText = "yyyy-MM-dd" };
-    private readonly CheckBox _senior = new() { Text = "Senior citizen (60+)", AutoSize = true };
-    private readonly CheckBox _pwd = new() { Text = "Person with disability", AutoSize = true };
-    private readonly ListBox _passengerList = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false };
+    private readonly GlassCheckBox _senior = new() { Text = "Senior citizen (60+)", AutoSize = true };
+    private readonly GlassCheckBox _pwd = new() { Text = "Person with disability (PWD)", AutoSize = true };
+    private readonly ListBox _passengerList = new() { Dock = DockStyle.Top, BorderStyle = BorderStyle.None, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed };
+    private readonly Label _travellerHeading = new() { Text = "TRAVELLERS (0)", AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly TextBox _email = new() { MaxLength = BookingRules.MaxEmailLength, PlaceholderText = "name@example.com" };
     private FieldRow _nameRow = null!, _addressRow = null!, _contactRow = null!, _idRow = null!, _birthdayRow = null!, _emailRow = null!;
-    private readonly GlassButton _addTraveller = new() { Text = "Add traveller" };
+    private readonly GlassButton _addTraveller = new() { Text = "+ Add traveller", Pill = true };
 
     // step 3: class and extras
     private readonly ChoiceCard[] _classCards = new ChoiceCard[4];
@@ -159,7 +160,6 @@ public sealed class BookingWizardForm : GlassForm
     private void ApplyMetrics()
     {
         _roundTrip.Height = D(34);
-        _flightInfo.Height = D(26);
         _seatInfo.Height = D(26);
         _seatAircraft.Height = D(24);
         _review.Height = D(150);
@@ -168,7 +168,8 @@ public sealed class BookingWizardForm : GlassForm
         _returnFlight.DropDownWidth = D(560);
         _flight.ItemHeight = D(46);
         _returnFlight.ItemHeight = D(46);
-        _passengerList.ItemHeight = D(28);
+        _passengerList.ItemHeight = D(46);
+        _passengerList.Height = D(60);   // its minimum: one row; it grows to fill the page
         _price.Width = D(300);
     }
 
@@ -240,6 +241,18 @@ public sealed class BookingWizardForm : GlassForm
         return card;
     }
 
+    /// <summary>A step page that draws its own section card: the scrolling <paramref name="content"/> sits inside one white card (listed in <see cref="OwnCards"/>).</summary>
+    private static Panel CardPage(Panel content, string heading = "")
+    {
+        content.Dock = DockStyle.Fill;
+        content.Visible = true;
+        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 16, Heading = heading };
+        card.Controls.Add(content);
+        var page = new Panel { Dock = DockStyle.Fill, Visible = false };
+        page.Controls.Add(card);
+        return page;
+    }
+
     /// <summary>Sizes a footer button to its text (docked buttons keep the width they are given).</summary>
     private void FitButton(GlassButton button)
         => button.Width = Math.Max(D(150), TextRenderer.MeasureText(button.Text, button.Font).Width + D(60));
@@ -247,8 +260,8 @@ public sealed class BookingWizardForm : GlassForm
     private void StyleLabels()
     {
         _pageTitle.ForeColor = Theme.Brand;   // Theme.Apply sets every label to the body colour, so this is set after it
-        _flightInfo.Font = Theme.Small;
-        _flightInfo.ForeColor = Theme.Accent;
+        _travellerHeading.Font = new Font(Theme.Small, FontStyle.Bold);
+        _travellerHeading.ForeColor = Theme.Brand;
         _seatInfo.Font = Theme.Small;
         _seatInfo.ForeColor = Theme.TextSecondary;
         _seatAircraft.Font = Theme.Small;
@@ -316,10 +329,10 @@ public sealed class BookingWizardForm : GlassForm
         var page = NewPage();
         _flight.DrawItem += DrawFlightItem;
         _returnFlight.DrawItem += DrawFlightItem;
-        _flightRow = new FieldRow("FLIGHT", _flight);
-        _dateRow = new FieldRow("DEPARTURE DATE", _flightDate);
-        _returnFlightRow = new FieldRow("RETURN FLIGHT", _returnFlight);
-        _returnDateRow = new FieldRow("RETURN DATE", _returnDate);
+        _flightRow = new FieldRow("FLIGHT", _flight, rounded: true);
+        _dateRow = new FieldRow("DEPARTURE DATE", _flightDate, rounded: true);
+        _returnFlightRow = new FieldRow("RETURN FLIGHT", _returnFlight, rounded: true);
+        _returnDateRow = new FieldRow("RETURN DATE", _returnDate, rounded: true);
 
         _flight.SelectedIndexChanged += (_, _) => { UpdateFlightInfo(); UpdateReturnFlightChoice(); SyncSession(); };
         _flightDate.ValueChanged += (_, _) =>
@@ -341,7 +354,7 @@ public sealed class BookingWizardForm : GlassForm
 
         _returnFlightRow.Visible = _roundTrip.Checked;
         AddStack(page, _flightRow, _flightInfo, Row(_dateRow, _returnDateRow), _roundTrip, _returnFlightRow);
-        return page;
+        return CardPage(page);
     }
 
     private void DrawFlightItem(object? sender, DrawItemEventArgs e)
@@ -410,54 +423,76 @@ public sealed class BookingWizardForm : GlassForm
     private Panel BuildPassengerPage()
     {
         var page = NewPage();
-        _nameRow = new FieldRow("FULL NAME", _name);
-        _idRow = new FieldRow("ID NUMBER", _idNumber);
-        _birthdayRow = new FieldRow("BIRTHDAY", _birthday);
-        _addressRow = new FieldRow("ADDRESS", _address);
-        _contactRow = new FieldRow("CONTACT NUMBER", _contact);
-        _emailRow = new FieldRow("EMAIL (OPTIONAL, FOR YOUR RECEIPT)", _email);
+        _nameRow = new FieldRow("FULL NAME", _name, rounded: true);
+        _idRow = new FieldRow("ID NUMBER", _idNumber, rounded: true);
+        _birthdayRow = new FieldRow("BIRTHDAY", _birthday, rounded: true);
+        _addressRow = new FieldRow("ADDRESS", _address, rounded: true);
+        _contactRow = new FieldRow("CONTACT NUMBER", _contact, rounded: true);
+        _emailRow = new FieldRow("EMAIL (OPTIONAL, FOR YOUR RECEIPT)", _email, rounded: true);
         foreach (var row in new[] { _nameRow, _idRow, _birthdayRow, _addressRow, _contactRow, _emailRow }) ClearOnEdit(row);
         _senior.CheckedChanged += (_, _) => _birthdayRow.ClearMessage();
 
-        var checks = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Padding = new Padding(0, D(6), 0, 0) };
-        _senior.Margin = new Padding(0, 0, D(18), 0);
+        var checks = new FlowLayoutPanel { Height = D(44), WrapContents = false, Padding = new Padding(0, D(8), 0, 0) };
+        _senior.Margin = new Padding(0, 0, D(40), 0);
+        _pwd.Margin = Padding.Empty;
         checks.Controls.Add(_senior);
         checks.Controls.Add(_pwd);
 
-        _addTraveller.Dock = DockStyle.Bottom;
-        _addTraveller.Width = D(150);
+        // "TRAVELLERS (n)" at the left; Remove selected and + Add traveller at the right (the last one added docks furthest right).
+        _addTraveller.Dock = DockStyle.Right;
+        _addTraveller.Width = D(170);
         _addTraveller.Click += (_, _) => AddPassenger();
-        var addHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 0, D(2)) };
-        addHost.Controls.Add(_addTraveller);
-
-        var actionRow = new TableLayoutPanel { Height = D(52), ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
-        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
-        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-        actionRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        actionRow.Controls.Add(checks, 0, 0);
-        actionRow.Controls.Add(addHost, 1, 0);
-
-        var form = new Panel { Dock = DockStyle.Fill };
-        AddStack(form, Row(_nameRow, _idRow), Row(_birthdayRow, _contactRow), Row(_addressRow, _emailRow), actionRow);
-
-        var listTitle = new Label
-        {
-            Text = "TRAVELLERS", Font = new Font(Theme.Small, FontStyle.Bold), ForeColor = Theme.TextSecondary,
-            AutoSize = false, Height = D(24), Dock = DockStyle.Top, TextAlign = ContentAlignment.BottomLeft
-        };
-        var remove = new GlassButton { Text = "Remove selected", Style = GlassButtonStyle.Ghost, Dock = DockStyle.Bottom };
+        var remove = new GlassButton { Text = "Remove selected", Style = GlassButtonStyle.Ghost, Pill = true, Dock = DockStyle.Right, Width = D(160) };
         remove.Click += (_, _) => RemoveSelectedPassenger();
+        var travellerHeader = new Panel { Height = D(56), Padding = new Padding(0, D(8), 0, D(8)) };
+        travellerHeader.Controls.Add(_travellerHeading);
+        travellerHeader.Controls.Add(remove);
+        travellerHeader.Controls.Add(_addTraveller);
+
         _passengerList.BackColor = Color.White;
         _passengerList.Font = Theme.Body;
-        var listHost = new Panel { Dock = DockStyle.Right, Width = D(250), Padding = new Padding(D(20), 0, 0, 0) };
-        listHost.Controls.Add(_passengerList);
-        listHost.Controls.Add(remove);
-        listHost.Controls.Add(listTitle);
+        _passengerList.DrawItem += DrawTravellerItem;
 
-        page.Controls.Add(form);
-        page.Controls.Add(listHost);
-        page.AutoScroll = false;
-        return page;
+        var divider = new Panel { Height = D(1), BackColor = Theme.Border };
+        var form = NewPage();
+        AddStack(form, Row(_nameRow, _idRow), Row(_birthdayRow, _contactRow), Row(_addressRow, _emailRow), checks,
+            new Panel { Height = D(8) }, divider, travellerHeader, _passengerList);
+        // The list takes whatever height is left (it was stacked first, so it docks last); the page only scrolls below its minimum.
+        _passengerList.Dock = DockStyle.Fill;
+        return CardPage(form);
+    }
+
+    private sealed record TravellerRow(int Number, string Name, string Detail)
+    {
+        public override string ToString() => $"{Name}  ·  {Detail}";
+    }
+
+    /// <summary>One traveller as a soft-green strip: their number, their name in bold and their age and discount tag muted.</summary>
+    private void DrawTravellerItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || sender is not ListBox list || list.Items[e.Index] is not TravellerRow row) return;
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        using (var back = new SolidBrush(Color.White)) e.Graphics.FillRectangle(back, e.Bounds);
+        Gfx.HighQuality(e.Graphics);
+        var strip = new RectangleF(e.Bounds.X, e.Bounds.Y + D(3), e.Bounds.Width - 1, e.Bounds.Height - D(7));
+        using (var path = Gfx.RoundedRect(strip, D(10)))
+        {
+            using (var fill = new SolidBrush(selected ? Gfx.Mix(Theme.BrandSoft, Theme.Brand, 0.12f) : Theme.BrandSoft)) e.Graphics.FillPath(fill, path);
+            if (selected)
+            {
+                using var outline = new Pen(Theme.Brand, 1.5f);
+                e.Graphics.DrawPath(outline, path);
+            }
+        }
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        int x = (int)strip.X + D(16);
+        int h = (int)strip.Height, y = (int)strip.Y;
+        TextRenderer.DrawText(e.Graphics, row.Number.ToString("00"), Theme.Small, new Rectangle(x, y, D(30), h), Theme.TextSecondary, flags);
+        x += D(38);
+        int nameWidth = Math.Min(TextRenderer.MeasureText(row.Name, _boldFont, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width, (int)(strip.Width * 0.5f));
+        TextRenderer.DrawText(e.Graphics, row.Name, _boldFont, new Rectangle(x, y, nameWidth, h), Theme.TextPrimary, flags);
+        x += nameWidth + D(18);
+        TextRenderer.DrawText(e.Graphics, row.Detail, Theme.Small, new Rectangle(x, y, Math.Max(0, (int)strip.Right - x - D(12)), h), Theme.TextSecondary, flags);
     }
 
     private void AddPassenger()
@@ -499,11 +534,13 @@ public sealed class BookingWizardForm : GlassForm
     private void RefreshPassengerList()
     {
         _passengerList.Items.Clear();
+        int number = 0;
         foreach (var p in _session.Passengers)
         {
             string tag = p.Senior && p.Pwd ? " · Senior/PWD" : p.Senior ? " · Senior" : p.Pwd ? " · PWD" : "";
-            _passengerList.Items.Add($"{p.Name}  ·  {p.Age}{tag}");
+            _passengerList.Items.Add(new TravellerRow(++number, p.Name, $"Age {p.Age}{tag}"));
         }
+        _travellerHeading.Text = $"TRAVELLERS ({number})";
     }
 
     // ------------------------------------------------------------------ step 3: class and extras

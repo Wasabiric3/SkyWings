@@ -43,9 +43,17 @@ internal sealed class RoundedInput : Control, ISelfStyled
 
         input.Enter += (_, _) => Invalidate();
         input.Leave += (_, _) => Invalidate();
-        input.EnabledChanged += (_, _) => { input.BackColor = input.Enabled ? Color.White : Theme.DisabledBack; if (_clip is not null) _clip.BackColor = input.BackColor; Invalidate(); };
+        input.EnabledChanged += (_, _) => ApplyEnabled();
         input.SizeChanged += (_, _) => UpdateHeight();
+        ApplyEnabled();   // the input may already be disabled (the return date before "Add a return flight" is ticked)
         Height = HostHeight();
+    }
+
+    private void ApplyEnabled()
+    {
+        Input.BackColor = Input.Enabled ? Color.White : Theme.DisabledBack;
+        if (_clip is not null) _clip.BackColor = Input.BackColor;
+        Invalidate();
     }
 
     public Control Input { get; }
@@ -96,8 +104,10 @@ internal sealed class RoundedInput : Control, ISelfStyled
         int side = Gfx.S(this, 12), edge = Gfx.S(this, 2);
         _clip.SetBounds(side, edge, Math.Max(0, Width - side - RightPad), Math.Max(0, Height - 2 * edge));
         // The native control is a little larger than the panel: the panel clips its border, and its arrow button (it sticks out
-        // to the right of the panel) is cut away, because the box paints its own chevron.
-        Input.SetBounds(-edge, -edge, _clip.Width + 2 * edge + Gfx.S(this, 24), _clip.Height + 2 * edge);
+        // to the right of the panel by just its own width, so an owner-drawn item still ends at the visible edge) is cut away,
+        // because the box paints its own chevron.
+        int button = SystemInformation.GetVerticalScrollBarWidthForDpi(DeviceDpi);
+        Input.SetBounds(-edge, -edge, _clip.Width + edge + button + 3, _clip.Height + 2 * edge);
     }
 
     protected override void OnClick(EventArgs e)
