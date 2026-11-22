@@ -35,7 +35,7 @@ public sealed class ManageBookingFormLayoutTests
             string path = Path.Combine(Path.GetTempPath(), $"skywings-managelayout-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString);
                 store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
                     AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
                 var person = new PassengerRecord("Ana Example", "1 St", "09171234567", 35, "1991-01-01", "P1234567A", false, false,
@@ -74,7 +74,6 @@ public sealed class ManageBookingFormLayoutTests
             }
             finally
             {
-                SqliteConnection.ClearAllPools();
                 if (File.Exists(path)) File.Delete(path);
             }
         });

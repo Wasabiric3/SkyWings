@@ -15,7 +15,7 @@ public sealed class RecentBookingsServiceTests
     public void Setup()
     {
         _path = Path.Combine(Path.GetTempPath(), $"skywings-recentsvc-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
         _service = new AdminService(_store, new StaffSession(1, "admin", "Admin", StaffRole.SuperAdmin, false));
     }
@@ -23,7 +23,6 @@ public sealed class RecentBookingsServiceTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_path)) File.Delete(_path);
     }
 

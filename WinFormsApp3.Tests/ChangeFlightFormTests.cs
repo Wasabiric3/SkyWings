@@ -25,7 +25,7 @@ public sealed class ChangeFlightFormTests
             string path = Path.Combine(Path.GetTempPath(), $"skywings-changeform-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString);
                 store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
                     AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
                 var controller = new ManageBookingController(store);
@@ -46,7 +46,6 @@ public sealed class ChangeFlightFormTests
             }
             finally
             {
-                SqliteConnection.ClearAllPools();
                 if (File.Exists(path)) File.Delete(path);
             }
         });

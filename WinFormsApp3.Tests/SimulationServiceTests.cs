@@ -15,7 +15,7 @@ public sealed class SimulationServiceTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-simsvc-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedDefaultFlights();
         _sim = new SimulationService(_store, TestSim.FullLoad);
     }
@@ -23,7 +23,6 @@ public sealed class SimulationServiceTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -117,14 +116,14 @@ public sealed class SimulationServiceTests
         string dbPath2 = Path.Combine(Path.GetTempPath(), $"skywings-simsvc2-{Guid.NewGuid():N}.db");
         try
         {
-            var other = new BookingStore(new SqliteConnectionStringBuilder { DataSource = dbPath2, ForeignKeys = true }.ConnectionString);
+            var other = new BookingStore(new SqliteConnectionStringBuilder { DataSource = dbPath2, ForeignKeys = true, Pooling = false }.ConnectionString);
             other.SeedDefaultFlights();
             new SimulationService(other, TestSim.FullLoad).EnsureLoad(Now, horizonDays: 2);
 
             DateTime date = Now.Date.AddDays(1);
             CollectionAssert.AreEquivalent(_store.LoadTakenSeats("PR-301", date).ToArray(), other.LoadTakenSeats("PR-301", date).ToArray());
         }
-        finally { SqliteConnection.ClearAllPools(); if (File.Exists(dbPath2)) File.Delete(dbPath2); }
+        finally { if (File.Exists(dbPath2)) File.Delete(dbPath2); }
     }
 
     [TestMethod]

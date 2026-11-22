@@ -12,7 +12,7 @@ internal sealed class WizardHarness : IDisposable
 
     public WizardHarness(Size? size = null)
     {
-        Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true }.ConnectionString);
+        Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true, Pooling = false }.ConnectionString);
         Store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
         Form = new BookingWizardForm(Store);
@@ -78,7 +78,6 @@ internal sealed class WizardHarness : IDisposable
     public void Dispose()
     {
         if (!Form.IsDisposed) Form.Dispose();
-        SqliteConnection.ClearAllPools();
         try { if (File.Exists(_path)) File.Delete(_path); } catch (IOException) { /* a temp file; the OS cleans it up */ }
     }
 }

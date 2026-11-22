@@ -39,7 +39,7 @@ public sealed class EmailFeatureTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-email-test-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -48,7 +48,6 @@ public sealed class EmailFeatureTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

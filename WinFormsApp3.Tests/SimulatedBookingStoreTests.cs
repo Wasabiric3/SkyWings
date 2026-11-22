@@ -16,7 +16,7 @@ public sealed class SimulatedBookingStoreTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-sim-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
         _store = new BookingStore(_connection);
         _store.SeedDefaultFlights();
     }
@@ -24,7 +24,6 @@ public sealed class SimulatedBookingStoreTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -178,7 +177,7 @@ public sealed class SimulatedBookingStoreTests
     public void AnOldBookingsTable_IsUpgraded_WithExistingBookingsCountedAsReal()
     {
         string path = Path.Combine(Path.GetTempPath(), $"skywings-old-{Guid.NewGuid():N}.db");
-        string cs = new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString;
+        string cs = new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString;
         try
         {
             var first = new BookingStore(cs);
@@ -191,7 +190,6 @@ public sealed class SimulatedBookingStoreTests
                 cmd.CommandText = "DROP INDEX IF EXISTS idx_bookings_simulated; ALTER TABLE bookings DROP COLUMN is_simulated;";
                 cmd.ExecuteNonQuery();
             }
-            SqliteConnection.ClearAllPools();
 
             var upgraded = new BookingStore(cs);   // opening upgrades the schema
 
@@ -201,7 +199,6 @@ public sealed class SimulatedBookingStoreTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (File.Exists(path)) File.Delete(path);
         }
     }

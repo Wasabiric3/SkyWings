@@ -14,7 +14,7 @@ public sealed class BookingStoreTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-test-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -23,7 +23,6 @@ public sealed class BookingStoreTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -397,7 +396,7 @@ public sealed class BookingStoreTests
 
     private int CountRows(string table, string where)
     {
-        using var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath }.ConnectionString);
+        using var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath, Pooling = false }.ConnectionString);
         con.Open();
         using var cmd = con.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {where}";

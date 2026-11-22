@@ -15,7 +15,7 @@ internal sealed class FormHarness : IDisposable
 
     public FormHarness()
     {
-        Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true }.ConnectionString);
+        Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true, Pooling = false }.ConnectionString);
         Store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
         Session = new StaffSession(1, "admin", "Admin", StaffRole.SuperAdmin, false);
         Admin = new AdminService(Store, Session);
@@ -149,7 +149,6 @@ internal sealed class FormHarness : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         try { if (File.Exists(_path)) File.Delete(_path); } catch (IOException) { /* a temp file */ }
     }
 }

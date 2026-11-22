@@ -16,7 +16,7 @@ public sealed class ManageBookingControllerTests
     {
         LookupGuard.Reset();
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-mng-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -27,7 +27,6 @@ public sealed class ManageBookingControllerTests
     public void Cleanup()
     {
         LookupGuard.Reset();
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

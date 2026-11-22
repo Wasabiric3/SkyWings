@@ -16,14 +16,13 @@ public sealed class SuperAdminTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-super-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
         _store = new BookingStore(_connection);
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -63,7 +62,7 @@ public sealed class SuperAdminTests
     public void OldStaffTable_IsUpgraded_KeepingRowsAndHashes()
     {
         string oldPath = Path.Combine(Path.GetTempPath(), $"skywings-oldstaff-{Guid.NewGuid():N}.db");
-        string conn = new SqliteConnectionStringBuilder { DataSource = oldPath, ForeignKeys = true }.ConnectionString;
+        string conn = new SqliteConnectionStringBuilder { DataSource = oldPath, ForeignKeys = true, Pooling = false }.ConnectionString;
         try
         {
             using (var con = new SqliteConnection(conn))
@@ -93,7 +92,6 @@ public sealed class SuperAdminTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (File.Exists(oldPath)) File.Delete(oldPath);
         }
     }

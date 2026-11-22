@@ -21,7 +21,7 @@ public sealed class FlightChangeTests
     {
         LookupGuard.Reset();
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-change-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
         _store = new BookingStore(_connection);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -33,7 +33,6 @@ public sealed class FlightChangeTests
     public void Cleanup()
     {
         LookupGuard.Reset();
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
