@@ -61,7 +61,7 @@ public sealed class WizardStepTests
     public void Flight_NoFlightSelected_ShowsTheMessage_WithARedOutline() => WizardHarness.OnStaThread(() =>
     {
         using var wizard = new WizardHarness();
-        wizard.Field<ComboBox>("_flight").SelectedIndex = -1;
+        wizard.Field<FlightPicker>("_flight").SelectedIndex = -1;
         wizard.Field<GlassButton>("_next").PerformClick();
         var row = wizard.Field<FieldRow>("_flightRow");
         Assert.AreEqual("Select a flight to continue.", row.Message);
@@ -156,7 +156,7 @@ public sealed class WizardStepTests
     {
         using var wizard = new WizardHarness();
         // The A320 has only Business and Economy cabins.
-        var flight = (Flight)wizard.Field<ComboBox>("_flight").SelectedItem!;
+        var flight = wizard.Field<FlightPicker>("_flight").Selected!;
         wizard.Store.SetFlightAircraft(flight.FlightNo, "A320");
         wizard.Call("SyncSession");
         var cards = wizard.Field<ChoiceCard[]>("_classCards");

@@ -8,7 +8,7 @@ namespace SkyWings.UI;
 /// <see cref="DateTimePicker"/>, which cannot be styled: it can be as tall as other fields and has no square drop-down button.
 /// Space, F4 or Alt+Down open the calendar from the keyboard.
 /// </summary>
-public sealed class DateField : Control, ISelfStyled
+public sealed class DateField : Control, ISelfStyled, IDropDownField
 {
     private static readonly Font TextFont = new(Theme.Body, FontStyle.Bold);
 

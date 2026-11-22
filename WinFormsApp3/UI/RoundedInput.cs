@@ -68,7 +68,7 @@ internal sealed class RoundedInput : Control, ISelfStyled
     public bool FocusVisible => Input.ContainsFocus;
 
     /// <summary>Combo boxes and date fields show a chevron, painted by the box, in a zone at the right.</summary>
-    private bool Chevron => Input is ComboBox or DateField;
+    private bool Chevron => Input is ComboBox or IDropDownField;
 
     private int RightPad => Gfx.S(this, Chevron ? 40 : 14);
 
@@ -113,7 +113,7 @@ internal sealed class RoundedInput : Control, ISelfStyled
     protected override void OnClick(EventArgs e)
     {
         if (Input is ComboBox { Enabled: true } combo) { combo.Focus(); combo.DroppedDown = true; }
-        else if (Input is DateField field) { field.Focus(); field.OpenDropDown(); }
+        else if (Input is IDropDownField field) { Input.Focus(); field.OpenDropDown(); }
         else Input.Focus();
         base.OnClick(e);
     }
