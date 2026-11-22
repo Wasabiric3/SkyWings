@@ -132,4 +132,25 @@ public sealed class AdminFrameLookTests
         Application.DoEvents();
         Assert.IsTrue(sort.Visible);
     });
+
+    [TestMethod]
+    public void TheDatabasePage_TablePickerAndSearch_AreRounded_AndFitAtTheMinimumSize() => FormHarness.OnStaThread(() =>
+    {
+        using var harness = new FormHarness();
+        using AdminForm form = OpenAtMinimum(harness);
+        OpenTab(form, "Database");
+        object page = All(form).First(c => c.GetType().Name == "DatabaseBrowserPage");
+        foreach (string name in new[] { "_tables", "_searchBox" })
+        {
+            var input = (Control)page.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!;
+            Control? box = input.Parent is RoundedInput ? input.Parent : input.Parent?.Parent;
+            Assert.IsInstanceOfType<RoundedInput>(box, name + " sits in a rounded box");
+            Rectangle r = form.RectangleToClient(box!.Parent!.RectangleToScreen(box.Bounds));
+            Assert.IsLessThanOrEqualTo(form.ClientSize.Width, r.Right, name + " is inside the window");
+            var count = (Label)page.GetType().GetField("_count", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!;
+            Rectangle c = form.RectangleToClient(count.Parent!.RectangleToScreen(count.Bounds));
+            Assert.IsLessThanOrEqualTo(c.Left, r.Right, name + " does not run under the row count");
+            Assert.IsGreaterThanOrEqualTo(180, box.Width);
+        }
+    });
 }
