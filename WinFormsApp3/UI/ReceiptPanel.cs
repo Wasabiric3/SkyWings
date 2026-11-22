@@ -45,10 +45,35 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         set { _title = value; AccessibleName = value; Invalidate(); }
     }
 
-    public void SetReceipt(string reference, IEnumerable<(string Label, string Value)> rows)
+    /// <summary>The colour of the header band. <see cref="Theme.Primary"/> keeps other screens as they were; the booking wizard uses <see cref="Theme.Brand"/>.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Color BandColor
+    {
+        get => _bandColor;
+        set { _bandColor = value; Invalidate(); }
+    }
+
+    private Color _bandColor = Theme.Primary;
+
+    /// <summary>The amount shown in the light-green "Total paid" band under the details, or null for no band.</summary>
+    internal string? TotalPaid { get; private set; }
+
+    /// <summary>Where the "Total paid" band is drawn: the bottom of the details side, left of the reference stub.</summary>
+    internal Rectangle TotalBand()
+    {
+        var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
+        float pad = Gfx.S(this, 20f);
+        float stubW = Math.Max(Gfx.S(this, 250f), bounds.Width * 0.30f);
+        int height = Gfx.S(this, 54);
+        return Rectangle.Round(new RectangleF(bounds.X + pad, bounds.Bottom - pad - height, bounds.Right - stubW - bounds.X - 2 * pad, height));
+    }
+
+    /// <param name="totalPaid">With a value, the total is shown in its own band below the details (leave "Total paid" out of <paramref name="rows"/>).</param>
+    public void SetReceipt(string reference, IEnumerable<(string Label, string Value)> rows, string? totalPaid = null)
     {
         _reference = reference;
         _rows = rows.ToList();
+        TotalPaid = totalPaid;
         _copyLabel = CopyIdle;
         AccessibleDescription = $"Booking {reference}. " + string.Join(". ", _rows.Select(r => $"{r.Label}: {r.Value}"));
         Invalidate();
@@ -122,7 +147,7 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         float bandH = Gfx.S(this, 50f);
         var oldClip = g.Clip;
         g.SetClip(path, CombineMode.Intersect);
-        using (var band = new SolidBrush(Theme.Primary))
+        using (var band = new SolidBrush(_bandColor))
             g.FillRectangle(band, bounds.X, bounds.Y, bounds.Width, bandH);
         g.Clip = oldClip;
 
@@ -158,16 +183,30 @@ public sealed class ReceiptPanel : Control, ISelfStyled
         float colW = (splitX - bounds.X - pad * 2) / 2;
         float rowH = Gfx.S(this, 58f);
         float startY = bounds.Y + bandH + Gfx.S(this, 18f);
+        // The details stop above the "Total paid" band when there is one.
+        float rowsBottom = TotalPaid is null ? bounds.Bottom : TotalBand().Top - Gfx.S(this, 8f);
         for (int i = 0; i < _rows.Count; i++)
         {
             int col = i % 2, row = i / 2;
             float x = bounds.X + pad + col * colW;
             float y = startY + row * rowH;
-            if (y + rowH > bounds.Bottom) break;
+            if (y + rowH > rowsBottom) break;
             g.DrawString(_rows[i].Label.ToUpperInvariant(), Theme.Small, mutedBrush,
                 new RectangleF(x, y, colW - pad / 2, Gfx.S(this, 20f)), topLeft);
             g.DrawString(_rows[i].Value, valueFont, textBrush,
                 new RectangleF(x, y + Gfx.S(this, 20f), colW - pad / 2, Gfx.S(this, 30f)), topLeft);
+        }
+
+        if (TotalPaid is { } total)
+        {
+            Rectangle totalBand = TotalBand();
+            using (var bandPath = Gfx.RoundedRect(totalBand, Gfx.S(this, 12f)))
+            using (var fill = new SolidBrush(Theme.BrandSoft))
+                g.FillPath(fill, bandPath);
+            int inner = Gfx.S(this, 18);
+            const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+            TextRenderer.DrawText(g, "TOTAL PAID", PillFont, new Rectangle(totalBand.X + inner, totalBand.Y, totalBand.Width / 2 - inner, totalBand.Height), Theme.Brand, flags | TextFormatFlags.Left);
+            TextRenderer.DrawText(g, total, BandFont, new Rectangle(totalBand.X + totalBand.Width / 2, totalBand.Y, totalBand.Width / 2 - inner, totalBand.Height), Theme.Brand, flags | TextFormatFlags.Right);
         }
 
         // Stub: reference + decorative bars.

@@ -9,23 +9,24 @@ public class SeatPaletteTests
     private static void AssertRgb(Color actual, int rgb, string what)
         => Assert.AreEqual(rgb, actual.ToArgb() & 0xFFFFFF, $"{what} was #{actual.ToArgb() & 0xFFFFFF:X6}");
 
+    // The seat colours follow the Figma: light green free seats, deep green selected, amber held, grey taken.
     [TestMethod]
-    public void Free_UsesKitGreen() => AssertRgb(SeatPalette.For(SeatState.Free, false).Fill, 0x9EC8AC, "Free fill");
+    public void Free_UsesBrandSoft() => AssertRgb(SeatPalette.For(SeatState.Free, false).Fill, 0xD9E8DA, "Free fill");
 
     [TestMethod]
-    public void Selected_UsesPrimary()
+    public void Selected_UsesBrand()
     {
         var p = SeatPalette.For(SeatState.Selected, false);
-        AssertRgb(p.Fill, 0x527866, "Selected fill");
-        Assert.AreEqual(Theme.Accent.ToArgb(), p.Border.ToArgb());
+        AssertRgb(p.Fill, 0x1B4D3E, "Selected fill");
+        Assert.AreEqual(Theme.Brand.ToArgb(), p.Border.ToArgb());
         Assert.AreEqual(Color.White.ToArgb(), p.Text.ToArgb());
     }
 
     [TestMethod]
-    public void Taken_And_Held_UseKitColours()
+    public void Taken_And_Held_UseTheFigmaColours()
     {
-        AssertRgb(SeatPalette.For(SeatState.Taken, false).Fill, 0xA7ADA9, "Occupied fill");
-        AssertRgb(SeatPalette.For(SeatState.Held, false).Fill, 0xCDA875, "On hold fill");
+        AssertRgb(SeatPalette.For(SeatState.Taken, false).Fill, 0xC9C9C9, "Taken fill");
+        AssertRgb(SeatPalette.For(SeatState.Held, false).Fill, 0xE8C183, "Held fill");
     }
 
     [TestMethod]
@@ -95,5 +96,66 @@ public class SeatLabelTests
         using var font = new Font(Theme.Small, FontStyle.Bold);
         int width = TextRenderer.MeasureText(SeatMap.SeatLabel(98, 'K'), font, Size.Empty, TextFormatFlags.NoPadding).Width;
         Assert.IsTrue(width <= 38 - 4, $"'99K' is {width}px in a 38px seat");
+    }
+
+    [TestMethod]
+    public void SelectedSeatLabel_WithATick_FitsInsideASeat_ForTheLargestRowNumbers()
+    {
+        using var font = new Font(Theme.Small, FontStyle.Bold);
+        int width = TextRenderer.MeasureText(SeatMap.SeatLabel(98, 'K') + "✓", font, Size.Empty, TextFormatFlags.NoPadding).Width;
+        Assert.IsTrue(width <= 38 - 2, $"'99K✓' is {width}px in a 38px seat");
+    }
+
+    private static SeatMap BusinessMap(int maxSelection)
+    {
+        var map = new SeatMap { MaxSelection = maxSelection };
+        map.Configure(Aircraft.A320.Cabin("Business")!);
+        return map;
+    }
+
+    [TestMethod]
+    public void ASelectedSeat_OfASingleTraveller_ShowsItsCodeAndATick()
+    {
+        using SeatMap map = BusinessMap(1);
+        map.SetSelected(new[] { SeatLayout.Code("Business", 1, 'A') });
+        Assert.AreEqual("1A✓", map.SeatText(0, 0));
+        Assert.AreEqual("1B", map.SeatText(0, 1), "a free seat shows row and letter");
+    }
+
+    [TestMethod]
+    public void SelectedSeats_OfSeveralTravellers_ShowTheirOrderNumber()
+    {
+        using SeatMap map = BusinessMap(2);
+        map.SetSelected(new[] { SeatLayout.Code("Business", 1, 'A'), SeatLayout.Code("Business", 2, 'B') });
+        Assert.AreEqual("1", map.SeatText(0, 0));
+        Assert.AreEqual("2", map.SeatText(1, 1));
+    }
+
+    [TestMethod]
+    public void TakenAndHeldSeats_KeepTheirMarks()
+    {
+        using SeatMap map = BusinessMap(1);
+        map.SetUnavailable(new[] { SeatLayout.Code("Business", 1, 'A') }, new[] { SeatLayout.Code("Business", 1, 'B') });
+        Assert.AreEqual("✕", map.SeatText(0, 0));
+        Assert.AreEqual("•••", map.SeatText(0, 1));
+    }
+
+    [TestMethod]
+    public void LegendGrid_IsTwoByTwo_AndEachSwatchHasItsSeatColour()
+    {
+        using var legend = new SeatLegend { Grid = true, Width = 280 };
+        legend.Height = Gfx.S(legend, 86);
+        legend.CreateControl();
+        using var bmp = new Bitmap(legend.Width, legend.Height);
+        legend.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        Color[] expected = { Theme.BrandSoft, Theme.Brand, Theme.SeatHeld, Theme.SeatTaken };   // Available, Selected, Held, Taken
+        for (int i = 0; i < 4; i++)
+        {
+            Rectangle swatch = legend.SwatchBounds(i);
+            Assert.AreEqual(expected[i].ToArgb(), bmp.GetPixel(swatch.X + swatch.Width / 2, swatch.Y + swatch.Height / 2).ToArgb(), $"swatch {i}");
+        }
+        Assert.IsLessThan(legend.SwatchBounds(1).X, legend.SwatchBounds(0).X);
+        Assert.AreEqual(legend.SwatchBounds(0).X, legend.SwatchBounds(2).X, "second row starts under the first");
+        Assert.IsLessThan(legend.SwatchBounds(2).Y, legend.SwatchBounds(0).Y);
     }
 }

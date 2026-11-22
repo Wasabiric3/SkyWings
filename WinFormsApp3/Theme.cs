@@ -32,6 +32,15 @@ public static class Theme
     public static readonly Color DisabledTextSoft = Color.FromArgb(176, 187, 181);
     public static readonly Color DisabledBack = Color.FromArgb(240, 244, 242);
 
+    // ===== BOOKING WIZARD LOOK (Figma) =====
+    public static readonly Color PageBg = Color.FromArgb(0xF6, 0xF5, 0xF0);
+    public static readonly Color Brand = Color.FromArgb(0x1B, 0x4D, 0x3E);
+    public static readonly Color BrandSoft = Color.FromArgb(0xD9, 0xE8, 0xDA);
+    public static readonly Color AmberSoft = Color.FromArgb(0xFD, 0xF1, 0xDA);
+    public static readonly Color AmberText = Color.FromArgb(0x7A, 0x5A, 0x1E);
+    public static readonly Color SeatHeld = Color.FromArgb(0xE8, 0xC1, 0x83);
+    public static readonly Color SeatTaken = Color.FromArgb(0xC9, 0xC9, 0xC9);
+
     // ===== FONTS =====
     // Java sizes are in pixels; WinForms uses points (pt = px * 0.75).
     public static readonly Font Title = new("Segoe UI", 18f, FontStyle.Bold);

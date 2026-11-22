@@ -37,12 +37,25 @@ public class GlassCard : Control
         return new RectangleF(s, s, Width - 2 * s - 1, Height - 2 * s - 1);
     }
 
+    private string _heading = "";
+
+    /// <summary>Optional small title at the top of the card, drawn in capitals in the brand green; the content starts below it.</summary>
+    [DefaultValue("")]
+    public string Heading
+    {
+        get => _heading;
+        set { _heading = value ?? ""; PerformLayout(); Invalidate(); }
+    }
+
+    private int HeadingHeight => _heading.Length == 0 ? 0 : Gfx.S(this, 30);
+
     public override Rectangle DisplayRectangle
     {
         get
         {
             int inset = Gfx.S(this, ShadowSize) + Gfx.S(this, _contentPadding);
-            return new Rectangle(inset, inset, Math.Max(0, Width - 2 * inset), Math.Max(0, Height - 2 * inset));
+            int head = HeadingHeight;
+            return new Rectangle(inset, inset + head, Math.Max(0, Width - 2 * inset), Math.Max(0, Height - 2 * inset - head));
         }
     }
 
@@ -60,10 +73,22 @@ public class GlassCard : Control
         using (var fill = new SolidBrush(BackColor)) g.FillPath(fill, path);
         using var edge = new Pen(Theme.BorderLight, 1f);
         g.DrawPath(edge, path);
+
+        if (_heading.Length > 0)
+        {
+            Rectangle area = DisplayRectangle;
+            var line = new RectangleF(area.X, area.Y - HeadingHeight, area.Width, HeadingHeight);
+            using var brush = new SolidBrush(Theme.Brand);
+            using var left = Gfx.Format(StringAlignment.Near);
+            g.DrawString(_heading.ToUpperInvariant(), HeadingFont, brush, line, left);
+        }
     }
+
+    private static readonly Font HeadingFont = new(Theme.Body, FontStyle.Bold);
 }
 
-public enum GlassButtonStyle { Primary, Secondary, Ghost, Danger }
+/// <summary><see cref="Outline"/> (white with a border) is the Figma look's secondary button; it is appended so the older values keep their numbers.</summary>
+public enum GlassButtonStyle { Primary, Secondary, Ghost, Danger, Outline }
 
 /// <summary>Rounded button with hover/pressed/focus states. Behaves like a normal button (AcceptButton, DialogResult).</summary>
 public sealed class GlassButton : Control, IButtonControl, ISelfStyled
@@ -91,6 +116,16 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
     {
         get => _style;
         set { _style = value; Invalidate(); }
+    }
+
+    private bool _pill;
+
+    /// <summary>The Figma look: fully rounded ends, and a deep-green (<see cref="Theme.Brand"/>) primary button.</summary>
+    [DefaultValue(false)]
+    public bool Pill
+    {
+        get => _pill;
+        set { _pill = value; Invalidate(); }
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -149,11 +184,16 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
         using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
         Gfx.HighQuality(g);
         var bounds = new RectangleF(1, 1, Width - 3, Height - 3);
-        float radius = Height * 0.27f;   // the brand kit's buttons round to ~27% of their height
+        float radius = _pill ? bounds.Height / 2 : Height * 0.27f;   // the brand kit's buttons round to ~27% of their height
 
         Color fill, border = Color.Transparent, text;
         switch (_style)
         {
+            case GlassButtonStyle.Outline:
+                fill = _pressed ? Theme.BrandSoft : Color.White;
+                border = _hover || _pressed ? Theme.Brand : Theme.Border;
+                text = Theme.Brand;
+                break;
             case GlassButtonStyle.Secondary:
                 fill = _pressed ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.25f) : _hover ? Gfx.Mix(Theme.SoftFill, Theme.Primary, 0.12f) : Theme.SoftFill;
                 text = Theme.Accent;
@@ -167,7 +207,10 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
                 text = Color.White;
                 break;
             default:
-                fill = _pressed ? Theme.AccentDark : _hover ? Theme.Accent : Theme.Primary;
+                if (_pill)
+                    fill = _pressed ? Gfx.Mix(Theme.Brand, Color.Black, 0.3f) : _hover ? Gfx.Mix(Theme.Brand, Color.Black, 0.15f) : Theme.Brand;
+                else
+                    fill = _pressed ? Theme.AccentDark : _hover ? Theme.Accent : Theme.Primary;
                 text = Color.White;
                 break;
         }
@@ -204,120 +247,6 @@ public sealed class GlassButton : Control, IButtonControl, ISelfStyled
     }
 }
 
-/// <summary>Horizontal numbered progress indicator. Completed steps can be clicked to go back.</summary>
-public sealed class StepBar : Control, ISelfStyled
-{
-    private readonly string[] _steps;
-    private int _current;
-    private int _furthest;
-
-    public StepBar(string[] steps)
-    {
-        _steps = steps;
-        SetStyle(ControlStyles.UserPaint |
-                 ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
-                 ControlStyles.ResizeRedraw, true);
-        Height = Gfx.S(this, 70);
-        Font = Theme.Small;
-        AccessibleName = "Booking progress";
-    }
-
-    public event EventHandler<int>? StepClicked;
-
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public int Current
-    {
-        get => _current;
-        set { _current = value; _furthest = Math.Max(_furthest, value); Invalidate(); }
-    }
-
-    public int Furthest => _furthest;
-
-    private float SlotWidth => _steps.Length == 0 ? 0 : Width / (float)_steps.Length;
-    private float CenterX(int i) => SlotWidth * (i + 0.5f);
-    private float Diameter => Gfx.S(this, 28f);
-    private float CenterY => Gfx.S(this, 6f) + Diameter / 2;
-
-    private int HitStep(Point p)
-    {
-        for (int i = 0; i < _steps.Length; i++)
-        {
-            var area = new RectangleF(CenterX(i) - SlotWidth / 2, 0, SlotWidth, Height);
-            if (area.Contains(p)) return i;
-        }
-        return -1;
-    }
-
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        int i = HitStep(e.Location);
-        Cursor = i >= 0 && i <= _furthest && i != _current ? Cursors.Hand : Cursors.Default;
-        base.OnMouseMove(e);
-    }
-
-    protected override void OnMouseClick(MouseEventArgs e)
-    {
-        int i = HitStep(e.Location);
-        if (i >= 0 && i <= _furthest && i != _current) StepClicked?.Invoke(this, i);
-        base.OnMouseClick(e);
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        base.OnPaint(e);
-        var g = e.Graphics;
-        using (var surface = new SolidBrush(Gfx.Surface(this))) g.FillRectangle(surface, ClientRectangle);
-        Gfx.HighQuality(g);
-        float d = Diameter, cy = CenterY, gap = Gfx.S(this, 8f);
-
-        for (int i = 0; i < _steps.Length - 1; i++)
-        {
-            using var pen = new Pen(i < _current ? Theme.Primary : Theme.Border, Gfx.S(this, 2f));
-            g.DrawLine(pen, CenterX(i) + d / 2 + gap, cy, CenterX(i + 1) - d / 2 - gap, cy);
-        }
-
-        _numberFont ??= new Font(Theme.Small, FontStyle.Bold);
-        _boldFont ??= new Font(Font, FontStyle.Bold);
-        _regularFont ??= new Font(Font, FontStyle.Regular);
-        using var labelFormat = Gfx.Format(StringAlignment.Center, StringAlignment.Near);
-        using var centerFormat = Gfx.Format(StringAlignment.Center);
-        for (int i = 0; i < _steps.Length; i++)
-        {
-            var circle = new RectangleF(CenterX(i) - d / 2, cy - d / 2, d, d);
-            bool done = i < _current, current = i == _current;
-            // Flat circles: active = Primary, done = Accent, pending = StepPending.
-            using (var brush = new SolidBrush(current ? Theme.Primary : done ? Theme.Accent : Theme.StepPending))
-                g.FillEllipse(brush, circle);
-
-            Color numberColor = current || done ? Color.White : Theme.TextSecondary;
-            using var numberBrush = new SolidBrush(numberColor);
-            g.DrawString(done ? "✓" : (i + 1).ToString(), _numberFont, numberBrush, circle, centerFormat);
-
-            Color labelColor = current ? Theme.TextPrimary : done ? Theme.Accent : Theme.TextSecondary;
-            using var labelBrush = new SolidBrush(labelColor);
-            var labelRect = new RectangleF(CenterX(i) - SlotWidth / 2 + 2, cy + d / 2 + Gfx.S(this, 6f), SlotWidth - 4, Gfx.S(this, 22f));
-            g.DrawString(_steps[i], current ? _boldFont : _regularFont, labelBrush, labelRect, labelFormat);
-        }
-    }
-
-    // Fonts are created once and reused; creating them on every paint is what made this control allocate heavily.
-    private Font? _numberFont, _boldFont, _regularFont;
-
-    private void DisposeFonts()
-    {
-        _numberFont?.Dispose(); _boldFont?.Dispose(); _regularFont?.Dispose();
-        _numberFont = _boldFont = _regularFont = null;
-    }
-
-    protected override void OnFontChanged(EventArgs e) { DisposeFonts(); base.OnFontChanged(e); }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) DisposeFonts();
-        base.Dispose(disposing);
-    }
-}
-
 /// <summary>Caption, input and inline message stacked in one row, so inputs always get the full column width.</summary>
 public sealed class FieldRow : Control, ISelfStyled
 {
@@ -326,10 +255,15 @@ public sealed class FieldRow : Control, ISelfStyled
     private readonly Label _caption = new();
     private readonly Label _message = new();
 
-    public FieldRow(string caption, Control input)
+    private readonly RoundedInput? _host;
+
+    /// <param name="rounded">The Figma look: the input sits in a rounded box that draws the focus and error outline.</param>
+    public FieldRow(string caption, Control input, bool rounded = false)
     {
         // No transparency: the row simply inherits its parent's colour (ambient BackColor), so nothing repaints through it.
         Input = input;
+        TabStop = false;   // the row is only a container; Tab goes straight to its input
+        if (rounded) _host = new RoundedInput(input);
 
         _caption.Text = caption;
         _caption.Font = CaptionFont;
@@ -340,8 +274,10 @@ public sealed class FieldRow : Control, ISelfStyled
 
         input.Font = Theme.Body;
         if (input is TextBox or ComboBox or DateTimePicker or NumericUpDown) input.BackColor = Color.White;
-        input.Dock = DockStyle.Top;
         input.Margin = Padding.Empty;
+        // The box that holds the input is what docks in the row, so it takes the input's place in the stack.
+        Control body = _host ?? input;
+        if (_host is not null) _host.Dock = DockStyle.Top; else input.Dock = DockStyle.Top;
 
         _message.Font = Theme.Small;
         _message.AutoSize = false;
@@ -349,7 +285,7 @@ public sealed class FieldRow : Control, ISelfStyled
         _message.TextAlign = ContentAlignment.TopLeft;
 
         // Owner-drawn combo boxes only reach their final height once their handle exists.
-        input.SizeChanged += (_, _) => ApplySizes();
+        body.SizeChanged += (_, _) => ApplySizes();
 
         // Room for the focus / error outline painted around the input (native boxes can't draw their own).
         Padding = new Padding(2, 0, 2, 0);
@@ -358,7 +294,7 @@ public sealed class FieldRow : Control, ISelfStyled
         input.EnabledChanged += (_, _) => Invalidate();
 
         Controls.Add(_message);
-        Controls.Add(input);
+        Controls.Add(body);
         Controls.Add(_caption);
         Dock = DockStyle.Top;
         ApplySizes();
@@ -380,7 +316,7 @@ public sealed class FieldRow : Control, ISelfStyled
     {
         _caption.Height = Gfx.S(this, 24);
         _message.Height = Gfx.S(this, 22);
-        Height = _caption.Height + Input.Height + _message.Height + Gfx.S(this, 2);
+        Height = _caption.Height + (_host ?? Input).Height + _message.Height + Gfx.S(this, 2);
     }
 
     protected override void OnDpiChangedAfterParent(EventArgs e)
@@ -394,7 +330,7 @@ public sealed class FieldRow : Control, ISelfStyled
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        if (!Input.Visible || !Input.Enabled) return;
+        if (_host is not null || !Input.Visible || !Input.Enabled) return;   // the rounded box draws its own outline
         bool focused = Input.ContainsFocus;
         if (!focused && !_hasError) return;
         Gfx.HighQuality(e.Graphics);
@@ -409,6 +345,7 @@ public sealed class FieldRow : Control, ISelfStyled
         _message.Text = text ?? "";
         _message.ForeColor = isError ? Theme.DangerRed : Theme.Accent;
         _hasError = isError && !string.IsNullOrEmpty(text);
+        if (_host is not null) _host.HasError = _hasError;
         Invalidate();
     }
 
@@ -418,7 +355,6 @@ public sealed class FieldRow : Control, ISelfStyled
 /// <summary>Selectable card used for cabin classes.</summary>
 public sealed class ChoiceCard : Control, ISelfStyled
 {
-    private static readonly Font TitleFont = new(Theme.Body, FontStyle.Bold);
 
     private bool _hover;
     private bool _selected;
@@ -430,7 +366,17 @@ public sealed class ChoiceCard : Control, ISelfStyled
                  ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.StandardClick, true);
         TabStop = true;
         Cursor = Cursors.Hand;
-        Height = Gfx.S(this, 92);
+        Height = Gfx.S(this, 118);
+    }
+
+    /// <summary>The circle that holds the tick, at the top right of the card.</summary>
+    internal Rectangle TickBounds
+    {
+        get
+        {
+            int d = Gfx.S(this, 22);
+            return new Rectangle(Width - 3 - Gfx.S(this, 16) - d, 2 + Gfx.S(this, 14), d, d);
+        }
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -469,27 +415,39 @@ public sealed class ChoiceCard : Control, ISelfStyled
         Gfx.HighQuality(g);
         var bounds = new RectangleF(2, 2, Width - 5, Height - 5);
         using var path = Gfx.RoundedRect(bounds, Gfx.S(this, 14));
-        Color fill = !Enabled ? Theme.DisabledBack : _selected ? Theme.SoftFill : _hover ? Theme.BgMuted : Theme.BgCard;
+        Color fill = !Enabled ? Theme.DisabledBack : _selected ? Theme.BrandSoft : _hover ? Theme.BgMuted : Theme.BgCard;
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
-        using (var pen = new Pen(_selected && Enabled ? Theme.Primary : Theme.Border, _selected && Enabled ? 2f : 1f)) g.DrawPath(pen, path);
+        using (var pen = new Pen(_selected && Enabled ? Theme.Brand : Theme.Border, _selected && Enabled ? 2f : 1f)) g.DrawPath(pen, path);
         if (Focused && ShowFocusCues)
         {
-            using var ring = new Pen(Color.FromArgb(150, Theme.Primary), 1f) { DashStyle = DashStyle.Dot };
+            using var ring = new Pen(Color.FromArgb(150, Theme.Brand), 1f) { DashStyle = DashStyle.Dot };
             g.DrawPath(ring, Gfx.RoundedRect(RectangleF.Inflate(bounds, -4, -4), Gfx.S(this, 10)));
         }
 
-        // Selection is shown by the border, tint and accent title, so the full width stays available for text.
-        float pad = Gfx.S(this, 12f);
-        var titleFont = TitleFont;
-        using var titleBrush = new SolidBrush(!Enabled ? Theme.DisabledText : _selected ? Theme.Accent : Theme.TextPrimary);
-        using var accentBrush = new SolidBrush(Enabled ? Theme.Accent : Theme.DisabledText);
-        using var mutedBrush = new SolidBrush(Enabled ? Theme.TextSecondary : Theme.DisabledText);
-        using var near = Gfx.Format(StringAlignment.Near, StringAlignment.Near);
-        float lineH = Gfx.S(this, 24f);
-        float y = bounds.Top + Gfx.S(this, 10f);
-        float width = bounds.Width - 2 * pad;
-        g.DrawString(Title, titleFont, titleBrush, new RectangleF(bounds.Left + pad, y, width, lineH), near);
-        g.DrawString(Subtitle, Theme.Small, accentBrush, new RectangleF(bounds.Left + pad, y + lineH, width, lineH), near);
-        g.DrawString(Detail, Theme.Small, mutedBrush, new RectangleF(bounds.Left + pad, y + lineH * 2, width, lineH), near);
+        // The class name in capitals, the price large, the detail small; a tick circle marks the chosen card.
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        int pad = Gfx.S(this, 16);
+        int x = (int)bounds.Left + pad;
+        int width = (int)bounds.Width - 2 * pad;
+        int y = (int)bounds.Top + Gfx.S(this, 14);
+        Color strong = Enabled ? Theme.Brand : Theme.DisabledText;
+        Color muted = Enabled ? Theme.TextSecondary : Theme.DisabledText;
+        TextRenderer.DrawText(g, Title.ToUpperInvariant(), CapsFont, new Rectangle(x, y, width - Gfx.S(this, 30), Gfx.S(this, 22)), strong, flags);
+        // A cabin that is not offered says so in small muted text instead of a price.
+        TextRenderer.DrawText(g, Subtitle, Enabled ? PriceFont : Theme.Small, new Rectangle(x, y + Gfx.S(this, 28), width, Gfx.S(this, 32)),
+            Enabled ? strong : muted, flags);
+        TextRenderer.DrawText(g, Detail, Theme.Small, new Rectangle(x, y + Gfx.S(this, 64), width, Gfx.S(this, 22)), muted, flags);
+
+        if (_selected && Enabled)
+        {
+            Rectangle tick = TickBounds;
+            using (var circle = new SolidBrush(Theme.Brand)) g.FillEllipse(circle, tick);
+            using var mark = new Pen(Color.White, Gfx.S(this, 2f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            float s = tick.Width / 22f;
+            g.DrawLines(mark, new[] { new PointF(tick.X + 6 * s, tick.Y + 11.5f * s), new PointF(tick.X + 9.5f * s, tick.Y + 15 * s), new PointF(tick.X + 16 * s, tick.Y + 7.5f * s) });
+        }
     }
+
+    private static readonly Font CapsFont = new(Theme.Small, FontStyle.Bold);
+    private static readonly Font PriceFont = new(Theme.Subtitle, FontStyle.Bold);
 }

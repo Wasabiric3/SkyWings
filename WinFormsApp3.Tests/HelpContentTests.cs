@@ -20,6 +20,23 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
+    public void BookAFlightTopic_NamesTheSixWizardSteps_AsTheyAreOnScreen()
+    {
+        string body = HelpContent.Topics().Single(t => t.Title == "Book a flight").Body;
+        StringAssert.Contains(body, "Flight, Passengers, Class & extras, Seats, Payment");
+        StringAssert.Contains(body, "Receipt");
+        StringAssert.Contains(body, "pills at the top", "steps already visited can be clicked to go back");
+    }
+
+    [TestMethod]
+    public void PromoCodeTopic_SaysWhereTheCodeIsEntered()
+    {
+        string promo = HelpContent.Topics().Single(t => t.Body.Contains("Enter a code on the")).Body;
+        StringAssert.Contains(promo, "Class & extras step");
+        Assert.DoesNotContain("payment step", promo, "the promo code is on the Class & extras step, not the payment step");
+    }
+
+    [TestMethod]
     public void TripStatusTopic_NamesEveryStatus()
     {
         var topic = HelpContent.Topics().Single(t => t.Title == "Trip status");

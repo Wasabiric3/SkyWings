@@ -22,7 +22,7 @@ internal static class HelpContent
     {
         new("Book a flight",
             "1. On the home screen, search for a flight or press \"Book a flight\".\n" +
-            "2. Work through the steps: Flights, Passengers, Class, Add-ons, Seats, Billing, Payment.\n" +
+            "2. Work through the six steps shown as pills at the top: Flight, Passengers, Class & extras, Seats, Payment, Receipt. Steps you have already visited can be clicked to go back.\n" +
             "3. The Receipt shows the booking reference. Give it to the traveller; they need it to manage the booking and to check in.\n\n" +
             $"A booking can have up to {BookingRules.MaxPassengersPerBooking} travellers, and round trips are supported."),
 
@@ -78,7 +78,7 @@ internal static class HelpContent
             $"and the {AppData.TaxRate:P0} VAT does not apply to them. Tick the discount for the traveller on the Passengers step and enter their ID number."),
 
         new("Promo codes",
-            "Enter a code on the payment step.\n\n" +
+            "Enter a code on the Class & extras step and press Apply.\n\n" +
             "SKY10: 10% off. Not valid for First Class, and it cannot be combined with the advance-purchase discount.\n\n" +
             "EARLY500: PHP 500 off. Needs a fare of at least PHP 5,000 and a booking made at least 30 days before departure. " +
             "It replaces the advance-purchase discount."),
