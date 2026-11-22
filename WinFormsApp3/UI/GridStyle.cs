@@ -110,7 +110,8 @@ internal static class GridStyle
         var pill = new Rectangle(e.CellBounds.Left + Gfx.S(grid, 10), e.CellBounds.Top + (e.CellBounds.Height - h) / 2, size.Width + padX * 2, h);
         Gfx.HighQuality(e.Graphics);
         using var path = Gfx.RoundedRect(pill, pill.Height / 2);
-        using var back = new SolidBrush(style.Back);
+        bool selected = (e.State & DataGridViewElementStates.Selected) != 0;   // on the row highlight the pill turns white, or it would vanish
+        using var back = new SolidBrush(selected ? Color.White : style.Back);
         e.Graphics.FillPath(back, path);
         TextRenderer.DrawText(e.Graphics, text, StatusFont, pill, style.Fore,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

@@ -44,12 +44,11 @@ public sealed class BookingDetailForm : GlassForm
         // Header: reference, route and a status pill so the state is visible before reading the details.
         Color statusColor = TripColors.For(trip.Phase);
         var header = new Panel { Dock = DockStyle.Top, Height = D(58) };
-        var status = new Label
+        var status = new StatusPill
         {
             // Wide enough for the longest label, "RETURN · CHECK-IN OPEN".
-            Text = trip.Label.ToUpperInvariant(), AutoSize = false, Width = D(190), Dock = DockStyle.Right,
-            TextAlign = ContentAlignment.MiddleCenter, Font = new Font(Theme.Small, FontStyle.Bold),
-            ForeColor = statusColor, BackColor = Color.FromArgb(32, statusColor)
+            Text = trip.Label.ToUpperInvariant(), Width = D(260), Dock = DockStyle.Right,
+            TextColor = statusColor, FillColor = Gfx.Mix(statusColor, Color.White, 0.86f)
         };
         var statusGap = new Panel { Dock = DockStyle.Right, Width = D(10) };
         var heading = new Label

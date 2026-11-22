@@ -5,8 +5,6 @@ namespace SkyWings.Tests;
 [DoNotParallelize]
 public sealed class AllFormsSnapshotTests
 {
-    /// <summary>Forms that clip content today; each is removed by the task that restyles it (the set must be empty at the end).</summary>
-    private static readonly HashSet<string> KnownNotFitting = new();
 
     [TestMethod]
     public void EveryForm_RendersNonBlank_AtDefaultAndMinimumSize() => FormHarness.OnStaThread(() =>
@@ -28,8 +26,7 @@ public sealed class AllFormsSnapshotTests
                 if (!FormHarness.IsDrawn(bmp)) problems.Add($"{name}-{size} is blank");
                 Directory.CreateDirectory(FormHarness.Folder);
                 bmp.Save(Path.Combine(FormHarness.Folder, $"{name}-{size}.png"));
-                if (!KnownNotFitting.Contains(name))
-                    problems.AddRange(FormHarness.Clipped(form).Select(c => $"{name}-{size}: {c}"));
+                problems.AddRange(FormHarness.Clipped(form).Select(c => $"{name}-{size}: {c}"));
             }
         }
         Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
