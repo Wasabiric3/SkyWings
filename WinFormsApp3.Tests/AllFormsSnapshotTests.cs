@@ -6,7 +6,7 @@ namespace SkyWings.Tests;
 public sealed class AllFormsSnapshotTests
 {
     /// <summary>Forms that clip content today; each is removed by the task that restyles it (the set must be empty at the end).</summary>
-    private static readonly HashSet<string> KnownNotFitting = new() { "admin" };   // fixed in Tasks 15 and 16
+    private static readonly HashSet<string> KnownNotFitting = new();
 
     [TestMethod]
     public void EveryForm_RendersNonBlank_AtDefaultAndMinimumSize() => FormHarness.OnStaThread(() =>

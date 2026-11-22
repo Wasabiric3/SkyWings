@@ -118,6 +118,7 @@ public sealed class AdminForm : GlassForm
     };
     private readonly GridSorter<AuditEntry> _auditSorter = new(AuditSortKeys);   // no sort chosen: newest first, as the log is loaded
 
+    private Label _frameTitle = null!;   // coloured after Theme.Apply, which resets label colours
     private StaffSession Session => _service.Session;
 
     public AdminForm(AdminService service)
@@ -129,11 +130,14 @@ public sealed class AdminForm : GlassForm
         Padding = new Padding(D(24), D(12), D(24), D(16));
 
         Panel? first = null;
-        var nav = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(D(8), D(6), 0, 0) };
+        // The section buttons get a row of their own under the title and account buttons, so all eight fit at the minimum window size.
+        var nav = new FlowLayoutPanel { Dock = DockStyle.Top, Height = D(54), WrapContents = false, Padding = new Padding(0, D(6), 0, D(4)) };
         void AddSection(string title, Permission needed, Func<Panel> build, Action? onShow = null)
         {
             if (!Session.Has(needed)) return;
             var button = new GlassButton { Text = title, Style = GlassButtonStyle.Ghost };
+            button.Width = Math.Max(D(76), TextRenderer.MeasureText(title, button.Font).Width + D(28));   // fit the caption, not the 104px minimum
+            button.Margin = new Padding(0, 0, D(4), 0);
             Panel page = build();
             _sections[button] = page;
             if (title == "Refunds") _refundsNav = button;
@@ -153,9 +157,11 @@ public sealed class AdminForm : GlassForm
         AddSection("Database", Permission.BrowseData, () => browser = new DatabaseBrowserPage(_service), () => browser?.OnShow());
 
         Controls.Add(_host);
-        Controls.Add(BuildHeader(nav));
+        Controls.Add(nav);               // docked below the title row (the last-added control docks first)
+        Controls.Add(BuildHeader());
 
         Theme.Apply(this);
+        _frameTitle.ForeColor = Theme.Brand;
         foreach (var label in new[] { _inventoryLabel, _bookingCount, _refundCount })
         {
             label.Font = Theme.Small;
@@ -191,9 +197,9 @@ public sealed class AdminForm : GlassForm
 
     // ------------------------------------------------------------------ frame
 
-    private Control BuildHeader(Control nav)
+    private Control BuildHeader()
     {
-        var title = new Label { Text = "SkyWings Staff", Font = Theme.Header, ForeColor = Theme.TextPrimary, AutoSize = false, Height = D(30), Dock = DockStyle.Top };
+        var title = _frameTitle = new Label { Text = "SkyWings Staff", Font = Theme.Header, ForeColor = Theme.Brand, AutoSize = false, Height = D(30), Dock = DockStyle.Top };
         var who = new Label
         {
             Text = $"{Session.DisplayName} · {RolePermissions.Label(Session.Role)}", Font = Theme.Small, ForeColor = Theme.TextSecondary,
@@ -220,7 +226,6 @@ public sealed class AdminForm : GlassForm
         account.Controls.Add(password);
 
         var bar = new Panel { Dock = DockStyle.Top, Height = D(56) };
-        bar.Controls.Add(nav);
         bar.Controls.Add(account);
         bar.Controls.Add(identity);
         return bar;
@@ -331,13 +336,20 @@ public sealed class AdminForm : GlassForm
             toolbar.Controls.Add(ToolButton("Backup", async (_, _) => await BackupDatabase(), GlassButtonStyle.Ghost));
             toolbar.Controls.Add(ToolButton("Restore", async (_, _) => await RestoreDatabase(), GlassButtonStyle.Ghost));
         }
-        _inventoryLabel.Margin = new Padding(D(12), D(12), 0, 0);
-        toolbar.Controls.Add(_inventoryLabel);
+        // The inventory line sits under the table: in the toolbar it was pushed out of the window at the minimum size.
+        _inventoryLabel.AutoSize = false;
+        _inventoryLabel.Dock = DockStyle.Bottom;
+        _inventoryLabel.Height = D(30);
+        _inventoryLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _inventoryLabel.Padding = new Padding(D(4), 0, 0, 0);
 
         GridStyle.Apply(_flights);
         _flights.SelectionChanged += (_, _) => UpdateFlightSelection();
         WireSorter(_flightSorter, _flights, "view_flights_sort", LoadFlights);
-        return Section(toolbar, _flights);
+        var tableArea = new Panel { Dock = DockStyle.Fill };
+        tableArea.Controls.Add(_flights);
+        tableArea.Controls.Add(_inventoryLabel);   // docked to the bottom of the table area
+        return Section(toolbar, tableArea);
     }
 
     private void LoadFlights() => Try("Unable to load flights", () => _flights.DataSource = _flightSorter.Sort(_service.LoadFlights()).ToList());

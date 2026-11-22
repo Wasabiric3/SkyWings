@@ -104,7 +104,7 @@ internal static class GridStyle
         string name = grid.Columns[e.ColumnIndex].DataPropertyName;
         if (name is not ("Status" or "PaymentStatus") || StatusStyle(text) is not { } style) return;
 
-        e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+        e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
         Size size = TextRenderer.MeasureText(e.Graphics, text, StatusFont, Size.Empty, TextFormatFlags.NoPadding);
         int padX = Gfx.S(grid, 10), h = size.Height + Gfx.S(grid, 6);
         var pill = new Rectangle(e.CellBounds.Left + Gfx.S(grid, 10), e.CellBounds.Top + (e.CellBounds.Height - h) / 2, size.Width + padX * 2, h);
