@@ -76,4 +76,48 @@ public sealed class DialogFrameTests
         using (form)
             Assert.IsLessThan(frame.Buttons.TabIndex, frame.Content.TabIndex);
     });
+
+    [TestMethod]
+    public void Create_SizesTheWindowToItsRows_SoNothingIsCutOff() => FormHarness.OnStaThread(() =>
+    {
+        using var form = new GlassForm { FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.Manual, Location = new Point(20, 20) };
+        var rows = new Control[]
+        {
+            new FieldRow("USERNAME", new TextBox()), new FieldRow("ROLE", new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }),
+            new FieldRow("DATE", new DateTimePicker()), new FieldRow("PASSWORD", new TextBox())
+        };
+        var ok = new GlassButton { Text = "Save" };
+        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary };
+        DialogFrame frame = DialogFrame.Create(form, 540, "Add a staff member", "They must change the password at first sign-in. Pick a long phrase.", rows, ok, cancel);
+        form.Show();
+        Application.DoEvents();
+
+        GlassCard card = frame.Content.Controls.OfType<GlassCard>().Single();
+        Control last = rows[^1];
+        Assert.IsLessThanOrEqualTo(card.DisplayRectangle.Bottom, last.Bottom, "the last field is inside the card");
+        Assert.IsLessThanOrEqualTo(frame.ClientSize.Height, frame.Buttons.Bottom, "the buttons are inside the window");
+        Assert.AreSame(ok, form.AcceptButton);
+        Assert.AreSame(cancel, form.CancelButton);
+        Assert.AreEqual(rows[0], card.Controls.Cast<Control>().OrderBy(c => c.TabIndex).First(), "the first field is first in Tab order");
+        Assert.IsEmpty(FormHarness.Clipped(form));
+    });
+
+    [TestMethod]
+    public void Enter_And_Esc_StillWork_OnEveryStaffDialog() => FormHarness.OnStaThread(() =>
+    {
+        string[] names = { "first-run-admin", "change-password", "prompt", "add-staff", "reset-password", "backup-password", "restore-credentials" };
+        using var harness = new FormHarness();
+        foreach ((string name, Func<Form> create) in harness.Forms().Where(f => names.Contains(f.Name)))
+        {
+            using Form form = create();
+            form.Show();
+            Application.DoEvents();
+            Assert.IsNotNull(form.AcceptButton, name + " has an Enter button");
+            Assert.IsNotNull(form.CancelButton, name + " has an Esc button");
+            Assert.AreEqual(DialogResult.Cancel, ((GlassButton)form.CancelButton).DialogResult, name + " Esc cancels");
+            Assert.IsEmpty(FormHarness.Clipped(form), name);
+            ((GlassButton)form.CancelButton).PerformClick();
+            Assert.AreEqual(DialogResult.Cancel, form.DialogResult, name);
+        }
+    });
 }

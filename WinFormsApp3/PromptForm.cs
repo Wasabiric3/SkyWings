@@ -29,34 +29,24 @@ public sealed class PromptForm : GlassForm
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
         int D(int px) => Gfx.S(this, px);
-        ClientSize = new Size(D(540), D(optionText is null ? 320 : 372));
 
         _input.MaxLength = maxLength;
         _input.PlaceholderText = placeholder;
-        var heading = new Label { Text = title, Font = Theme.Header, AutoSize = false, Height = D(44), TextAlign = ContentAlignment.MiddleLeft };
-        var hintLabel = new Label { Text = hint, Font = Theme.Small, ForeColor = Theme.TextSecondary, AutoSize = false, Height = D(60) };
         _row = new FieldRow(caption, _input);
         _input.TextChanged += (_, _) => _row.ClearMessage();
 
         var ok = new GlassButton { Text = okText };
         ok.Click += (_, _) => Accept();
-        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary, DialogResult = DialogResult.Cancel };
-        var buttons = new FlowLayoutPanel { Height = D(56), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, D(10), 0, 0) };
-        buttons.Controls.Add(ok);
-        buttons.Controls.Add(cancel);
+        var cancel = new GlassButton { Text = "Cancel", Style = GlassButtonStyle.Secondary };
 
-        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
+        var rows = new List<Control> { _row };
         if (optionText is not null)
         {
             _option = new CheckBox { Text = optionText, Checked = optionDefault, AutoSize = false, Height = D(34), Width = D(480) };
-            Layouts.Stack(card, heading, hintLabel, _row, _option, buttons);
+            rows.Add(_option);
         }
-        else Layouts.Stack(card, heading, hintLabel, _row, buttons);
-        Controls.Add(card);
-        Padding = new Padding(D(10));
+        DialogFrame.Create(this, 540, title, hint, rows, ok, cancel);
         Theme.Apply(this);
-        AcceptButton = ok;
-        CancelButton = cancel;
         Shown += (_, _) => _input.Focus();
     }
 

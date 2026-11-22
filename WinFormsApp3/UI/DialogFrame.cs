@@ -27,6 +27,37 @@ public sealed class DialogFrame : Panel
     public Panel Content { get; }
     public FlowLayoutPanel Buttons { get; }
 
+    /// <summary>
+    /// Builds a whole small dialog: the header (title and hint), a white card holding <paramref name="rows"/> stacked top to bottom, and the buttons
+    /// (<paramref name="accept"/> rightmost). The window is as wide as <paramref name="width"/> (96-dpi pixels) and as tall as its content needs once
+    /// the fields have their real heights.
+    /// </summary>
+    internal static DialogFrame Create(Form form, int width, string title, string hint, IReadOnlyList<Control> rows, GlassButton accept, GlassButton? cancel)
+    {
+        var frame = new DialogFrame();
+        frame.Header.Title = title;
+        frame.Header.Hint = hint;
+        var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 14 };
+        Layouts.Stack(card, rows.ToArray());
+        frame.Content.Controls.Add(card);
+        frame.Buttons.Controls.Add(accept);
+        if (cancel is not null) frame.Buttons.Controls.Add(cancel);
+        frame.Attach(form, accept, cancel);
+        form.Controls.Add(frame);
+        form.ClientSize = new Size(Gfx.S(form, width), Gfx.S(form, 420));
+        form.Load += (_, _) => frame.FitHeight(form, card, rows);
+        return frame;
+    }
+
+    /// <summary>Sets the window height from what the header, the card's rows and the button row actually measure once laid out.</summary>
+    private void FitHeight(Form form, GlassCard card, IReadOnlyList<Control> rows)
+    {
+        form.PerformLayout();
+        int chrome = 2 * (Gfx.S(card, card.ShadowSize) + Gfx.S(card, card.ContentPadding));
+        int needed = form.Padding.Vertical + Header.Height + chrome + rows.Sum(r => r.Height) + Buttons.Height;
+        form.ClientSize = new Size(form.ClientSize.Width, needed);
+    }
+
     /// <summary>Makes <paramref name="accept"/> the form's Enter button and <paramref name="cancel"/> its Esc button (it closes the dialog with Cancel).</summary>
     public void Attach(Form form, GlassButton accept, GlassButton? cancel)
     {
