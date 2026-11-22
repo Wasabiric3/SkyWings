@@ -30,7 +30,7 @@ internal static class GridStyle
         grid.BorderStyle = BorderStyle.None;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         grid.BackgroundColor = Color.White;
-        grid.GridColor = Theme.BorderLight;
+        grid.GridColor = Theme.Border;
         grid.EnableHeadersVisualStyles = false;
         grid.RowHeadersVisible = false;
         grid.AllowUserToAddRows = false;
@@ -46,16 +46,16 @@ internal static class GridStyle
         grid.RowTemplate.Height = Gfx.S(grid, 36);
         grid.Font = Theme.Body;
 
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.BgMuted;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.PageBg;
         grid.ColumnHeadersDefaultCellStyle.ForeColor = Theme.TextSecondary;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.BgMuted;
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.PageBg;
         grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Theme.TextSecondary;
         grid.ColumnHeadersDefaultCellStyle.Font = StatusFont;
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
 
         grid.DefaultCellStyle.BackColor = Color.White;
         grid.DefaultCellStyle.ForeColor = Theme.TextPrimary;
-        grid.DefaultCellStyle.SelectionBackColor = Theme.Selection;
+        grid.DefaultCellStyle.SelectionBackColor = Theme.BrandSoft;
         grid.DefaultCellStyle.SelectionForeColor = Theme.TextPrimary;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 10, 0);
         grid.AlternatingRowsDefaultCellStyle.BackColor = Theme.RowAlt;

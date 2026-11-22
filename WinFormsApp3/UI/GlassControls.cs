@@ -353,7 +353,7 @@ public sealed class FieldRow : Control, ISelfStyled
     public void SetMessage(string? text, bool isError = true)
     {
         _message.Text = text ?? "";
-        _message.ForeColor = isError ? Theme.DangerRed : Theme.Accent;
+        _message.ForeColor = isError ? Theme.DangerRed : Theme.Brand;
         _hasError = isError && !string.IsNullOrEmpty(text);
         if (_host is not null) _host.HasError = _hasError;
         Invalidate();
