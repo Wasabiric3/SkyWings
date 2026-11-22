@@ -106,6 +106,66 @@ public sealed class GridSorterTests
     public void AnEmptyList_SortsToAnEmptyList()
         => Assert.IsEmpty(Make().Sort(Array.Empty<Item>()));
 
+    // ---- no sort until a header is clicked (a screen whose own order matters, like "pending requests first") ----
+
+    private static GridSorter<Item> Unsorted() => new(new Dictionary<string, SortKey<Item>>
+    {
+        ["Label"] = new(i => i.Name), ["Qty"] = new(i => i.Count), ["When"] = new(i => i.At, FirstDescending: true),
+    });
+
+    [TestMethod]
+    public void WithoutADefault_TheIncomingOrderIsKept_UntilAHeaderIsClicked()
+    {
+        GridSorter<Item> sorter = Unsorted();
+        Assert.IsNull(sorter.Column);
+        CollectionAssert.AreEqual(new[] { "banana", "Apple", "cherry" }, Names(sorter.Sort(Items)));
+        Assert.AreEqual("", sorter.ToSetting(), "nothing to remember");
+
+        Assert.IsTrue(sorter.Toggle("Label"));
+        CollectionAssert.AreEqual(new[] { "Apple", "banana", "cherry" }, Names(sorter.Sort(Items)));
+        Assert.AreEqual("Label:asc", sorter.ToSetting());
+    }
+
+    [TestMethod]
+    public void Clear_GoesBackToTheIncomingOrder()
+    {
+        GridSorter<Item> sorter = Unsorted();
+        sorter.Toggle("Qty");
+        sorter.Clear();
+        Assert.IsNull(sorter.Column);
+        CollectionAssert.AreEqual(new[] { "banana", "Apple", "cherry" }, Names(sorter.Sort(Items)));
+    }
+
+    [TestMethod]
+    public void AnEmptySetting_LeavesAnUnsortedSorterUnsorted()
+    {
+        GridSorter<Item> sorter = Unsorted();
+        sorter.LoadSetting("");
+        Assert.IsNull(sorter.Column);
+    }
+
+    [TestMethod]
+    public void Clear_RemovesTheArrowFromTheGrid() => OnSta(() =>
+    {
+        using var form = new Form { Width = 600, Height = 400 };
+        var grid = new DataGridView { Dock = DockStyle.Fill, AllowUserToAddRows = false };
+        form.Controls.Add(grid);
+        GridSorter<Item> sorter = Unsorted();
+        sorter.Attach(grid);
+        form.Show();
+        grid.DataSource = sorter.Sort(Items).ToList();
+        Application.DoEvents();
+        Assert.IsTrue(grid.Columns.Cast<DataGridViewColumn>().All(c => c.HeaderCell.SortGlyphDirection == SortOrder.None), "no arrow before a click");
+
+        sorter.Toggle("Qty");
+        grid.DataSource = sorter.Sort(Items).ToList();
+        Application.DoEvents();
+        Assert.AreEqual(SortOrder.Ascending, grid.Columns.Cast<DataGridViewColumn>().Single(c => c.DataPropertyName == "Qty").HeaderCell.SortGlyphDirection);
+
+        sorter.Clear();
+        Assert.IsTrue(grid.Columns.Cast<DataGridViewColumn>().All(c => c.HeaderCell.SortGlyphDirection == SortOrder.None), "Clear takes the arrow off");
+    });
+
     // ---- on a real grid ----
 
     private static void OnSta(Action action)

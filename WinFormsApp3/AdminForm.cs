@@ -18,6 +18,15 @@ public sealed class AdminForm : GlassForm
 
     // flights
     private readonly DataGridView _flights = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
+    private static readonly IReadOnlyDictionary<string, SortKey<FlightAdminRow>> FlightSortKeys = new Dictionary<string, SortKey<FlightAdminRow>>
+    {
+        ["FlightNo"] = new(r => r.FlightNo), ["Origin"] = new(r => r.Origin), ["Destination"] = new(r => r.Destination),
+        ["BasePrice"] = new(r => r.BasePrice, FirstDescending: true), ["Type"] = new(r => r.Type),
+        ["Capacity"] = new(r => r.Capacity, FirstDescending: true), ["Status"] = new(r => r.Status),
+        // The departure column is text ("9:00 PM"); it sorts by the time of day.
+        ["DepartureDisplay"] = new(r => AppData.FlightScheduledTimes.TryGetValue(r.FlightNo, out TimeOnly t) ? t : TimeOnly.MinValue),
+    };
+    private readonly GridSorter<FlightAdminRow> _flightSorter = new(FlightSortKeys);
     private readonly Label _inventoryLabel = new() { AutoSize = true };
     private readonly GlassButton _toggleActive = new() { Text = "Deactivate", Style = GlassButtonStyle.Secondary };
 
@@ -70,6 +79,13 @@ public sealed class AdminForm : GlassForm
 
     // staff
     private readonly DataGridView _staff = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
+    private static readonly IReadOnlyDictionary<string, SortKey<StaffRowView>> StaffSortKeys = new Dictionary<string, SortKey<StaffRowView>>
+    {
+        ["Username"] = new(r => r.Username), ["Name"] = new(r => r.Name), ["Role"] = new(r => r.Role), ["Status"] = new(r => r.Status),
+        ["LastSignIn"] = new(r => r.Account.LastLoginAtUtc, FirstDescending: true),   // the text is "12 min ago": sort by the moment
+        ["Locked"] = new(r => r.Account.LockedUntilUtc, FirstDescending: true),
+    };
+    private readonly GridSorter<StaffRowView> _staffSorter = new(StaffSortKeys);
     private readonly GlassButton _toggleStaff = new() { Text = "Deactivate", Style = GlassButtonStyle.Secondary };
 
     // audit
@@ -314,10 +330,26 @@ public sealed class AdminForm : GlassForm
 
         GridStyle.Apply(_flights);
         _flights.SelectionChanged += (_, _) => UpdateFlightSelection();
+        WireSorter(_flightSorter, _flights, "view_flights_sort", LoadFlights);
         return Section(toolbar, _flights);
     }
 
-    private void LoadFlights() => Try("Unable to load flights", () => _flights.DataSource = _service.LoadFlights());
+    private void LoadFlights() => Try("Unable to load flights", () => _flights.DataSource = _flightSorter.Sort(_service.LoadFlights()).ToList());
+
+    /// <summary>
+    /// Click-a-header sorting for one grid: the sort is remembered between sessions (a view setting) and <paramref name="reload"/>
+    /// shows the rows again in the new order.
+    /// </summary>
+    private void WireSorter<T>(GridSorter<T> sorter, DataGridView grid, string settingKey, Action reload)
+    {
+        sorter.LoadSetting(_service.GetViewSetting(settingKey, ""));
+        sorter.Attach(grid);
+        sorter.Changed += (_, _) =>
+        {
+            Try("Unable to save the view setting", () => _service.SetViewSetting(settingKey, sorter.ToSetting()));
+            reload();
+        };
+    }
 
     private FlightAdminRow? SelectedFlight() => _flights.CurrentRow?.DataBoundItem as FlightAdminRow;
 
@@ -672,7 +704,19 @@ public sealed class AdminForm : GlassForm
     // ------------------------------------------------------------------ refunds
 
     private sealed record RefundRow(string Reference, string Refunded, string FlightNo, string Route, string FlightDate,
-        decimal TotalAmount, decimal RefundAmount, string RefundRef, string Method, string HandledBy);
+        decimal TotalAmount, decimal RefundAmount, string RefundRef, string Method, string HandledBy,
+        [property: System.ComponentModel.Browsable(false)] DateTime? RefundedAt,
+        [property: System.ComponentModel.Browsable(false)] DateTime FlightDateValue);
+
+    private static readonly IReadOnlyDictionary<string, SortKey<RefundRow>> RefundSortKeys = new Dictionary<string, SortKey<RefundRow>>
+    {
+        ["Reference"] = new(r => r.Reference), ["Refunded"] = new(r => r.RefundedAt, FirstDescending: true), ["FlightNo"] = new(r => r.FlightNo),
+        ["Route"] = new(r => r.Route), ["FlightDate"] = new(r => r.FlightDateValue, FirstDescending: true),
+        ["TotalAmount"] = new(r => r.TotalAmount, FirstDescending: true), ["RefundAmount"] = new(r => r.RefundAmount, FirstDescending: true),
+        ["RefundRef"] = new(r => r.RefundRef), ["Method"] = new(r => r.Method), ["HandledBy"] = new(r => r.HandledBy),
+    };
+    // Only for this session: the order dropdown above the list is what is remembered, and choosing one clears a header sort.
+    private readonly GridSorter<RefundRow> _refundSorter = new(RefundSortKeys);
 
     // The choices of the "view" row: label, what it does. Remembered between sessions (app_settings view_* keys).
     private static readonly (string Label, string Key)[] PeriodChoices =
@@ -765,6 +809,8 @@ public sealed class AdminForm : GlassForm
         _requestOnlyControls.AddRange(new Control[] { logRequest, _requestShowClosed });
 
         GridStyle.Apply(_refunds);
+        _refundSorter.Attach(_refunds);
+        _refundSorter.Changed += (_, _) => LoadRefunds();
         _refunds.DefaultCellStyle.Font = Theme.Small;
         _refunds.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _refunds.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
@@ -781,6 +827,7 @@ public sealed class AdminForm : GlassForm
         };
 
         GridStyle.Apply(_requests);
+        WireSorter(_requestSorter, _requests, "view_requests_sort", LoadRequests);
         _requests.DefaultCellStyle.Font = Theme.Small;
         _requests.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _requests.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
@@ -808,6 +855,7 @@ public sealed class AdminForm : GlassForm
     {
         if (_loadingViewSettings) return;
         Try("Unable to save the view setting", () => _service.SetViewSetting(key, value));
+        _refundSorter.Clear();   // choosing an order, period or filter in the row above replaces a header sort
         ReloadRefundsView();
     }
 
@@ -851,7 +899,18 @@ public sealed class AdminForm : GlassForm
     // ------------------------------------------------------------------ refund requests
 
     private sealed record RequestRow(string Reference, string Status, string Source, string Logged, string FlightNo, string Route,
-        string FlightDate, decimal TotalAmount, decimal EstimatedRefund, string Note);
+        string FlightDate, decimal TotalAmount, decimal EstimatedRefund, string Note,
+        [property: System.ComponentModel.Browsable(false)] DateTime LoggedAt,
+        [property: System.ComponentModel.Browsable(false)] DateTime FlightDateValue);
+
+    private static readonly IReadOnlyDictionary<string, SortKey<RequestRow>> RequestSortKeys = new Dictionary<string, SortKey<RequestRow>>
+    {
+        ["Reference"] = new(r => r.Reference), ["Status"] = new(r => r.Status), ["Source"] = new(r => r.Source),
+        ["Logged"] = new(r => r.LoggedAt, FirstDescending: true), ["FlightNo"] = new(r => r.FlightNo), ["Route"] = new(r => r.Route),
+        ["FlightDate"] = new(r => r.FlightDateValue, FirstDescending: true), ["TotalAmount"] = new(r => r.TotalAmount, FirstDescending: true),
+        ["EstimatedRefund"] = new(r => r.EstimatedRefund, FirstDescending: true), ["Note"] = new(r => r.Note),
+    };
+    private readonly GridSorter<RequestRow> _requestSorter = new(RequestSortKeys);
 
     private const string SenderWarning = "⚠ Sender differs from the booking's email. ";
 
@@ -867,12 +926,15 @@ public sealed class AdminForm : GlassForm
         List<RefundRequestRow>? rows = null;
         if (!Try("Unable to load the refund requests", () => rows = _service.LoadRefundRequests(_requestShowClosed.Checked, SelectedPeriodStart()))) return;
         _requestRows = rows!;
-        _requests.DataSource = _requestRows.Select(r => new RequestRow(r.Reference, RequestStatusText(r.Status), r.Source == "EMAIL" ? "Email" : "Desk",
-            r.LoggedAt.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture), r.FlightNo, r.Route,
+        DateTime now = DateTime.Now;
+        // Pending requests first, then the newest, as the store returns them, until a header is clicked.
+        _requests.DataSource = _requestSorter.Sort(_requestRows.Select(r => new RequestRow(r.Reference, RequestStatusText(r.Status), r.Source == "EMAIL" ? "Email" : "Desk",
+            RecencyFormat.Relative(r.LoggedAt, now), r.FlightNo, r.Route,
             r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.EstimatedRefund,
             r.Status == BookingStore.RequestDismissed ? $"Declined: {r.Note}"
                 : r.Status == BookingStore.RequestDone ? $"Refunded by {r.ClosedBy}"
-                : (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.CustomerMessage)).ToList();
+                : (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.CustomerMessage,
+            r.LoggedAt, r.FlightDate))).ToList();
         int open = _requestRows.Count(r => r.Status == BookingStore.RequestOpen);
         _refundCount.Text = open == 0
             ? "No refund requests waiting"
@@ -975,8 +1037,11 @@ public sealed class AdminForm : GlassForm
         RefundList? list = null;
         if (!Try("Unable to load the refunds", () => list = _service.LoadRefundList(_refundSearch.Text, _refundShowAll.Checked, SelectedPeriodStart(), KeyOf(_refundSort, SortChoices), KeyOf(_refundHandled, HandledChoices)))) return;
         _refundList = list!;
-        _refunds.DataSource = _refundList.Rows.Select(r => new RefundRow(r.Reference, RefundTime(r), r.FlightNo, r.Route,
-            r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.Refund, r.RefundReference, r.Method, r.HandledBy)).ToList();
+        DateTime now = DateTime.Now;
+        _refunds.DataSource = _refundSorter.Sort(_refundList.Rows.Select(r => new RefundRow(r.Reference,
+            r.RefundedAt is { } at ? RecencyFormat.Relative(at, now) : "", r.FlightNo, r.Route,
+            r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.Refund, r.RefundReference, r.Method, r.HandledBy,
+            r.RefundedAt, r.FlightDate))).ToList();
         string shown = _refundList.Rows.Count < _refundList.MatchCount ? $"newest {_refundList.Rows.Count:N0} of {_refundList.MatchCount:N0}" : $"{_refundList.MatchCount:N0}";
         _refundCount.Text = $"{shown} cancelled · PHP {_refundList.MatchRefundTotal:N2} refunded";
     }
@@ -991,7 +1056,7 @@ public sealed class AdminForm : GlassForm
         RequestRow? selected = ShowingRequests ? _requests.CurrentRow?.DataBoundItem as RequestRow : null;
         RefundRequestRow? request = selected is null ? null
             : _requestRows.FirstOrDefault(r => r.Reference == reference && RequestStatusText(r.Status) == selected.Status
-                && r.LoggedAt.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) == selected.Logged);
+                && r.LoggedAt == selected.LoggedAt);
         while (true)
         {
             BookingRecord? booking = null;
@@ -1116,6 +1181,7 @@ public sealed class AdminForm : GlassForm
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadStaff(), GlassButtonStyle.Ghost));
 
         GridStyle.Apply(_staff);
+        WireSorter(_staffSorter, _staff, "view_staff_sort", LoadStaff);
         _staff.SelectionChanged += (_, _) =>
         {
             if (SelectedStaff() is { } account) _toggleStaff.Text = account.Active ? "Deactivate" : "Activate";
@@ -1129,10 +1195,13 @@ public sealed class AdminForm : GlassForm
     {
         List<StaffAccount> accounts = new();
         if (!Try("Unable to load staff", () => accounts = _service.LoadStaff())) return;
+        DateTime now = DateTime.Now;
         string Local(DateTime? utc) => utc is { } t ? t.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) : "—";
-        _staff.DataSource = accounts.Select(a => new StaffRowView(a.Username, a.DisplayName, RolePermissions.Label(a.Role),
-            a.Active ? "Active" : "Inactive", Local(a.LastLoginAtUtc),
-            a.LockedUntilUtc is { } until && until > DateTime.UtcNow ? "Until " + Local(until) : "—", a)).ToList();
+        // The last sign-in reads as "12 min ago" / "Yesterday, 4:45 PM"; a lock that lasts until a future time stays a clock time.
+        string SignedIn(DateTime? utc) => utc is { } t ? RecencyFormat.Relative(t.ToLocalTime(), now) : "—";
+        _staff.DataSource = _staffSorter.Sort(accounts.Select(a => new StaffRowView(a.Username, a.DisplayName, RolePermissions.Label(a.Role),
+            a.Active ? "Active" : "Inactive", SignedIn(a.LastLoginAtUtc),
+            a.LockedUntilUtc is { } until && until > DateTime.UtcNow ? "Until " + Local(until) : "—", a))).ToList();
     }
 
     private void AddStaff()
