@@ -21,7 +21,7 @@ internal static class HelpContent
     public static IReadOnlyList<HelpTopic> Topics() => new HelpTopic[]
     {
         new("Book a flight",
-            "1. On the home screen, search for a flight or press \"Book a flight\".\n" +
+            "1. On the home screen, find the flight on the board: narrow it with the region chips, the day arrows and the search box, then select it. The details panel shows its status, timeline and cabins; choose a cabin and press the Book button. Or press \"Book a flight\" at the top to start from the first step.\n" +
             "2. Work through the six steps shown as pills at the top: Flight, Passengers, Class & extras, Seats, Payment, Receipt. Steps you have already visited can be clicked to go back.\n" +
             "3. The Receipt shows the booking reference. Give it to the traveller; they need it to manage the booking and to check in.\n\n" +
             $"A booking can have up to {BookingRules.MaxPassengersPerBooking} travellers, and round trips are supported."),
@@ -44,7 +44,7 @@ internal static class HelpContent
             "Choose Approve refund to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left."),
 
         new("Waitlist for a sold-out flight",
-            "When a cabin is sold out, select the flight on the home screen and choose \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
+            "When a cabin is sold out, select the flight on the home screen, choose that cabin in the details panel and press \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
             "Keep the waitlist code that is shown.\n\n" +
             $"When a booking is cancelled, the first traveller in line is emailed an offer and the seats are held for up to {AppData.WaitlistOfferHours} hours, or until bookings close for the flight if that comes first. " +
             "To use it, choose \"Waitlist\" on the home screen, enter the waitlist code, then \"Book now\". " +

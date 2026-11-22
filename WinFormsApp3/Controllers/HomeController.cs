@@ -37,7 +37,7 @@ public sealed record Dashboard(
 /// Controller for <c>HomeForm</c>: loads the route cards and destination list for the signed-in staff member and records
 /// their sign-out. Has no WinForms dependency.
 /// </summary>
-public sealed class HomeController
+public sealed partial class HomeController
 {
     private readonly BookingStore _store;
 
@@ -82,6 +82,11 @@ public sealed class HomeController
     /// <exception cref="IOException">The database could not be read.</exception>
     public List<FlightRow> SearchFlights(string? destination, DateTime date, string className, DateTime? now = null)
         => FlightSearch.Search(_store, destination, date, className, now);
+
+    /// <summary>The flights on the home board for a region ("" for all), search text (city or flight number) and day. See <see cref="FlightSearch.Board"/>.</summary>
+    /// <exception cref="IOException">The database could not be read.</exception>
+    public List<FlightRow> LoadBoard(string region, string text, DateTime day, DateTime? now = null)
+        => FlightSearch.Board(_store, region, text, day, now);
 
     /// <summary>Re-works the live status of already loaded rows for a new moment, without touching the database.</summary>
     /// <summary>Whether the board's flight can still be booked for <paramref name="date"/> (same day included, until the cutoff).</summary>
