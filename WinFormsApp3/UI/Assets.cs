@@ -40,6 +40,10 @@ internal static class Assets
         "southeast_asia" => new PointF(0.5f, 0.55f),  // the floating villages
         "europe" => new PointF(0.5f, 0.5f),           // the dome and the rooftops
         "north_america" => new PointF(0.5f, 0.52f),   // the skyline
+        "economy" => new PointF(0.5f, 0.45f),         // the seat backs and screens
+        "premium_economy" => new PointF(0.5f, 0.5f),  // the seats and windows
+        "business" => new PointF(0.5f, 0.55f),        // the seat and its pillow
+        "first_class" => new PointF(0.5f, 0.5f),      // the seat and its suite
         _ => new PointF(0.5f, 0.5f)
     };
 

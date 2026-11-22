@@ -515,12 +515,13 @@ public sealed class BookingWizardForm : GlassForm
     {
         var page = NewPage();
         // Padded so the cards line up with the white card below (which draws its border a few pixels inside its bounds).
-        var cards = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(134), ColumnCount = 4, RowCount = 1, Padding = new Padding(D(8), 0, D(8), 0) };
+        var cards = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(216), ColumnCount = 4, RowCount = 1, Padding = new Padding(D(8), 0, D(8), 0) };
         for (int i = 0; i < 4; i++)
         {
             cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
             var card = new ChoiceCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, i < 3 ? D(14) : 0, D(14)) };
             card.Title = AppData.ClassNames[i];
+            card.PhotoKey = ChoiceCard.PhotoKeyFor(AppData.ClassNames[i]);
             card.Detail = ClassDetails[i];
             card.AccessibleName = $"{AppData.ClassNames[i]} class";
             string className = AppData.ClassNames[i];
