@@ -1,3 +1,5 @@
+using SkyWings.Controllers;
+
 namespace SkyWings.Tests;
 
 /// <summary>Renders each wizard step to a PNG so the look can be compared with the Figma by eye (see the folder name below).</summary>
@@ -16,6 +18,15 @@ public sealed class WizardSnapshotTests
         for (int step = 0; step <= 5; step++)
         {
             if (step == 3) wizard.Call("PrepareSeatStep");
+            if (step == 5)
+            {
+                // A finished booking, so the receipt page shows real details.
+                Assert.AreEqual(SeatHoldOutcome.Held, wizard.Controller.HoldSeats(new[] { SeatLayout.Code("Economy", 1, 'A') }, Array.Empty<string>()).Outcome);
+                SubmitResult submit = wizard.Controller.SubmitBooking("Credit Card", "4111111111111111");
+                Assert.IsTrue(submit.Succeeded);
+                typeof(BookingWizardForm).GetMethod("BuildReceipt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(wizard.Form, new object[] { submit.Booking! });
+            }
             wizard.GoTo(step);
             using Bitmap bmp = wizard.Snapshot();
             var colours = new HashSet<int>();

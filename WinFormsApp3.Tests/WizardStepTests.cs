@@ -324,4 +324,30 @@ public sealed class WizardStepTests
             Assert.IsNotNull(All(wizard.Field<FieldRow>(name)).OfType<RoundedInput>().SingleOrDefault(), name + " is a rounded field");
         Assert.IsTrue(wizard.Field<TextBox>("_account").UseSystemPasswordChar, "card digits are not readable over a shoulder");
     });
+
+    // ------------------------------------------------------------------ step 6: receipt
+
+    [TestMethod]
+    public void Receipt_ShowsTheRealTotalInABand_OnADeepGreenHeader() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.AddTraveller();
+        wizard.Call("PrepareSeatStep");
+        Assert.AreEqual(SeatHoldOutcome.Held, wizard.Controller.HoldSeats(new[] { SeatLayout.Code("Economy", 1, 'A') }, Array.Empty<string>()).Outcome);
+        SubmitResult submit = wizard.Controller.SubmitBooking("Credit Card", "4111111111111111");
+        Assert.IsTrue(submit.Succeeded);
+        typeof(BookingWizardForm).GetMethod("BuildReceipt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(wizard.Form, new object[] { submit.Booking! });
+        wizard.GoTo(5);
+
+        var receipt = wizard.Field<ReceiptPanel>("_receipt");
+        Assert.AreEqual($"PHP {submit.Booking!.TotalAmount:N2}", receipt.TotalPaid, "the total comes from the stored booking");
+        Assert.AreEqual(Theme.Brand.ToArgb(), receipt.BandColor.ToArgb());
+        var rows = wizard.Field<List<(string Label, string Value)>>("_receiptRows");
+        Assert.IsFalse(rows.Any(r => r.Label == "Total paid"), "the total is in the band, not in the grid");
+        Assert.IsTrue(rows.Any(r => r.Label == "Payment"));
+        Assert.IsTrue(wizard.Field<GlassButton>("_print").Visible);
+        Assert.IsTrue(wizard.Form.ClientRectangle.Contains(wizard.InForm(wizard.Field<GlassButton>("_next"))));
+        Assert.IsFalse(wizard.Field<Panel[]>("_pages")[5].VerticalScroll.Visible, "a one-traveller receipt fits the page at the default window size");
+    });
 }

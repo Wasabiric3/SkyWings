@@ -27,7 +27,7 @@ public sealed class BookingWizardForm : GlassForm
         "Your booking is confirmed. Keep the receipt for your records."
     };
     /// <summary>Steps whose page already draws its own section cards; every other step still sits on one white card. Grows as the steps are restyled.</summary>
-    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions, StepSeats, StepPayment };
+    private static readonly HashSet<int> OwnCards = new() { StepFlight, StepPassengers, StepOptions, StepSeats, StepPayment, StepReceipt };
     private static readonly string[] ClassDetails =
     {
         "Bags & meals extra", "1 bag · meal", "2 bags · meal", "3 bags · dining"
@@ -103,7 +103,7 @@ public sealed class BookingWizardForm : GlassForm
     private FieldRow _methodRow = null!, _accountRow = null!;
 
     // step 6: receipt
-    private readonly ReceiptPanel _receipt = new() { Dock = DockStyle.Top };
+    private readonly ReceiptPanel _receipt = new() { Dock = DockStyle.Top, BandColor = Theme.Brand };
     private List<(string Label, string Value)> _receiptRows = new();
     private BookingRecord? _receiptBooking;   // the stored booking the receipt page and the printout are built from
     private readonly Label _emailStatus = new() { AutoSize = false, Height = 0, Dock = DockStyle.Top, Font = Theme.Small };
@@ -900,6 +900,7 @@ public sealed class BookingWizardForm : GlassForm
         _emailStatus.Text = note;
         _emailStatus.ForeColor = Theme.TextSecondary;
         _emailStatus.Height = Gfx.S(this, 40);
+        _pages[StepReceipt].AutoScrollMinSize = new Size(0, _receipt.Height + _emailStatus.Height);
     }
 
     // ------------------------------------------------------------------ step 6: receipt
@@ -931,12 +932,12 @@ public sealed class BookingWizardForm : GlassForm
         }
         rows.Add(("Baggage", booking.BaggageOption));
         rows.Add(("Meal", booking.MealOption));
-        rows.Add(("Total paid", $"PHP {booking.TotalAmount:N2}"));
         rows.Add(("Payment", $"{booking.PaymentMethod} {booking.MaskedAccount}"));
         _receiptRows = rows;
-        _receipt.Height = D(100) + ((rows.Count + 1) / 2) * D(58);
-        _receipt.SetReceipt(booking.Reference, rows);
-        _pages[StepReceipt].AutoScrollMinSize = new Size(0, _receipt.Height + D(52));   // room for the email note above
+        // The total is shown in its own band under the details, so the card is a little taller than the rows need.
+        _receipt.Height = D(100) + ((rows.Count + 1) / 2) * D(58) + D(84);
+        _receipt.SetReceipt(booking.Reference, rows, $"PHP {booking.TotalAmount:N2}");
+        _pages[StepReceipt].AutoScrollMinSize = new Size(0, _receipt.Height + _emailStatus.Height);   // room for the email note above, once it has arrived
     }
 
     private void PrintReceipt()

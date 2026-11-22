@@ -4,6 +4,8 @@ An airline booking desk for Philippine staff, built with Windows Forms on .NET 1
 
 Staff sign in with their own accounts, then can search flights, run the six-step booking wizard (flight, passengers, class and extras, seats, payment, receipt), manage bookings, check passengers in, and use the admin console (flights, staff, audit log, reports, encrypted backup and restore).
 
+The booking wizard follows the Figma design: the six steps are pills at the top (a step already visited can be clicked to go back), a trip summary with the running total stays at the right, and the footer has Back (on the first step it closes the wizard) and the main action. Fields are rounded and dates open a month calendar. The same look is being rolled out to the other screens one at a time.
+
 ## Requirements
 
 - Windows
