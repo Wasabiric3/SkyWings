@@ -154,7 +154,7 @@ public sealed class HelpForm : GlassForm
     private readonly Panel _host = new() { Dock = DockStyle.Fill };
 
     private readonly TextBox _search = new() { PlaceholderText = "Search help" };
-    private readonly ListBox _topics = new() { BorderStyle = BorderStyle.None, IntegralHeight = false };
+    private readonly ListBox _topics = new() { BorderStyle = BorderStyle.None, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed };
     private readonly RichTextBox _answer = new() { ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Color.White, DetectUrls = false };
 
     private readonly IReadOnlyList<HelpTopic> _allTopics = HelpContent.Topics();
@@ -215,20 +215,36 @@ public sealed class HelpForm : GlassForm
 
     private Panel BuildFaqPage()
     {
-        _search.Dock = DockStyle.Top;
+        var searchRow = new FieldRow("SEARCH", _search) { Dock = DockStyle.Top };
         _topics.Dock = DockStyle.Fill;
         _topics.Font = Theme.Body;
+        _topics.ItemHeight = D(34);
+        _topics.DrawItem += DrawTopic;
         _answer.Dock = DockStyle.Fill;
         _answer.Font = Theme.Body;
 
         var left = new Panel { Dock = DockStyle.Left, Width = D(260), Padding = new Padding(0, 0, D(12), 0) };
         left.Controls.Add(_topics);
-        left.Controls.Add(_search);
+        left.Controls.Add(searchRow);
 
         var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 12 };
         card.Controls.Add(_answer);
         card.Controls.Add(left);
         return Wrap(card);
+    }
+
+    /// <summary>A topic row: the soft green with deep-green bold text when selected, plain text otherwise (the native list would use system blue).</summary>
+    private static readonly Font SelectedTopicFont = new(Theme.Body, FontStyle.Bold);   // shared: a Font per drawn row would leak GDI handles
+
+    private void DrawTopic(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= _topics.Items.Count) return;
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        using (var back = new SolidBrush(selected ? Theme.BrandSoft : Color.White)) e.Graphics.FillRectangle(back, e.Bounds);
+        string text = (_topics.Items[e.Index] as HelpTopic)?.Title ?? "";
+        var bounds = new Rectangle(e.Bounds.X + D(10), e.Bounds.Y, e.Bounds.Width - D(14), e.Bounds.Height);
+        TextRenderer.DrawText(e.Graphics, text, selected ? SelectedTopicFont : Theme.Body, bounds, selected ? Theme.Brand : Theme.TextPrimary,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 
     private void FilterTopics()
