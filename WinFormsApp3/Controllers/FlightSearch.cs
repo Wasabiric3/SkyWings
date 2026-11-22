@@ -22,6 +22,9 @@ public sealed record FlightRow(string FlightNo, string Route, string Departs, st
     public string DestinationText => Flight.Destination;
     public string ScheduledText => Status.Scheduled.ToString("h:mm tt");
     public string EstimatedText => Status.Estimated.ToString("h:mm tt");
+
+    /// <summary>The scheduled departure, with the estimate after an arrow when the flight is late ("6:00 AM → 6:25 AM").</summary>
+    public string DepartsText => Status.DelayMinutes > 0 ? $"{ScheduledText} → {EstimatedText}" : ScheduledText;
     public string GateText => Status.Gate.Length > 0 ? Status.Gate : "—";
     public string StatusText => Status.Label;
     public string CountdownText => Status.Countdown;

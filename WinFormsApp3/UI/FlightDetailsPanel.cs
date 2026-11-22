@@ -14,6 +14,8 @@ public sealed class FlightDetailsPanel : GlassCard
     private static readonly Font BoldFont = new(Theme.Body, FontStyle.Bold);
     private static readonly Font SmallBold = new(Theme.Small, FontStyle.Bold);
     private static readonly Font CapsFont = new(Theme.Small, FontStyle.Bold);
+    private static readonly Font TimelineFont = new("Segoe UI", 8.25f, FontStyle.Regular);   // the timeline labels sit side by side: a little smaller
+    private static readonly Font TimelineBold = new("Segoe UI", 8.25f, FontStyle.Bold);
 
     private const TextFormatFlags Line = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
@@ -209,7 +211,8 @@ public sealed class FlightDetailsPanel : GlassCard
         int numberWidth = Math.Max(S(40), rc.Width - _pill.Width - S(8));
         TextRenderer.DrawText(g, d.Flight.FlightNo, NumberFont, new Rectangle(rc.Left, b.Header, numberWidth, S(32)), Theme.Brand, Line);
         TextRenderer.DrawText(g, $"{d.Flight.Origin} → {d.Flight.Destination}", Theme.Body, new Rectangle(rc.Left, b.Header + S(34), rc.Width, S(22)), Theme.TextPrimary, Line);
-        string countdown = d.Status.Countdown;
+        string gate = d.Status.Gate.Length > 0 ? $"Gate {d.Status.Gate} · " : "";
+        string countdown = gate + d.Status.Countdown;
         TextRenderer.DrawText(g, countdown, Theme.Small, new Rectangle(rc.Left, b.Header + S(56), rc.Width, S(20)), Theme.TextSecondary, Line);
         if (d.DelayText.Length > 0)
         {
@@ -231,7 +234,7 @@ public sealed class FlightDetailsPanel : GlassCard
     {
         int count = d.Timeline.Count;
         if (count < 2) return;
-        int inset = S(14), radius = S(6);
+        int inset = S(30), radius = S(6);   // half a label, so the first and last labels stay inside the card
         float step = (rc.Width - 2 * inset) / (float)(count - 1);
         int lineY = top + S(8);
         for (int i = 0; i < count - 1; i++)
@@ -262,7 +265,7 @@ public sealed class FlightDetailsPanel : GlassCard
             int left = Math.Clamp((int)cx - width / 2, rc.Left, Math.Max(rc.Left, rc.Right - width));   // the end labels stay inside the card
             string label = stage.Label == "Check-in open" ? "Check-in" : stage.Label;
             Color ink = stage.State == StageState.Upcoming ? Theme.TextSecondary : Theme.TextPrimary;
-            TextRenderer.DrawText(g, label, stage.State == StageState.Current ? SmallBold : Theme.Small, new Rectangle(left, top + S(20), width, S(18)), ink,
+            TextRenderer.DrawText(g, label, stage.State == StageState.Current ? TimelineBold : TimelineFont, new Rectangle(left, top + S(20), width, S(18)), ink,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(g, stage.Time.Replace(", ", "\n"), Theme.Small, new Rectangle(left, top + S(38), width, S(34)), Theme.TextSecondary,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);

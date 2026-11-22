@@ -38,7 +38,30 @@ internal sealed class FormHarness : IDisposable
         return booking;
     }
 
+    /// <summary>Books every seat of one cabin of a flight on a day (several bookings: one holds at most 9 travellers), so the cabin shows as sold out.</summary>
+    public void SellOut(string flightNo, DateTime day, string className)
+    {
+        CabinLayout cabin = Store.LoadAircraft(flightNo).Cabin(className)!;
+        var people = new List<PassengerRecord>();
+        for (int row = 1; row <= cabin.Rows; row++)
+            foreach (char letter in cabin.Letters)
+            {
+                string name = $"Guest {row}{letter}";
+                people.Add(new PassengerRecord(name, "1 Test St", "09171234567", 30, "1995-01-01", "P" + people.Count.ToString("D7"), false, false,
+                    new SeatAssignment(name, cabin.Code(row, letter)), Array.Empty<string>(), 1000m));
+            }
+        int n = 0;
+        foreach (PassengerRecord[] group in people.Chunk(9))
+        {
+            string reference = $"SKY-FULL{++n:D5}";
+            var booking = new BookingRecord(reference, DateTime.Now, flightNo, "Manila (MNL)", "Cebu (CEB)", day, false, className, "Credit Card", "**** 4521",
+                1000m * group.Length, "Scheduled", group, AppData.StatusConfirmed, "PAID", "TXN-" + reference, DateTime.Now, 0m);
+            Store.SaveConfirmedBooking(booking, false, booking.TotalAmount, "Credit Card", "**** 4521", "TXN-" + reference, DateTime.Now);
+        }
+    }
+
     /// <summary>One entry per form that can be created from the store alone.</summary>
+
     public IEnumerable<(string Name, Func<Form> Create)> Forms()
     {
         Flight flight = AppData.DomesticFlights[0];
