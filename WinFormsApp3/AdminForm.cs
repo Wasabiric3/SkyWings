@@ -635,13 +635,10 @@ public sealed class AdminForm : GlassForm
         _refundCount.Margin = new Padding(D(4), D(12), 0, 0);
 
         GlassButton logRequest = ToolButton("Log request", (_, _) => LogRefundRequest(), GlassButtonStyle.Secondary);
-        GlassButton approve = ToolButton("Approve", (_, _) => ApproveSelectedRequest(), GlassButtonStyle.Primary);
-        GlassButton decline = ToolButton("Decline", (_, _) => DeclineSelectedRequest(), GlassButtonStyle.Danger);
 
         actions.Controls.Add(_refundView);
         actions.Controls.Add(logRequest);
-        actions.Controls.Add(approve);
-        actions.Controls.Add(decline);
+        // Approve and Decline live in the request dialog, next to the customer's note.
         actions.Controls.Add(ToolButton("Details", (_, _) => ShowRefundBooking()));
         actions.Controls.Add(ToolButton("Refresh", async (_, _) => await RefreshRefundsViewAsync(), GlassButtonStyle.Ghost));
         actions.Controls.Add(ToolButton("Export CSV", (_, _) => ExportRefundsView(), GlassButtonStyle.Secondary));
@@ -654,7 +651,7 @@ public sealed class AdminForm : GlassForm
         view.Controls.Add(_refundShowAll);
         view.Controls.Add(_requestShowClosed);
         _refundOnlyControls.AddRange(new Control[] { _refundSort, _refundHandled, _refundSearch, _refundShowAll });
-        _requestOnlyControls.AddRange(new Control[] { logRequest, approve, decline, _requestShowClosed });
+        _requestOnlyControls.AddRange(new Control[] { logRequest, _requestShowClosed });
 
         GridStyle.Apply(_refunds);
         _refunds.DefaultCellStyle.Font = Theme.Small;
@@ -801,56 +798,42 @@ public sealed class AdminForm : GlassForm
         if (ShowingRequests) LoadRequests(); else RefreshRequestBadge();
     }
 
-    private RefundRequestRow? SelectedOpenRequest()
+    /// <summary>
+    /// Approves the request the dialog showed: asks once more (this cancels the booking, refunds the customer and cannot be undone),
+    /// then cancels, refunds and emails the customer. False when the staff member backed out, so the dialog can come back.
+    /// </summary>
+    private bool ApproveRequest(RefundRequestRow request, BookingRecord booking)
     {
-        if (_requests.CurrentRow?.DataBoundItem is not RequestRow row) { ShowInfo("Select a request first."); return null; }
-        RefundRequestRow? request = _requestRows.FirstOrDefault(r => r.Reference == row.Reference && r.Status == BookingStore.RequestOpen);
-        if (request is null) ShowInfo("That request is already closed.");
-        return request;
-    }
-
-    /// <summary>Shows the request and what the refund would be, then (after a yes) cancels the booking, refunds it and emails the customer.</summary>
-    private void ApproveSelectedRequest()
-    {
-        if (SelectedOpenRequest() is not { } request) return;
-        BookingRecord? booking = null;
-        if (!Try("Unable to load the booking", () => booking = _service.FindBooking(request.Reference))) return;
-        if (booking is null) { ShowInfo("The booking is no longer available."); LoadRequests(); return; }
-        if (booking.Status != AppData.StatusConfirmed) { ShowInfo("This booking is no longer confirmed, so there is nothing to refund. The list has been refreshed."); LoadRequests(); return; }
+        if (booking.Status != AppData.StatusConfirmed) { ShowInfo("This booking is no longer confirmed, so there is nothing to refund. The list has been refreshed."); LoadRequests(); return true; }
 
         decimal refund = AppData.ComputeRefundAmount(booking.TotalAmount, booking.FlightDateValue);
-        string message = string.IsNullOrWhiteSpace(request.CustomerMessage) ? "(no message was recorded)" : request.CustomerMessage;
-        string warning = request.Source == "EMAIL" && !request.SenderMatches
-            ? "WARNING: this request came from an email address that is not the one on the booking. Check it before approving.\n\n" : "";
-        string question = warning + $"Approve the refund for {booking.Reference}?\n\n" +
-                          $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:MMM d, yyyy}\n" +
-                          $"Total paid: PHP {booking.TotalAmount:N2}\n" +
-                          $"Refund ({AppData.RefundRate(booking.FlightDateValue):P0}): PHP {refund:N2} to {booking.PaymentMethod} {booking.MaskedAccount}\n\n" +
-                          $"Customer's message:\n{message}\n\n" +
-                          "This cancels the booking, frees the seats, refunds the original payment method and emails the customer that the refund is approved.";
-        if (MessageBox.Show(this, question, "Approve refund", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        string question = $"Approve the refund for {booking.Reference}?\n\n" +
+                          $"PHP {refund:N2} goes back to {booking.PaymentMethod} {booking.MaskedAccount}.\n" +
+                          "The booking is cancelled, the seats are freed and the customer is emailed that the refund is approved.";
+        if (MessageBox.Show(this, question, "Approve refund", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return false;
 
         RefundApprovalResult? result = null;
-        if (!Try("Unable to approve the refund", () => result = _service.ApproveRefundRequest(request.Id, request.Reference))) return;
+        if (!Try("Unable to approve the refund", () => result = _service.ApproveRefundRequest(request.Id, request.Reference))) return true;
         MessageBox.Show(this, result!.Ok ? $"{result.Message}\nRefund reference: {result.RefundReference}" : result.Message, "Approve refund",
             MessageBoxButtons.OK, result.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         LoadRequests();
+        return true;
     }
 
-    /// <summary>Closes the request without cancelling the booking; by default the customer is emailed the reason.</summary>
-    private void DeclineSelectedRequest()
+    /// <summary>Closes the request without cancelling the booking; by default the customer is emailed the reason. False when the staff member backed out.</summary>
+    private bool DeclineRequest(RefundRequestRow request)
     {
-        if (SelectedOpenRequest() is not { } request) return;
         using var prompt = new PromptForm("Decline request",
             $"The booking {request.Reference} stays active and nothing is refunded. Say why, for the record.",
             "REASON", "e.g. Flight is within the no-refund window", 200, "Decline",
             text => text.Length == 0 ? "Please give a short reason." : null,
             "Email this reason to the customer", true);
-        if (prompt.ShowDialog(this) != DialogResult.OK) return;
+        if (prompt.ShowDialog(this) != DialogResult.OK) return false;
         bool done = false;
-        if (!Try("Unable to decline the request", () => done = _service.DismissRefundRequest(request.Id, request.Reference, prompt.Value, prompt.OptionChecked))) return;
+        if (!Try("Unable to decline the request", () => done = _service.DismissRefundRequest(request.Id, request.Reference, prompt.Value, prompt.OptionChecked))) return true;
         if (!done) ShowInfo("That request was already closed. The list has been refreshed.");
         LoadRequests();
+        return true;
     }
     private void ExportRefundsView()
     {
@@ -893,13 +876,25 @@ public sealed class AdminForm : GlassForm
             ? (_requests.CurrentRow?.DataBoundItem as RequestRow)?.Reference
             : (_refunds.CurrentRow?.DataBoundItem as RefundRow)?.Reference;
         if (reference is null) { ShowInfo("Select a booking first."); return; }
-        BookingRecord? booking = null;
-        if (!Try("Unable to load the booking", () => booking = _service.FindBooking(reference))) return;
-        if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
-        TripStatusInfo? trip = null;
-        if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatus(booking, DateTime.Now))) return;
-        using var details = new BookingDetailForm(booking, trip!);
-        details.ShowDialog(this);
+        // In the requests view the dialog also carries the request: its note and, while open, Approve and Decline.
+        RequestRow? selected = ShowingRequests ? _requests.CurrentRow?.DataBoundItem as RequestRow : null;
+        RefundRequestRow? request = selected is null ? null
+            : _requestRows.FirstOrDefault(r => r.Reference == reference && RequestStatusText(r.Status) == selected.Status
+                && r.LoggedAt.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) == selected.Logged);
+        while (true)
+        {
+            BookingRecord? booking = null;
+            if (!Try("Unable to load the booking", () => booking = _service.FindBooking(reference))) return;
+            if (booking is null) { ShowInfo("The selected booking is no longer available."); return; }
+            TripStatusInfo? trip = null;
+            if (!Try("Unable to load the booking", () => trip = _service.LoadTripStatus(booking, DateTime.Now))) return;
+            DialogResult choice;
+            using (var details = new BookingDetailForm(booking, trip!, request)) choice = details.ShowDialog(this);
+            if (request is null || choice is not (DialogResult.Yes or DialogResult.No)) return;
+            // Backing out of the confirmation or the reason prompt brings the request back up instead of losing it.
+            bool acted = choice == DialogResult.Yes ? ApproveRequest(request, booking) : DeclineRequest(request);
+            if (acted) return;
+        }
     }
 
     private void ExportRefunds()

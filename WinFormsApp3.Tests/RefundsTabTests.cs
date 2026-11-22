@@ -80,7 +80,7 @@ public sealed class RefundsTabTests
                 Assert.IsFalse(refunds.Visible);
                 Assert.IsTrue(requests.Visible);
                 Assert.AreEqual(1, requests.Rows.Count, "the open request");
-                AssertToolbarFits(form, requests, "Log request", "Approve", "Decline", "Details", "Refresh", "Export CSV");
+                AssertToolbarFits(form, requests, "Log request", "Details", "Refresh", "Export CSV");
 
                 // Cancelling the booking answers the request; the count goes away after a refresh.
                 Assert.IsTrue(store.CancelBooking("SKY-TAB000000002", 3200m, "agent1"));
@@ -95,6 +95,44 @@ public sealed class RefundsTabTests
                 if (File.Exists(path)) File.Delete(path);
             }
         });
+
+    [TestMethod]
+    public void RequestDialog_ShowsTheCustomersNote_AndOnlyOffersApproveAndDeclineWhileOpen()
+        => OnStaThread(() =>
+        {
+            var person = new PassengerRecord("Ana Example", "1 St", "09171234567", 35, "1991-01-01", "P1234567A", false, false,
+                new SeatAssignment("Ana Example", "ECO1A"), Array.Empty<string>(), 4000m);
+            var booking = new BookingRecord("SKY-DLG000000001", DateTime.Now, "PR-101", "Manila (MNL)", "Cebu (CEB)", new DateTime(2030, 3, 5), true,
+                "Economy", "Credit Card", "**** 4521", 4000m, "Scheduled", new[] { person }, AppData.StatusConfirmed, "PAID", "TXN-DLG", DateTime.Now, 0m);
+            var trip = new SkyWings.Controllers.TripStatusInfo(SkyWings.Controllers.TripPhase.Upcoming, "Upcoming", false, null, "Cebu (CEB)");
+            RefundRequestRow Request(string status) => new(1, booking.Reference, "PR-101", "Manila (MNL) → Cebu (CEB)", booking.FlightDateValue, 4000m,
+                3200m, status, "mailbox", DateTime.Now, null, "", "", "Please cancel, my plans changed.", "EMAIL", false);
+
+            using (var open = new BookingDetailForm(booking, trip, Request(BookingStore.RequestOpen)))
+            {
+                open.CreateControl();
+                var texts = AllControls(open).OfType<GlassButton>().Select(b => b.Text).ToList();
+                CollectionAssert.Contains(texts, "Approve refund");
+                CollectionAssert.Contains(texts, "Decline");
+                Assert.IsTrue(AllControls(open).OfType<TextBox>().Any(t => t.Text == "Please cancel, my plans changed."), "the customer's note is shown");
+                Assert.IsTrue(AllControls(open).OfType<Label>().Any(l => l.Text.Contains("not the one on the booking")), "a different sender is flagged");
+            }
+
+            using var closed = new BookingDetailForm(booking, trip, Request(BookingStore.RequestDismissed));
+            closed.CreateControl();
+            var closedTexts = AllControls(closed).OfType<GlassButton>().Select(b => b.Text).ToList();
+            CollectionAssert.DoesNotContain(closedTexts, "Approve refund");
+            CollectionAssert.DoesNotContain(closedTexts, "Decline");
+        });
+
+    private static IEnumerable<Control> AllControls(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            yield return child;
+            foreach (Control nested in AllControls(child)) yield return nested;
+        }
+    }
 
     private static void AssertToolbarFits(AdminForm form, DataGridView grid, params string[] buttons)
     {

@@ -40,7 +40,8 @@ internal static class HelpContent
             "When a customer asks for a refund (the receipt and boarding pass emails have a \"Request cancellation / refund\" button that writes to the SkyWings address), " +
             "SkyWings reads that mailbox about once a minute and adds the request to the Refunds tab (Refund requests view) with the customer's message; press Refresh there to check right away. " +
             "It warns you when the email came from an address that is not the one on the booking. You can also log a request by hand with \"Log refund request\" in Manage booking, or \"Log request\" in the Refunds tab. A request only writes the request down: the booking stays active, and the tab button shows how many requests are waiting. " +
-            "Choose Approve to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left."),
+            "Double-click a request (or press Details) to open it: you see the booking, the customer's note and the refund it would give, and answer it right there. " +
+            "Choose Approve refund to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left."),
 
         new("Waitlist for a sold-out flight",
             "When a cabin is sold out, select the flight on the home screen and choose \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
