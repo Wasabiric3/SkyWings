@@ -41,7 +41,7 @@ public sealed class OtherTabsSortingTests
 
         public Desk()
         {
-            Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true }.ConnectionString);
+            Store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true, Pooling = false }.ConnectionString);
             Store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
             Service = new AdminService(Store, new StaffSession(1, "admin", "Admin", StaffRole.SuperAdmin, false));
         }
@@ -71,7 +71,6 @@ public sealed class OtherTabsSortingTests
 
         public void Dispose()
         {
-            SqliteConnection.ClearAllPools();
             try { if (File.Exists(_path)) File.Delete(_path); } catch (IOException) { /* a temp file */ }
         }
     }

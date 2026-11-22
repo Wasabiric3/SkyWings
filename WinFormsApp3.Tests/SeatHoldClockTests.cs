@@ -16,14 +16,13 @@ public sealed class SeatHoldClockTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-hold-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, 180, 220);
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

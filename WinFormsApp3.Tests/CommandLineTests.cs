@@ -15,14 +15,13 @@ public sealed class CommandLineTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-cmdline-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedDefaultFlights();
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -70,7 +69,7 @@ public sealed class CommandLineTests
         string db = Path.Combine(Path.GetTempPath(), $"skywings-cmdline-fresh-{Guid.NewGuid():N}.db");
         try
         {
-            var fresh = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true }.ConnectionString);
+            var fresh = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true, Pooling = false }.ConnectionString);
 
             string? message = CommandLine.Run(new[] { CommandLine.ResetSimulation }, fresh, Now);
 
@@ -79,7 +78,6 @@ public sealed class CommandLineTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (File.Exists(db)) File.Delete(db);
         }
     }
@@ -88,7 +86,7 @@ public sealed class CommandLineTests
     public void BookingsHaveAnIndexOnFlightDate()
     {
         // The staff Bookings tab reads one flight date at a time; without this every load scans the whole table.
-        using var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath }.ConnectionString);
+        using var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath, Pooling = false }.ConnectionString);
         con.Open();
         using var cmd = con.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM pragma_index_list('bookings') l JOIN pragma_index_info(l.name) i " +

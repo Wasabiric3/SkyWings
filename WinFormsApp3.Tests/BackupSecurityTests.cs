@@ -50,7 +50,7 @@ public sealed class BackupSecurityTests
         Directory.CreateDirectory(_folder);
         _livePath = Path.Combine(_folder, "live.db");
         _safetyFolder = Path.Combine(_folder, "safety");
-        _liveConnection = new SqliteConnectionStringBuilder { DataSource = _livePath, ForeignKeys = true }.ConnectionString;
+        _liveConnection = new SqliteConnectionStringBuilder { DataSource = _livePath, ForeignKeys = true, Pooling = false }.ConnectionString;
         _live = new BookingStore(_liveConnection);
         _live.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, 180, 220);
     }
@@ -58,7 +58,6 @@ public sealed class BackupSecurityTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         try { Directory.Delete(_folder, recursive: true); } catch (IOException) { }
     }
 
@@ -155,7 +154,7 @@ public sealed class BackupSecurityTests
     {
         // The "attacker" builds their own database with an administrator they control, and makes a valid backup of it.
         string evilPath = Path.Combine(_folder, "evil.db");
-        string evilConnection = new SqliteConnectionStringBuilder { DataSource = evilPath }.ConnectionString;
+        string evilConnection = new SqliteConnectionStringBuilder { DataSource = evilPath, Pooling = false }.ConnectionString;
         var evil = new BookingStore(evilConnection);
         evil.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, 180, 220);
         evil.CreateStaff("evil.admin", "Evil Admin", "attackers own password", StaffRole.Admin, false);

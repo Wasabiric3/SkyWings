@@ -48,7 +48,7 @@ public sealed class RefundsTabTests
             string path = Path.Combine(Path.GetTempPath(), $"skywings-refundstab-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString);
                 store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
                     AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
                 Book(store, "SKY-TAB000000001");
@@ -91,7 +91,6 @@ public sealed class RefundsTabTests
             }
             finally
             {
-                SqliteConnection.ClearAllPools();
                 if (File.Exists(path)) File.Delete(path);
             }
         });
@@ -159,14 +158,14 @@ public sealed class RefundsTabTests
             string path = Path.Combine(Path.GetTempPath(), $"skywings-refundview-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString);
                 store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
                     AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
                 Book(store, "SKY-VIEW00000001");
                 Book(store, "SKY-VIEW00000002");
                 Assert.IsTrue(store.CancelBooking("SKY-VIEW00000001", 1000m, "agent1"));
                 Assert.IsTrue(store.CancelBooking("SKY-VIEW00000002", 2000m, "agent1"));
-                using (var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ConnectionString))
+                using (var con = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ConnectionString))
                 {
                     con.Open();
                     using var cmd = con.CreateCommand();
@@ -219,7 +218,6 @@ public sealed class RefundsTabTests
             }
             finally
             {
-                SqliteConnection.ClearAllPools();
                 if (File.Exists(path)) File.Delete(path);
             }
         });

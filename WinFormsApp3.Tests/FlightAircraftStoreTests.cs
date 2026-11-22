@@ -14,13 +14,12 @@ public sealed class FlightAircraftStoreTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-ac-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -135,13 +134,12 @@ public sealed class SeedDefaultFlightsTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-sdf-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

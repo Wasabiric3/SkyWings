@@ -15,14 +15,13 @@ public sealed class SimulatedCheckInStoreTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-simcheckin-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedDefaultFlights();
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

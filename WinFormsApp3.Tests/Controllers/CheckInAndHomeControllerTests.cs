@@ -18,7 +18,7 @@ public sealed class CheckInControllerTests
     {
         LookupGuard.Reset();
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-chk-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -39,7 +39,6 @@ public sealed class CheckInControllerTests
     public void Cleanup()
     {
         LookupGuard.Reset();
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -211,7 +210,7 @@ public sealed class HomeControllerTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-home-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _controller = new HomeController(_store, new StaffSession(1, "agent1", "Ana Reyes", StaffRole.Agent, false));
     }
@@ -219,7 +218,6 @@ public sealed class HomeControllerTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

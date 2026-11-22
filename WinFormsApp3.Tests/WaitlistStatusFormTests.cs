@@ -34,7 +34,7 @@ public sealed class WaitlistStatusFormTests
             string db = Path.Combine(Path.GetTempPath(), $"skywings-wlstatus-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true, Pooling = false }.ConnectionString);
                 using var form = new WaitlistStatusForm(store)
                 {
                     StartPosition = FormStartPosition.Manual, Location = new Point(-4000, 0), ShowInTaskbar = false
@@ -52,6 +52,6 @@ public sealed class WaitlistStatusFormTests
                     Assert.IsTrue(form.ClientRectangle.Contains(area), $"'{b.Text}' is inside the window");
                 }
             }
-            finally { SqliteConnection.ClearAllPools(); if (File.Exists(db)) File.Delete(db); }
+            finally { if (File.Exists(db)) File.Delete(db); }
         });
 }

@@ -15,7 +15,7 @@ public sealed class BookingWizardControllerTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-ctl-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _controller = new BookingWizardController(_store);
     }
@@ -23,7 +23,6 @@ public sealed class BookingWizardControllerTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

@@ -14,14 +14,13 @@ public sealed class RecentBookingsStoreTests
     public void Setup()
     {
         _path = Path.Combine(Path.GetTempPath(), $"skywings-recent-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _path, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights, AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
     }
 
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_path)) File.Delete(_path);
     }
 

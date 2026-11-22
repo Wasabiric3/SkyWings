@@ -16,7 +16,7 @@ public sealed class SimulationBudgetAndWaitlistTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-simbudget-{Guid.NewGuid():N}.db");
-        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString);
+        _store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString);
         _store.SeedDefaultFlights();
         _sim = new SimulationService(_store);   // the real defaults: a 500-booking day
     }
@@ -24,7 +24,6 @@ public sealed class SimulationBudgetAndWaitlistTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 
@@ -91,13 +90,13 @@ public sealed class SimulationBudgetAndWaitlistTests
         string dbPath2 = Path.Combine(Path.GetTempPath(), $"skywings-simbudget2-{Guid.NewGuid():N}.db");
         try
         {
-            var other = new BookingStore(new SqliteConnectionStringBuilder { DataSource = dbPath2, ForeignKeys = true }.ConnectionString);
+            var other = new BookingStore(new SqliteConnectionStringBuilder { DataSource = dbPath2, ForeignKeys = true, Pooling = false }.ConnectionString);
             other.SeedDefaultFlights();
             new SimulationService(other).EnsureLoad(Now, horizonDays: 2);
 
             CollectionAssert.AreEquivalent(_store.LoadSimulatedFlightDates().ToArray(), other.LoadSimulatedFlightDates().ToArray());
         }
-        finally { SqliteConnection.ClearAllPools(); if (File.Exists(dbPath2)) File.Delete(dbPath2); }
+        finally { if (File.Exists(dbPath2)) File.Delete(dbPath2); }
     }
 
     [TestMethod]
@@ -306,7 +305,7 @@ public sealed class SimulationBudgetAndWaitlistTests
         string oldPath = Path.Combine(Path.GetTempPath(), $"skywings-oldwl-{Guid.NewGuid():N}.db");
         try
         {
-            string connection = new SqliteConnectionStringBuilder { DataSource = oldPath, ForeignKeys = true }.ConnectionString;
+            string connection = new SqliteConnectionStringBuilder { DataSource = oldPath, ForeignKeys = true, Pooling = false }.ConnectionString;
             using (var con = new SqliteConnection(connection))
             {
                 con.Open();
@@ -324,6 +323,6 @@ public sealed class SimulationBudgetAndWaitlistTests
             Assert.IsNotNull(old);
             Assert.IsFalse(old.IsSimulated, "existing rows are real");
         }
-        finally { SqliteConnection.ClearAllPools(); if (File.Exists(oldPath)) File.Delete(oldPath); }
+        finally { if (File.Exists(oldPath)) File.Delete(oldPath); }
     }
 }

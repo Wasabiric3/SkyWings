@@ -54,7 +54,7 @@ public sealed class RefundMailTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-refundmail-{Guid.NewGuid():N}.db");
-        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ConnectionString;
+        _connection = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false }.ConnectionString;
         _store = new BookingStore(_connection);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -63,7 +63,6 @@ public sealed class RefundMailTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

@@ -27,7 +27,7 @@ public sealed class HomeHeaderTests
             string db = Path.Combine(Path.GetTempPath(), $"skywings-header-{Guid.NewGuid():N}.db");
             try
             {
-                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true }.ConnectionString);
+                var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = db, ForeignKeys = true, Pooling = false }.ConnectionString);
                 store.SeedDefaultFlights();
                 store.SetSetting(BookingStore.SettingDemoActivity, "0");   // no background load generation during the test
                 StaffAccount staff = store.CreateStaff("headertest", firstName + " Tester", "Header-Test-Pass1!", StaffRole.Admin, false);
@@ -49,7 +49,6 @@ public sealed class HomeHeaderTests
             }
             finally
             {
-                SqliteConnection.ClearAllPools();
                 if (File.Exists(db)) File.Delete(db);
             }
         });

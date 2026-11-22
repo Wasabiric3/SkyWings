@@ -14,7 +14,7 @@ public sealed class FlightSearchTests
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"skywings-fs-{Guid.NewGuid():N}.db");
-        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true };
+        var csb = new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true, Pooling = false };
         _store = new BookingStore(csb.ConnectionString);
         _store.SeedFlightsIfEmpty(AppData.DomesticFlights, AppData.InternationalFlights,
             AppData.DefaultDomesticCapacity, AppData.DefaultInternationalCapacity);
@@ -23,7 +23,6 @@ public sealed class FlightSearchTests
     [TestCleanup]
     public void Cleanup()
     {
-        SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 

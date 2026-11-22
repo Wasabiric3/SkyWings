@@ -87,7 +87,7 @@ public sealed class FlightScheduleTests
         string path = Path.Combine(Path.GetTempPath(), $"skywings-sched-{Guid.NewGuid():N}.db");
         try
         {
-            var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
+            var store = new BookingStore(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ConnectionString);
             // A database made by an older version: the flights table holds only the original flight, with a customised price.
             using (var con = new SqliteConnection(store.ConnectionString))
             {
@@ -111,7 +111,6 @@ public sealed class FlightScheduleTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (File.Exists(path)) File.Delete(path);
         }
     }

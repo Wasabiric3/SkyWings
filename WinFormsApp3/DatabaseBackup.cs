@@ -62,7 +62,9 @@ public static class DatabaseBackup
             string safetyFile = Path.Combine(safetyBackupDirectory, $"before-restore-{DateTime.Now:yyyyMMdd-HHmmss}{BackupCrypto.Extension}");
             BackupCrypto.EncryptFile(safetyPlain, safetyFile, backupPassword);
 
-            SqliteConnection.ClearAllPools();   // release any pooled handle on the old file before replacing it
+            // Release the pooled handles on the old file before replacing it. Only the live database's pool: ClearAllPools would also dispose
+            // idle connections of every other database in the process (and of any other thread using one), which then fail mid-use.
+            using (var liveHandle = new SqliteConnection(liveConnectionString)) SqliteConnection.ClearPool(liveHandle);
             File.Move(candidate, live, overwrite: true);
         }
         finally
