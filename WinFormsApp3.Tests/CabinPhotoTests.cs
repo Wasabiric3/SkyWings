@@ -59,7 +59,7 @@ public sealed class CabinPhotoTests
     public void ACardWithAPhoto_ShowsItAtTheTop_AndPushesTheTextBelowIt() => FormHarness.OnStaThread(() =>
     {
         using var plain = new ChoiceCard { Width = 200, Height = 120, Title = "Business", Subtitle = "PHP 21,000", Detail = "Lie-flat seat" };
-        using var withPhoto = new ChoiceCard { Width = 200, Height = 204, Title = "Business", Subtitle = "PHP 21,000", Detail = "Lie-flat seat", PhotoKey = "business" };
+        using var withPhoto = new ChoiceCard { Width = 200, Height = 262, Title = "Business", Subtitle = "PHP 21,000", Detail = "Lie-flat seat", PhotoKey = "business" };
         Assert.AreEqual(0, plain.PhotoOffset, "no photo, no offset");
         Assert.IsGreaterThan(40, withPhoto.PhotoOffset);
 
@@ -73,7 +73,7 @@ public sealed class CabinPhotoTests
     public void TheTickOfASelectedCard_SitsOnThePhoto_WhenThereIsOne() => FormHarness.OnStaThread(() =>
     {
         using var plain = new ChoiceCard { Width = 200, Height = 120, Selected = true };
-        using var withPhoto = new ChoiceCard { Width = 200, Height = 204, Selected = true, PhotoKey = "economy" };
+        using var withPhoto = new ChoiceCard { Width = 200, Height = 262, Selected = true, PhotoKey = "economy" };
         Assert.IsLessThan(withPhoto.PhotoOffset, withPhoto.TickBounds.Bottom, "the tick is inside the photo band");
         Assert.AreEqual(2 + Gfx.S(plain, 14), plain.TickBounds.Top, "a card without a photo keeps its tick where it was");
     });
@@ -81,8 +81,8 @@ public sealed class CabinPhotoTests
     [TestMethod]
     public void ACabinThatIsNotOffered_ShowsItsPhotoWashedOut() => FormHarness.OnStaThread(() =>
     {
-        using var on = new ChoiceCard { Width = 200, Height = 204, Title = "First Class", PhotoKey = "first_class" };
-        using var off = new ChoiceCard { Width = 200, Height = 204, Title = "First Class", PhotoKey = "first_class", Enabled = false };
+        using var on = new ChoiceCard { Width = 200, Height = 262, Title = "First Class", PhotoKey = "first_class" };
+        using var off = new ChoiceCard { Width = 200, Height = 262, Title = "First Class", PhotoKey = "first_class", Enabled = false };
         using Bitmap a = Render(on), b = Render(off);
         long Sum(Bitmap bmp)
         {
@@ -107,7 +107,7 @@ public sealed class CabinPhotoTests
     public void OnANarrowCard_TheCabinNameIsNotCutShort_WhenThereIsAPhoto() => FormHarness.OnStaThread(() =>
     {
         // At the minimum wizard width a card is about 120px wide. "PREMIUM ECONOMY" cannot fit, but "BUSINESS" and "ECONOMY" can.
-        using var photo = new ChoiceCard { Width = 120, Height = 204, Title = "Economy", Subtitle = "PHP 84,000", PhotoKey = "economy", Selected = true };
+        using var photo = new ChoiceCard { Width = 120, Height = 262, Title = "Economy", Subtitle = "PHP 84,000", PhotoKey = "economy", Selected = true };
         using var plain = new ChoiceCard { Width = 120, Height = 120, Title = "Economy", Subtitle = "PHP 84,000", Selected = true };
         using Bitmap withPhoto = Render(photo), without = Render(plain);
         int Ink(Bitmap bmp, int top)   // dark title pixels in the title row, right half (where "...") would end the word
@@ -118,4 +118,37 @@ public sealed class CabinPhotoTests
         }
         Assert.IsGreaterThan(5, Ink(withPhoto, 10 + 14 + photo.PhotoOffset), "the whole word is drawn, up to the card's right side");
     });
+
+    [TestMethod]
+    public void OnAShortWindow_TheWholeClassPageScrolls_InsteadOfSquashingTheOptionsIntoASmallBox() => WizardHarness.OnStaThread(() =>
+    {
+        using var wizard = new WizardHarness();
+        wizard.Form.Size = wizard.Form.MinimumSize;
+        wizard.GoTo(2);
+        Application.DoEvents();
+        Panel page = wizard.Field<Panel[]>("_pages")[2];
+        var cards = wizard.Field<ChoiceCard[]>("_classCards");
+        Assert.IsTrue(page.AutoScroll, "the page itself scrolls");
+        Assert.IsTrue(page.VerticalScroll.Visible, "there is more than fits at the smallest size");
+        Assert.IsTrue(cards.All(c => c.Height >= Gfx.S(c, 250)), "the cabin cards keep their full height (and their photos)");
+        // no small scrolling box inside the options card
+        GlassCard options = page.Controls.OfType<GlassCard>().Single();
+        Assert.IsFalse(options.Controls.OfType<Panel>().Any(p => p.AutoScroll), "the options are not in a box of their own that scrolls");
+
+        // scrolled to the end, the promo code and Apply button can be reached
+        page.AutoScrollPosition = new Point(0, page.VerticalScroll.Maximum);
+        Application.DoEvents();
+        GlassButton apply = All(page).OfType<GlassButton>().Single(b => b.Text == "Apply");
+        Rectangle r = page.RectangleToClient(apply.Parent!.RectangleToScreen(apply.Bounds));
+        Assert.IsLessThanOrEqualTo(page.ClientSize.Height, r.Bottom, "Apply is on screen after scrolling down");
+    });
+
+    private static IEnumerable<Control> All(Control root)
+    {
+        foreach (Control c in root.Controls)
+        {
+            yield return c;
+            foreach (Control inner in All(c)) yield return inner;
+        }
+    }
 }

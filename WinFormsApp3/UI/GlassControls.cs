@@ -410,7 +410,7 @@ public sealed class ChoiceCard : Control, ISelfStyled
     private bool HasPhoto => _photoKey is not null && Assets.Photo(_photoKey) is not null;
 
     /// <summary>How far the text is pushed down to make room for the photo (0 for a card without one).</summary>
-    internal int PhotoOffset => HasPhoto ? Gfx.S(this, 82) : 0;
+    internal int PhotoOffset => HasPhoto ? Gfx.S(this, 140) : 0;
 
     /// <summary>The photograph that goes with a cabin, named after it ("Premium Economy" is "premium_economy"); null for any other name.</summary>
     internal static string? PhotoKeyFor(string className) => className switch
