@@ -49,11 +49,11 @@ public sealed class BookingWizardForm : GlassForm
     private readonly GlassButton _print = new() { Text = "Print receipt", Style = GlassButtonStyle.Outline, Pill = true, Visible = false };
 
     // step 1: flight
-    private readonly ComboBox _flight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, DropDownWidth = 560 };
+    private readonly FlightPicker _flight = new();
     // Same-day bookings are fine until the cutoff (AppData.IsBookable); the flight step checks the chosen flight.
     private readonly DateField _flightDate = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today };
     private readonly GlassCheckBox _roundTrip = new() { Text = "Add a return flight", AutoSize = false, Dock = DockStyle.Top };
-    private readonly ComboBox _returnFlight = new() { DropDownStyle = ComboBoxStyle.DropDownList, DrawMode = DrawMode.OwnerDrawFixed, Enabled = false };
+    private readonly FlightPicker _returnFlight = new() { Enabled = false };
     private readonly DateField _returnDate = new() { CustomFormat = AppData.DateInputFormat, MinDate = DateTime.Today.AddDays(1), Enabled = false };
     private readonly InfoStrip _flightInfo = new() { Dock = DockStyle.Top };
     private FieldRow _flightRow = null!, _dateRow = null!, _returnFlightRow = null!, _returnDateRow = null!;
@@ -166,10 +166,6 @@ public sealed class BookingWizardForm : GlassForm
         _seatAircraft.Height = D(24);
         _review.Height = D(150);
         _receipt.Height = D(330);
-        _flight.DropDownWidth = D(560);
-        _returnFlight.DropDownWidth = D(560);
-        _flight.ItemHeight = D(46);
-        _returnFlight.ItemHeight = D(46);
         _passengerList.ItemHeight = D(46);
         _passengerList.Height = D(60);   // its minimum: one row; it grows to fill the page
         _price.Width = D(300);
@@ -319,7 +315,7 @@ public sealed class BookingWizardForm : GlassForm
             index = _availableFlights.FindIndex(f => f.FlightNo == flightNo);
         if (index < 0 && !string.IsNullOrEmpty(destination))
             index = _availableFlights.FindIndex(f => f.Destination == destination && f.Origin.StartsWith("Manila", StringComparison.Ordinal));
-        if (index >= 0 && index < _flight.Items.Count) _flight.SelectedIndex = index;
+        if (index >= 0 && index < _flight.Flights.Count) _flight.SelectedIndex = index;
         if (date is { } day && day.Date >= _flightDate.MinDate) _flightDate.Value = day.Date;
         if (!string.IsNullOrEmpty(className) && AppData.ClassNames.Contains(className)) SelectClass(className);
     }
@@ -329,8 +325,6 @@ public sealed class BookingWizardForm : GlassForm
     private Panel BuildFlightPage()
     {
         var page = NewPage();
-        _flight.DrawItem += DrawFlightItem;
-        _returnFlight.DrawItem += DrawFlightItem;
         _flightRow = new FieldRow("FLIGHT", _flight);
         _dateRow = new FieldRow("DEPARTURE DATE", _flightDate);
         _returnFlightRow = new FieldRow("RETURN FLIGHT", _returnFlight);
@@ -359,35 +353,6 @@ public sealed class BookingWizardForm : GlassForm
         return CardPage(page);
     }
 
-    private void DrawFlightItem(object? sender, DrawItemEventArgs e)
-    {
-        if (e.Index < 0 || sender is not ComboBox combo || combo.Items[e.Index] is not Flight flight) return;
-        // Owner-drawn boxes don't grey themselves out when disabled, so do it here (the return flight box before "Add a return flight" is ticked).
-        bool disabled = !combo.Enabled;
-        Color strongText = disabled ? Theme.DisabledText : Theme.TextPrimary;
-        Color softText = disabled ? Theme.DisabledTextSoft : Theme.TextSecondary;
-        Color priceText = disabled ? Theme.DisabledText : Theme.Accent;
-        bool highlighted = !disabled && (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
-        using (var back = new SolidBrush(disabled ? Theme.DisabledBack : highlighted ? Theme.Selection : Color.White))
-            e.Graphics.FillRectangle(back, e.Bounds);
-
-        string time = AppData.FlightScheduledTimes.TryGetValue(flight.FlightNo, out TimeOnly t) ? t.ToString("h:mm tt") : "";
-        string price = $"PHP {flight.BasePrice:N0}";
-        int pad = 12;
-        Size priceSize = TextRenderer.MeasureText(price, _boldFont);
-        var priceRect = new Rectangle(e.Bounds.Right - priceSize.Width - pad, e.Bounds.Y, priceSize.Width, e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, price, _boldFont, priceRect, priceText,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Right | TextFormatFlags.NoPadding);
-
-        int textW = e.Bounds.Width - priceSize.Width - pad * 3;
-        var line1 = new Rectangle(e.Bounds.X + pad, e.Bounds.Y + 6, textW, e.Bounds.Height / 2 - 4);
-        var line2 = new Rectangle(e.Bounds.X + pad, e.Bounds.Y + e.Bounds.Height / 2, textW, e.Bounds.Height / 2 - 4);
-        TextRenderer.DrawText(e.Graphics, $"{flight.Origin} → {flight.Destination}", _boldFont, line1, strongText,
-            TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
-        TextRenderer.DrawText(e.Graphics, $"{flight.FlightNo}" + (time.Length > 0 ? $"  ·  departs {time}" : ""), Theme.Small, line2,
-            softText, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
-    }
-
     private void LoadFlights()
     {
         try
@@ -398,26 +363,25 @@ public sealed class BookingWizardForm : GlassForm
         {
             ShowError("Unable to load flights", ex);
         }
-        _flight.Items.AddRange(_availableFlights.Cast<object>().ToArray());
-        if (_flight.Items.Count > 0) _flight.SelectedIndex = 0;
+        _flight.SetFlights(_availableFlights);
+        if (_flight.Flights.Count > 0) _flight.SelectedIndex = 0;
     }
 
     private void UpdateFlightInfo()
     {
-        if (_flight.SelectedItem is not Flight flight) { _flightInfo.Text = ""; return; }
+        if (_flight.Selected is not { } flight) { _flightInfo.Text = ""; return; }
         _flightInfo.Text = _controller.DescribeFlight(flight, _flightDate.Value.Date, _selectedClass, DateTime.Now);
     }
 
     private void UpdateReturnFlightChoice()
     {
-        _returnFlight.Items.Clear();
-        if (_flight.SelectedItem is not Flight outbound) return;
-        foreach (var flight in _availableFlights
+        _returnFlight.SetFlights(Array.Empty<Flight>());
+        if (_flight.Selected is not { } outbound) return;
+        _returnFlight.SetFlights(_availableFlights
             .Where(f => string.Equals(f.Origin, outbound.Destination, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(f.Destination, outbound.Origin, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(f => f.FlightNo))
-            _returnFlight.Items.Add(flight);
-        if (_returnFlight.Items.Count > 0) _returnFlight.SelectedIndex = 0;
+            .OrderBy(f => f.FlightNo).ToList());
+        if (_returnFlight.Flights.Count > 0) _returnFlight.SelectedIndex = 0;
     }
 
     // ------------------------------------------------------------------ step 2: passengers
@@ -1006,7 +970,7 @@ public sealed class BookingWizardForm : GlassForm
                 _dateRow.ClearMessage();
                 if (_roundTrip.Checked)
                 {
-                    if (_returnFlight.SelectedItem is not Flight)
+                    if (_returnFlight.Selected is null)
                     {
                         _returnFlightRow.SetMessage("No return flight is available for this route.");
                         return false;
@@ -1050,9 +1014,9 @@ public sealed class BookingWizardForm : GlassForm
 
     private void SyncSession()
     {
-        _session.SelectedFlight = _flight.SelectedItem as Flight;
+        _session.SelectedFlight = _flight.Selected;
         _session.FlightDate = _flightDate.Value.Date;
-        _session.ReturnFlight = _roundTrip.Checked ? _returnFlight.SelectedItem as Flight : null;
+        _session.ReturnFlight = _roundTrip.Checked ? _returnFlight.Selected : null;
         _session.ReturnDate = _session.ReturnFlight is null ? null : _returnDate.Value.Date;
         _session.ClassName = _selectedClass;
         _session.BaggageOption = _baggage.SelectedItem?.ToString() ?? "No checked baggage included";
