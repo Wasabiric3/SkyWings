@@ -107,7 +107,7 @@ public partial class HomeForm : GlassForm
         Control flightList = BuildFlightList();
         Control sectionTitle = BuildSectionTitle();
         _destinations.Dock = DockStyle.Top;
-        _destinations.Height = D(172);
+        _destinations.Height = D(218);
         _destinations.WrapContents = false;
         _destinations.AutoScroll = false;
         _destinations.BackColor = Color.Transparent;
@@ -658,7 +658,7 @@ public partial class HomeForm : GlassForm
         string from = summary.Flights.Count > 0 ? $"{summary.Flights.Select(f => f.Destination).Distinct().Count()} places · {summary.Flights.Count} flights · from PHP {summary.Flights.Min(f => f.BasePrice):N0}" : "No flights available";
         var card = new DestinationCard
         {
-            Width = D(268), Height = D(166), Margin = new Padding(0, 0, D(10), 0),
+            Width = D(268), Height = D(212), Margin = new Padding(0, 0, D(10), 0),
             Title = summary.Title, Subtitle = summary.Subtitle, Meta = from, Accent = summary.Accent,
             AccessibleName = $"{summary.Title}: {from}"
         };
@@ -766,6 +766,14 @@ public partial class HomeForm : GlassForm
             var r = new Rectangle(0, 0, Width, Height);
             using var clip = Gfx.RoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), Gfx.S(this, 16f));
             g.SetClip(clip);
+            // The SkyWings airliner photograph, cropped to the slot with the plane kept in view.
+            if (Assets.Photo("hero") is { } photo)
+            {
+                BrandArt.DrawCover(g, photo, new RectangleF(0, 0, Width, Height), Assets.PhotoFocus("hero"));
+                return;
+            }
+
+            // No photograph (the file is missing): the brand art, as before.
             BrandArt.FillHero(g, r, DeviceDpi);
 
             Bitmap? mark = Assets.Watermark(DeviceDpi);

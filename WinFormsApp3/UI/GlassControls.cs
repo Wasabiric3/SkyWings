@@ -385,15 +385,42 @@ public sealed class ChoiceCard : Control, ISelfStyled
     /// <summary>The price font, shrunk (never below 8 pt) so a long price such as "PHP 336,000" fits a narrow card. The caller disposes it.</summary>
     internal Font FitPriceFont() => PriceSummaryPanel.FitFont(Subtitle, PriceFont, PriceTextWidth);
 
-    /// <summary>The circle that holds the tick, at the top right of the card.</summary>
+    /// <summary>The circle that holds the tick, at the top right of the card (on the photo's corner when the card has one).</summary>
     internal Rectangle TickBounds
     {
         get
         {
             int d = Gfx.S(this, 22);
-            return new Rectangle(Width - 3 - Gfx.S(this, 16) - d, 2 + Gfx.S(this, 14), d, d);
+            return HasPhoto
+                ? new Rectangle(Width - 3 - Gfx.S(this, 16) - d, 2 + Gfx.S(this, 16), d, d)
+                : new Rectangle(Width - 3 - Gfx.S(this, 16) - d, 2 + Gfx.S(this, 14), d, d);
         }
     }
+
+    /// <summary>The photograph of the cabin ("economy", "premium_economy", "business", "first_class"), drawn across the top of the card; null for a card with text only.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string? PhotoKey
+    {
+        get => _photoKey;
+        set { _photoKey = value; Invalidate(); }
+    }
+
+    private string? _photoKey;
+
+    private bool HasPhoto => _photoKey is not null && Assets.Photo(_photoKey) is not null;
+
+    /// <summary>How far the text is pushed down to make room for the photo (0 for a card without one).</summary>
+    internal int PhotoOffset => HasPhoto ? Gfx.S(this, 140) : 0;
+
+    /// <summary>The photograph that goes with a cabin, named after it ("Premium Economy" is "premium_economy"); null for any other name.</summary>
+    internal static string? PhotoKeyFor(string className) => className switch
+    {
+        "Economy" => "economy",
+        "Premium Economy" => "premium_economy",
+        "Business" => "business",
+        "First Class" => "first_class",
+        _ => null
+    };
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string Title { get; set; } = "";
@@ -440,15 +467,28 @@ public sealed class ChoiceCard : Control, ISelfStyled
             g.DrawPath(ring, Gfx.RoundedRect(RectangleF.Inflate(bounds, -4, -4), Gfx.S(this, 10)));
         }
 
+        // The cabin's photograph across the top, rounded like the card; washed out when the cabin is not offered.
+        if (HasPhoto && Assets.Photo(_photoKey!) is { } photo)
+        {
+            var picture = new RectangleF(bounds.Left + Gfx.S(this, 8), bounds.Top + Gfx.S(this, 8), bounds.Width - Gfx.S(this, 16), PhotoOffset - Gfx.S(this, 4) - Gfx.S(this, 8));
+            using var picturePath = Gfx.RoundedRect(picture, Gfx.S(this, 10));
+            GraphicsState saved = g.Save();
+            g.SetClip(picturePath);
+            BrandArt.DrawCover(g, photo, picture, Assets.PhotoFocus(_photoKey!));
+            if (!Enabled)
+                using (var wash = new SolidBrush(Color.FromArgb(170, Theme.DisabledBack))) g.FillRectangle(wash, picture);
+            g.Restore(saved);
+        }
+
         // The class name in capitals, the price large, the detail small; a tick circle marks the chosen card.
         const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
         int pad = Gfx.S(this, 16);
         int x = (int)bounds.Left + pad;
         int width = (int)bounds.Width - 2 * pad;
-        int y = (int)bounds.Top + Gfx.S(this, 14);
+        int y = (int)bounds.Top + Gfx.S(this, 14) + PhotoOffset;
         Color strong = Enabled ? Theme.Brand : Theme.DisabledText;
         Color muted = Enabled ? Theme.TextSecondary : Theme.DisabledText;
-        TextRenderer.DrawText(g, Title.ToUpperInvariant(), CapsFont, new Rectangle(x, y, width - Gfx.S(this, 30), Gfx.S(this, 22)), strong, flags);
+        TextRenderer.DrawText(g, Title.ToUpperInvariant(), CapsFont, new Rectangle(x, y, width - (HasPhoto ? 0 : Gfx.S(this, 30)), Gfx.S(this, 22)), strong, flags);   // the tick sits on the photo, so the name may use the full width
         // A cabin that is not offered says so in small muted text instead of a price.
         using (Font priceFont = Enabled ? FitPriceFont() : new Font(Theme.Small, FontStyle.Regular))
             TextRenderer.DrawText(g, Subtitle, priceFont, new Rectangle(x, y + Gfx.S(this, 28), width, Gfx.S(this, 32)),
@@ -458,6 +498,7 @@ public sealed class ChoiceCard : Control, ISelfStyled
         if (_selected && Enabled)
         {
             Rectangle tick = TickBounds;
+            if (HasPhoto) using (var ring = new SolidBrush(Color.White)) g.FillEllipse(ring, Rectangle.Inflate(tick, Gfx.S(this, 2), Gfx.S(this, 2)));   // keeps the tick readable on a photo
             using (var circle = new SolidBrush(Theme.Brand)) g.FillEllipse(circle, tick);
             using var mark = new Pen(Color.White, Gfx.S(this, 2f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
             float s = tick.Width / 22f;

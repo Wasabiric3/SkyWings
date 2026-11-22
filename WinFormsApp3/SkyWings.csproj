@@ -30,6 +30,8 @@
   <ItemGroup>
 	<!-- Brand images pre-rendered from the asset kit by tools/svg2png; loaded through UI/Assets.cs. -->
 	<EmbeddedResource Include="Assets\*.png" LogicalName="Assets/%(Filename)%(Extension)" />
+	<!-- Photographs (home banner and the four region cards); loaded through Assets.Photo. -->
+	<EmbeddedResource Include="Assets\*.jpg" LogicalName="Assets/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

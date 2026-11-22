@@ -46,6 +46,35 @@ internal static class BrandArt
         return new Rectangle(inner.X, inner.Y + (inner.Height - h) / 2, inner.Width, h);
     }
 
+    /// <summary>
+    /// The part of a photograph to draw so it covers <paramref name="dest"/> without distortion: the longer side is cropped to the
+    /// destination's shape, centred on <paramref name="focus"/> (0..1 across and down) and kept inside the image, so the subject of the
+    /// photo stays in view. The whole width (or height) of the image is always used.
+    /// </summary>
+    internal static RectangleF CoverSource(Size image, Size dest, PointF focus)
+    {
+        if (dest.Width < 1 || dest.Height < 1) return new RectangleF(0, 0, image.Width, image.Height);
+        float want = dest.Width / (float)dest.Height, have = image.Width / (float)image.Height;
+        float w = image.Width, h = image.Height;
+        if (have > want) w = image.Height * want;     // image is wider than the destination: trim the sides
+        else h = image.Width / want;                  // image is taller: trim top and bottom
+        float x = Math.Clamp(focus.X * image.Width - w / 2, 0, image.Width - w);
+        float y = Math.Clamp(focus.Y * image.Height - h / 2, 0, image.Height - h);
+        return new RectangleF(x, y, w, h);
+    }
+
+    /// <summary>Draws a photograph to fill <paramref name="dest"/>, cropped around <paramref name="focus"/> (see <see cref="CoverSource(Size, Size, PointF)"/>). The caller sets any clip.</summary>
+    public static void DrawCover(Graphics g, Bitmap? photo, RectangleF dest, PointF focus)
+    {
+        if (photo is null || dest.Width < 1 || dest.Height < 1) return;
+        RectangleF source = CoverSource(photo.Size, Size.Round(dest.Size), focus);
+        var state = g.Save();
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.Half;
+        g.DrawImage(photo, dest, source, GraphicsUnit.Pixel);
+        g.Restore(state);
+    }
+
     /// <summary>Draws a brand bitmap scaled to a logical (96-dpi) size, high quality. No-op when the image is missing.</summary>
     public static void DrawScaled(Graphics g, Bitmap? image, Rectangle dest)
     {
