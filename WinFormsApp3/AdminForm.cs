@@ -871,6 +871,13 @@ public sealed class AdminForm : GlassForm
         _requests.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _requests.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _requests.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowRefundBooking(); };
+        // A pending request from an address that is not the booking's stands out in amber, so it is not approved by habit.
+        _requests.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= _requests.Rows.Count || _requests.Rows[e.RowIndex].DataBoundItem is not RequestRow { SenderDiffers: true }) return;
+            e.CellStyle!.BackColor = Theme.AmberSoft;
+            e.CellStyle.ForeColor = Theme.AmberText;
+        };
         _requests.DataBindingComplete += (_, _) =>
         {
             var weights = new Dictionary<string, float>
@@ -940,7 +947,8 @@ public sealed class AdminForm : GlassForm
     private sealed record RequestRow(string Reference, string Status, string Source, string Logged, string FlightNo, string Route,
         string FlightDate, decimal TotalAmount, decimal EstimatedRefund, string Note,
         [property: System.ComponentModel.Browsable(false)] DateTime LoggedAt,
-        [property: System.ComponentModel.Browsable(false)] DateTime FlightDateValue);
+        [property: System.ComponentModel.Browsable(false)] DateTime FlightDateValue,
+        [property: System.ComponentModel.Browsable(false)] bool SenderDiffers = false);
 
     private static readonly IReadOnlyDictionary<string, SortKey<RequestRow>> RequestSortKeys = new Dictionary<string, SortKey<RequestRow>>
     {
@@ -973,7 +981,8 @@ public sealed class AdminForm : GlassForm
             r.Status == BookingStore.RequestDismissed ? $"Declined: {r.Note}"
                 : r.Status == BookingStore.RequestDone ? $"Refunded by {r.ClosedBy}"
                 : (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.CustomerMessage,
-            r.LoggedAt, r.FlightDate))).ToList();
+            r.LoggedAt, r.FlightDate,
+            r.Status == BookingStore.RequestOpen && r.Source == "EMAIL" && !r.SenderMatches))).ToList();
         int open = _requestRows.Count(r => r.Status == BookingStore.RequestOpen);
         _refundCount.Text = open == 0
             ? "No refund requests waiting"
@@ -1022,7 +1031,12 @@ public sealed class AdminForm : GlassForm
         string question = $"Approve the refund for {booking.Reference}?\n\n" +
                           $"PHP {refund:N2} goes back to {booking.PaymentMethod} {booking.MaskedAccount}.\n" +
                           "The booking is cancelled, the seats are freed and the customer is emailed that the refund is approved.";
-        if (MessageBox.Show(this, question, "Approve refund", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return false;
+        // An email from a different address than the booking's: say so once more at the last step, and make "No" the default button.
+        bool senderDiffers = request.Source == "EMAIL" && !request.SenderMatches;
+        if (senderDiffers)
+            question += "\n\n⚠ This request came from an email address that is NOT the one on the booking. Check it before approving.";
+        if (MessageBox.Show(this, question, "Approve refund", MessageBoxButtons.YesNo, senderDiffers ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
+                senderDiffers ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1) != DialogResult.Yes) return false;
 
         RefundApprovalResult? result = null;
         if (!Try("Unable to approve the refund", () => result = _service.ApproveRefundRequest(request.Id, request.Reference))) return true;
