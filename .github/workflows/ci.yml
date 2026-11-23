@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -18,13 +18,19 @@ jobs:
         run: dotnet build SkyWings.slnx --configuration Release
       - name: Test
         run: |
-          dotnet test SkyWings.slnx --configuration Release --no-build --results-directory TestResults --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none --logger GitHubActions *>&1 | Tee-Object test.log
+          # The simulation tests build a full demo database each, so a few take minutes on a CI runner: slow is not hung.
+          dotnet test SkyWings.slnx --configuration Release --no-build --results-directory TestResults --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none --logger GitHubActions --logger trx *>&1 | Tee-Object test.log
           exit $LASTEXITCODE
-      - name: Summarise test failure
-        if: failure()
+      - name: Summarise tests
+        if: always()
         run: |
-          $tail = (Get-Content test.log -Tail 60) -join '%0A'
-          Write-Host "::error title=dotnet test log tail::$tail"
+          $tail = (Get-Content test.log -Tail 25) -join '%0A'
+          Write-Host "::notice title=dotnet test log tail::$tail"
+          $slow = Get-ChildItem TestResults -Recurse -Filter '*.trx' -ErrorAction SilentlyContinue | ForEach-Object {
+            $x = [xml](Get-Content $_.FullName)
+            $x.TestRun.Results.UnitTestResult | ForEach-Object { [pscustomobject]@{ Name = $_.testName; Secs = [int][TimeSpan]::Parse($_.duration).TotalSeconds } }
+          } | Sort-Object Secs -Descending | Select-Object -First 15
+          if ($slow) { Write-Host "::notice title=Slowest tests (seconds)::$(($slow | ForEach-Object { "$($_.Secs)s $($_.Name)" }) -join '%0A')" }
           Get-ChildItem TestResults -Recurse -Filter 'Sequence_*.xml' -ErrorAction SilentlyContinue | ForEach-Object {
             $x = [xml](Get-Content $_.FullName)
             $open = $x.TestSequence.Test | Where-Object { $_.Completed -ne 'True' } | ForEach-Object { $_.Name }
