@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -16,7 +17,7 @@ jobs:
       - name: Build
         run: dotnet build SkyWings.slnx --configuration Release
       - name: Test
-        run: dotnet test SkyWings.slnx --configuration Release --no-build
+        run: dotnet test SkyWings.slnx --configuration Release --no-build --blame-hang --blame-hang-timeout 10m --logger GitHubActions
       - name: Publish (self-contained, single file)
         run: dotnet publish WinFormsApp3/SkyWings.csproj -p:PublishProfile=win-x64 -o publish
       - uses: actions/upload-artifact@v4
