@@ -17,7 +17,19 @@ jobs:
       - name: Build
         run: dotnet build SkyWings.slnx --configuration Release
       - name: Test
-        run: dotnet test SkyWings.slnx --configuration Release --no-build --blame-hang --blame-hang-timeout 10m --logger GitHubActions
+        run: |
+          dotnet test SkyWings.slnx --configuration Release --no-build --results-directory TestResults --blame-hang --blame-hang-timeout 10m --logger GitHubActions *>&1 | Tee-Object test.log
+          exit $LASTEXITCODE
+      - name: Summarise test failure
+        if: failure()
+        run: |
+          $tail = (Get-Content test.log -Tail 60) -join '%0A'
+          Write-Host "::error title=dotnet test log tail::$tail"
+          Get-ChildItem TestResults -Recurse -Filter 'Sequence_*.xml' -ErrorAction SilentlyContinue | ForEach-Object {
+            $x = [xml](Get-Content $_.FullName)
+            $open = $x.TestSequence.Test | Where-Object { $_.Completed -ne 'True' } | ForEach-Object { $_.Name }
+            if ($open) { Write-Host "::error title=Tests that never finished::$($open -join '%0A')" }
+          }
       - name: Publish (self-contained, single file)
         run: dotnet publish WinFormsApp3/SkyWings.csproj -p:PublishProfile=win-x64 -o publish
       - uses: actions/upload-artifact@v4
