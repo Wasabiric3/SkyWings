@@ -19,6 +19,12 @@ public sealed partial class BookingStore
     public const string RequestDone = "DONE";
     public const string RequestDismissed = "DISMISSED";
 
+    /// <summary>A refund email for a booking that was already cancelled: nothing to decide, kept (closed at once) so staff can see it came in.</summary>
+    public const string RequestSettled = "SETTLED";
+
+    /// <summary>A settled note is shown without "Show closed" for this long, then it only appears under "Show closed".</summary>
+    public static readonly TimeSpan SettledStaysVisible = TimeSpan.FromHours(24);
+
     /// <summary>Raised, outside the lock, after a booking was cancelled (staff, customer desk or simulator). Used to email the customer.</summary>
     public event Action<string>? BookingCanceled;
 
@@ -63,10 +69,41 @@ public sealed partial class BookingStore
         }
         else if (!result.Ok && result.AlreadyCancelled && source == "EMAIL")
         {
+            // Never let this note get in the way of the customer's reply (or of the mailbox reader): a failure is only logged.
+            try { RecordSettledEmail(reference.Trim().ToUpperInvariant(), customerMessage, senderMatches, now ?? DateTime.Now); }
+            catch (Exception ex) { LogError(ex); }
             try { RefundRequestAlreadyCancelled?.Invoke(reference.Trim().ToUpperInvariant()); }
             catch (Exception ex) { LogError(ex); }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Keeps a closed "Settled" row for a refund email about a booking that was already cancelled, so it shows on the Refunds tab: what was
+    /// refunded, and whether the sender is the booking's own address. One row per booking per day, however often someone writes.
+    /// </summary>
+    private void RecordSettledEmail(string reference, string customerMessage, bool senderMatches, DateTime at)
+    {
+        lock (_lock)
+        {
+            BookingRecord? booking = FindByReference(reference);
+            if (booking is null || booking.Status != AppData.StatusCanceled) return;
+            using var con = OpenConnection();
+            using (var recent = Cmd(con, "SELECT 1 FROM refund_requests WHERE booking_ref = @ref AND status = 'SETTLED' AND logged_at >= @since LIMIT 1", null,
+                       ("@ref", reference), ("@since", at - SettledStaysVisible)))
+                if (recent.ExecuteScalar() is not null) return;
+
+            RefundRecord? refund = LoadRefund(reference);
+            decimal amount = refund?.Amount ?? booking.RefundAmount;
+            string note = refund is not null
+                ? $"Already refunded: PHP {refund.Amount:N2} · {refund.Reference}"
+                : "Already cancelled · no refund was due";
+            Exec(con,
+                "INSERT INTO refund_requests (booking_ref, status, estimated_refund, logged_by, logged_at, closed_at, closed_by, note, customer_message, source, sender_matches) " +
+                "VALUES (@ref, 'SETTLED', @amount, 'email', @at, @at, 'system', @note, @message, 'EMAIL', @matches)",
+                ("@ref", reference), ("@amount", amount), ("@at", at), ("@note", Clean(note, 200)),
+                ("@message", Clean(customerMessage, 1000)), ("@matches", senderMatches ? 1 : 0));
+        }
     }
 
     private RefundRequestResult LogRefundRequestCore(string reference, string loggedBy, DateTime? now, string customerMessage, string source, bool senderMatches)
@@ -103,7 +140,10 @@ public sealed partial class BookingStore
         }
     }
 
-    /// <summary>Requests with their booking details, open ones first and then the newest. Closed (done or dismissed) ones only when asked.</summary>
+    /// <summary>
+    /// Requests with their booking details, open ones first and then the newest. Closed (done or dismissed) ones only when asked; a
+    /// "settled" note (an email about a booking that was already cancelled) is also listed for <see cref="SettledStaysVisible"/>.
+    /// </summary>
     /// <param name="since">Only closed requests logged from this moment on are listed; an open request is always listed, however old.</param>
     public List<RefundRequestRow> LoadRefundRequests(bool includeClosed = false, int limit = 500, DateTime? since = null)
     {
@@ -117,10 +157,12 @@ public sealed partial class BookingStore
                     "SELECT r.id, r.booking_ref, r.status, r.estimated_refund, r.logged_by, r.logged_at, r.closed_at, r.closed_by, r.note, r.customer_message, r.source, r.sender_matches, " +
                     "b.flight_no, b.origin, b.destination, b.flight_date, b.total_amount " +
                     "FROM refund_requests r JOIN bookings b ON b.reference = r.booking_ref " +
-                    (!includeClosed ? "WHERE r.status = 'OPEN' " : since is not null ? "WHERE (r.status = 'OPEN' OR r.logged_at >= @since) " : "") +
+                    (!includeClosed ? "WHERE (r.status = 'OPEN' OR (r.status = 'SETTLED' AND r.logged_at >= @recent)) "
+                        : since is not null ? "WHERE (r.status = 'OPEN' OR r.logged_at >= @since) " : "") +
                     "ORDER BY CASE r.status WHEN 'OPEN' THEN 0 ELSE 1 END, r.logged_at DESC, r.id DESC LIMIT @limit", null,
                     since is { } from && includeClosed ? new (string, object?)[] { ("@limit", Math.Clamp(limit, 1, 5000)), ("@since", from) }
-                                                       : new (string, object?)[] { ("@limit", Math.Clamp(limit, 1, 5000)) });
+                    : !includeClosed ? new (string, object?)[] { ("@limit", Math.Clamp(limit, 1, 5000)), ("@recent", DateTime.Now - SettledStaysVisible) }
+                                     : new (string, object?)[] { ("@limit", Math.Clamp(limit, 1, 5000)) });
                 using var rs = cmd.ExecuteReader();
                 while (rs.Read())
                     rows.Add(new RefundRequestRow(rs.GetInt64(rs.GetOrdinal("id")), Str(rs, "booking_ref"), Str(rs, "flight_no"),

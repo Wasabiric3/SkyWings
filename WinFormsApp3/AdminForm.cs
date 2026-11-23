@@ -878,12 +878,23 @@ public sealed class AdminForm : GlassForm
         _requests.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _requests.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
         _requests.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowRefundBooking(); };
-        // A pending request from an address that is not the booking's stands out in amber, so it is not approved by habit.
+        // A request (or a settled note) from an address that is not the booking's stands out in amber, so it is not approved by habit and
+        // is not overlooked. A settled note from the booking's own address is quiet: nothing is left to decide.
         _requests.CellFormatting += (_, e) =>
         {
-            if (e.RowIndex < 0 || e.RowIndex >= _requests.Rows.Count || _requests.Rows[e.RowIndex].DataBoundItem is not RequestRow { SenderDiffers: true }) return;
-            e.CellStyle!.BackColor = Theme.AmberSoft;
-            e.CellStyle.ForeColor = Theme.AmberText;
+            if (e.RowIndex < 0 || e.RowIndex >= _requests.Rows.Count || _requests.Rows[e.RowIndex].DataBoundItem is not RequestRow row) return;
+            if (row.SenderDiffers)
+            {
+                e.CellStyle!.BackColor = Theme.AmberSoft;
+                e.CellStyle.ForeColor = Theme.AmberText;
+                // Still amber while the row is selected (a slightly deeper amber), so choosing it does not hide the warning.
+                e.CellStyle.SelectionBackColor = Color.FromArgb(0xF6, 0xDF, 0xB0);
+                e.CellStyle.SelectionForeColor = Theme.AmberText;
+            }
+            else if (row.Status == RequestStatusText(BookingStore.RequestSettled))
+            {
+                e.CellStyle!.ForeColor = Theme.TextSecondary;
+            }
         };
         _requests.DataBindingComplete += (_, _) =>
         {
@@ -972,6 +983,7 @@ public sealed class AdminForm : GlassForm
     {
         BookingStore.RequestOpen => "Pending",
         BookingStore.RequestDone => "Done",
+        BookingStore.RequestSettled => "Settled",
         _ => "Declined"
     };
 
@@ -987,13 +999,16 @@ public sealed class AdminForm : GlassForm
             r.FlightDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), r.Total, r.EstimatedRefund,
             r.Status == BookingStore.RequestDismissed ? $"Declined: {r.Note}"
                 : r.Status == BookingStore.RequestDone ? $"Refunded by {r.ClosedBy}"
+                : r.Status == BookingStore.RequestSettled ? (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.Note
                 : (r.Source == "EMAIL" && !r.SenderMatches ? SenderWarning : "") + r.CustomerMessage,
             r.LoggedAt, r.FlightDate,
-            r.Status == BookingStore.RequestOpen && r.Source == "EMAIL" && !r.SenderMatches))).ToList();
+            r.Status is BookingStore.RequestOpen or BookingStore.RequestSettled && r.Source == "EMAIL" && !r.SenderMatches))).ToList();
         int open = _requestRows.Count(r => r.Status == BookingStore.RequestOpen);
-        _refundCount.Text = open == 0
+        int settled = _requestRows.Count(r => r.Status == BookingStore.RequestSettled);
+        string settledText = settled == 0 ? "" : $" · {settled:N0} settled";
+        _refundCount.Text = (open == 0
             ? "No refund requests waiting"
-            : $"{open:N0} request(s) waiting · cancel the booking to complete one, or dismiss it";
+            : $"{open:N0} request(s) waiting · cancel the booking to complete one, or dismiss it") + settledText;
         UpdateRefundsBadge(open);
     }
 

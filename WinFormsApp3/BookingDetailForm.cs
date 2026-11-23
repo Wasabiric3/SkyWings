@@ -103,6 +103,7 @@ public sealed class BookingDetailForm : GlassForm
             outcome = $"Refund if approved: PHP {refund:N2} ({AppData.RefundRate(booking.FlightDateValue):P0}) to {booking.PaymentMethod} {booking.MaskedAccount}";
         }
         else if (request.Status == BookingStore.RequestDone) outcome = $"Refunded by {request.ClosedBy}";
+        else if (request.Status == BookingStore.RequestSettled) outcome = $"Settled · {request.Note}";
         else outcome = $"Declined by {request.ClosedBy}: {request.Note}";
 
         string source = request.Source == "EMAIL" ? "Email" : "Desk";
@@ -118,11 +119,14 @@ public sealed class BookingDetailForm : GlassForm
         };
 
         panel.Controls.Add(noteHost);
-        if (open && request.Source == "EMAIL" && !request.SenderMatches)
+        bool settled = request.Status == BookingStore.RequestSettled;
+        if ((open || settled) && request.Source == "EMAIL" && !request.SenderMatches)
         {
             panel.Controls.Add(new Label
             {
-                Text = "⚠ This email came from an address that is not the one on the booking. Check it before approving.",
+                Text = settled
+                    ? "⚠ Sent from an address that is not the booking's. Already settled; nothing to approve."
+                    : "⚠ This email came from an address that is not the one on the booking. Check it before approving.",
                 Dock = DockStyle.Top, Height = D(26), Font = new Font(Theme.Small, FontStyle.Bold), ForeColor = Theme.Warning,
                 TextAlign = ContentAlignment.MiddleLeft
             });

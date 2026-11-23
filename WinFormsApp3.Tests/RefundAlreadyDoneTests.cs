@@ -85,7 +85,8 @@ public sealed class RefundAlreadyDoneTests
 
         Assert.AreEqual(0, logged);
         Assert.AreEqual(1, ignored);
-        Assert.IsEmpty(_store.LoadRefundRequests(), "nothing is logged for an already cancelled booking");
+        Assert.AreEqual(0, _store.CountOpenRefundRequests(), "no pending request is made for an already cancelled booking");
+        Assert.AreEqual(BookingStore.RequestSettled, _store.LoadRefundRequests().Single().Status, "only a closed note that the email came in");
         EmailMessage reply = AlreadyDoneEmails().Single();
         Assert.AreEqual("ana@example.com", reply.To, "the reply goes to the address on the booking, not to the sender");
         StringAssert.Contains(reply.HtmlBody, "already cancelled");
