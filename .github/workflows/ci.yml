@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -18,7 +18,7 @@ jobs:
         run: dotnet build SkyWings.slnx --configuration Release
       - name: Test
         run: |
-          dotnet test SkyWings.slnx --configuration Release --no-build --results-directory TestResults --blame-hang --blame-hang-timeout 10m --logger GitHubActions *>&1 | Tee-Object test.log
+          dotnet test SkyWings.slnx --configuration Release --no-build --results-directory TestResults --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none --logger GitHubActions *>&1 | Tee-Object test.log
           exit $LASTEXITCODE
       - name: Summarise test failure
         if: failure()
