@@ -117,9 +117,16 @@ public sealed class AdminForm : GlassForm
     private List<AuditEntry> _auditEntries = new();
     private static readonly IReadOnlyDictionary<string, SortKey<AuditEntry>> AuditSortKeys = new Dictionary<string, SortKey<AuditEntry>>
     {
-        ["When"] = new(e => e.AtUtc, FirstDescending: true), ["Who"] = new(e => e.Actor), ["Role"] = new(e => e.Role),
-        ["Action"] = new(e => e.Action), ["Item"] = new(e => e.Target), ["Detail"] = new(e => e.Detail),
+        ["When"] = new(e => e.AtUtc, FirstDescending: true), ["Who"] = new(e => e.Actor),
+        ["What"] = new(e => AuditPresentation.Describe(e).Title), ["Item"] = new(e => e.Target), ["Detail"] = new(e => e.Detail),
     };
+    private readonly Dictionary<string, GlassButton> _auditChips = new();
+    private string _auditFilter = "Activity";   // everything except the sign-ins and sign-outs, which are most of the log
+    private List<(AuditEntry Entry, AuditView View)> _auditViews = new();
+    private readonly StatTile _auditTileToday = new() { Title = "Events today" };
+    private readonly StatTile _auditTileEmails = new() { Title = "Emails today" };
+    private readonly StatTile _auditTileRefunds = new() { Title = "Refunds today" };
+    private readonly StatTile _auditTileAttention = new() { Title = "Attention today", Accent = Theme.Warning };
     private readonly GridSorter<AuditEntry> _auditSorter = new(AuditSortKeys);   // no sort chosen: newest first, as the log is loaded
 
     private Label _frameTitle = null!;   // coloured after Theme.Apply, which resets label colours
@@ -1454,7 +1461,11 @@ public sealed class AdminForm : GlassForm
 
     // ------------------------------------------------------------------ audit
 
-    private sealed record AuditRow(string When, string Who, string Role, string Action, string Item, string Detail);
+    private sealed record AuditRow(string When, string Who, string What, string Item, string Detail,
+        [property: System.ComponentModel.Browsable(false)] AuditEntry Entry,
+        [property: System.ComponentModel.Browsable(false)] AuditSeverity Severity);
+
+    private static readonly string[] AuditChipNames = { "Activity", "All", "Refund", "Email", "Security", "Booking", "Admin", "Sign-ins" };
 
     private Panel BuildAuditPage()
     {
@@ -1466,25 +1477,148 @@ public sealed class AdminForm : GlassForm
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadAudit(), GlassButtonStyle.Ghost));
         toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportAudit()));
 
+        // Four headline numbers for today, like the Reports page.
+        var all = new[] { _auditTileToday, _auditTileEmails, _auditTileRefunds, _auditTileAttention };
+        var tiles = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(104), ColumnCount = all.Length, RowCount = 1 };
+        for (int i = 0; i < all.Length; i++)
+        {
+            tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / all.Length));
+            all[i].Dock = DockStyle.Fill;
+            all[i].Margin = new Padding(0, 0, i < all.Length - 1 ? D(6) : 0, 0);
+            tiles.Controls.Add(all[i], i, 0);
+        }
+        tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var tilesHost = new Panel { Dock = DockStyle.Top, Height = D(110) };
+        tilesHost.Controls.Add(tiles);
+
+        // One chip per group: the grid shows only that group.
+        // The chips wrap onto a second row in a narrow window. Each one always carries its count ("Refunds 18"), so none is ever named
+        // exactly like a section button.
+        var chips = new FlowLayoutPanel { Dock = DockStyle.Top, Height = D(50), WrapContents = true, Padding = new Padding(0, D(4), 0, D(4)), BackColor = Color.Transparent };
+        foreach (string name in AuditChipNames)
+        {
+            string chipName = name;
+            var chip = new GlassButton { Text = $"{name} 0", Style = GlassButtonStyle.Outline, Height = D(38), Margin = new Padding(0, 0, D(6), D(4)) };
+            chip.Width = Math.Max(D(64), TextRenderer.MeasureText(chip.Text, chip.Font).Width + D(30));
+            chip.Click += (_, _) => { _auditFilter = chipName; ApplyAuditView(); };
+            _auditChips[name] = chip;
+            chips.Controls.Add(chip);
+        }
+        void FitChips()
+        {
+            int wanted = chips.GetPreferredSize(new Size(Math.Max(D(60), chips.ClientSize.Width), 0)).Height;
+            if (chips.Height != wanted) chips.Height = wanted;
+        }
+        chips.SizeChanged += (_, _) => FitChips();
+        chips.ControlAdded += (_, _) => FitChips();
+
         GridStyle.Apply(_audit);
         WireSorter(_auditSorter, _audit, "view_audit_sort", LoadAudit);
         _audit.DefaultCellStyle.Font = Theme.Small;
         _audit.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        _audit.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowAuditDetails(); };
         _audit.DataBindingComplete += (_, _) =>
         {
-            var weights = new Dictionary<string, float> { ["When"] = 1.5f, ["Who"] = 1f, ["Role"] = 0.6f, ["Action"] = 1.6f, ["Item"] = 1.3f, ["Detail"] = 3f };
+            var weights = new Dictionary<string, float> { ["When"] = 2f, ["Who"] = 0.9f, ["What"] = 3f, ["Item"] = 1.4f, ["Detail"] = 2.4f };
             foreach (DataGridViewColumn column in _audit.Columns)
+            {
                 if (weights.TryGetValue(column.DataPropertyName, out float w)) column.FillWeight = w * 100;
+                if (column.DataPropertyName == "What") column.HeaderText = "What happened";
+            }
         };
-        return Section(toolbar, _audit);
+        // Colour by importance: green text for what went well, amber for what needs a look, red for security, grey for routine.
+        _audit.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= _audit.Rows.Count || _audit.Rows[e.RowIndex].DataBoundItem is not AuditRow row) return;
+            switch (row.Severity)
+            {
+                case AuditSeverity.Attention:
+                    e.CellStyle!.BackColor = Theme.AmberSoft; e.CellStyle.ForeColor = Theme.AmberText; break;
+                case AuditSeverity.Security:
+                    e.CellStyle!.BackColor = Color.FromArgb(0xFD, 0xEC, 0xEA); e.CellStyle.ForeColor = Color.FromArgb(0x9B, 0x2C, 0x24); break;
+                case AuditSeverity.Done:
+                    if (_audit.Columns[e.ColumnIndex].DataPropertyName == "What") e.CellStyle!.ForeColor = Theme.Brand;
+                    break;
+                default:
+                    e.CellStyle!.ForeColor = Theme.TextSecondary; break;
+            }
+        };
+
+        var content = new Panel { Dock = DockStyle.Fill };
+        content.Controls.Add(_audit);
+        content.Controls.Add(chips);
+        content.Controls.Add(tilesHost);
+        // In a short window the list matters more than the numbers: without the tiles it keeps room for several rows.
+        content.SizeChanged += (_, _) => tilesHost.Visible = content.Height >= D(330);
+        return Section(toolbar, content);
     }
 
     private static string AuditTime(AuditEntry e) => e.AtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm:ss tt", CultureInfo.InvariantCulture);
 
+    /// <summary>Whether an event belongs under the chosen chip. "Activity" is everything except sign-ins; "Security" also takes anything that touches security.</summary>
+    private static bool AuditMatches(string filter, AuditView view) => filter switch
+    {
+        "All" => true,
+        "Activity" => view.Category != AuditCategory.SignIns,
+        "Security" => view.Category == AuditCategory.Security || view.Severity == AuditSeverity.Security,
+        _ => AuditPresentation.CategoryName(view.Category) == filter
+    };
+
     private void LoadAudit()
     {
-        if (!Try("Unable to load the audit log", () => _auditEntries = _service.LoadAudit(_auditSearch.Text))) return;
-        _audit.DataSource = _auditSorter.Sort(_auditEntries).Select(e => new AuditRow(AuditTime(e), e.Actor, e.Role, e.Action, e.Target, e.Detail)).ToList();
+        // Loaded without a search so the friendly sentences can be searched too ("approved", "ignored"); the search is applied below.
+        List<AuditEntry>? loaded = null;
+        if (!Try("Unable to load the audit log", () => loaded = _service.LoadAudit(null, 2000))) return;
+        string search = _auditSearch.Text.Trim();
+        _auditViews = _auditSorter.Sort(loaded!)
+            .Select(e => (Entry: e, View: AuditPresentation.Describe(e)))
+            .Where(x => search.Length == 0 || new[] { x.Entry.Actor, x.Entry.Action, x.Entry.Target, x.Entry.Detail, x.View.Title }
+                .Any(text => text.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        _auditEntries = _auditViews.Select(x => x.Entry).ToList();
+        ApplyAuditView();
+    }
+
+    /// <summary>Shows the loaded events under the chosen chip, and refreshes the chip counts and today's numbers.</summary>
+    private void ApplyAuditView()
+    {
+        foreach ((string name, GlassButton chip) in _auditChips)
+        {
+            int count = _auditViews.Count(x => AuditMatches(name, x.View));
+            chip.Text = $"{name} {count:N0}";
+            chip.Width = Math.Max(D(64), TextRenderer.MeasureText(chip.Text, chip.Font).Width + D(30));
+            chip.Style = name == _auditFilter ? GlassButtonStyle.Primary : GlassButtonStyle.Outline;
+        }
+        _auditChips["Activity"].Parent?.PerformLayout();   // the counts changed the chips' widths: wrap them again
+
+        DateTime today = DateTime.Today;
+        var todays = _auditViews.Where(x => x.Entry.AtUtc.ToLocalTime().Date == today).ToList();
+        int attention = todays.Count(x => x.View.Severity is AuditSeverity.Attention or AuditSeverity.Security);
+        _auditTileToday.Value = todays.Count(x => x.View.Category != AuditCategory.SignIns).ToString("N0");
+        _auditTileEmails.Value = todays.Count(x => x.View.Category == AuditCategory.Email && x.View.Severity == AuditSeverity.Done).ToString("N0");
+        _auditTileRefunds.Value = todays.Count(x => x.Entry.Action == "REFUND_REQUEST_APPROVED").ToString("N0");
+        _auditTileAttention.Value = attention.ToString("N0");
+        _auditTileAttention.Accent = attention > 0 ? Theme.Warning : Theme.Accent;
+
+        _audit.DataSource = _auditViews
+            .Where(x => AuditMatches(_auditFilter, x.View))
+            .Select(x => new AuditRow(AuditTime(x.Entry), x.Entry.Actor, $"{x.View.Symbol} {x.View.Title}", x.Entry.Target, x.Entry.Detail, x.Entry, x.View.Severity))
+            .ToList();
+    }
+
+    /// <summary>The full record of the selected event: the exact time, who and in what role, the raw event code, the item and the detail.</summary>
+    private void ShowAuditDetails()
+    {
+        if (_audit.CurrentRow?.DataBoundItem is not AuditRow { Entry: var e }) return;
+        AuditView view = AuditPresentation.Describe(e);
+        string text = $"{view.Title}\n\n" +
+                      $"When:   {e.AtUtc.ToLocalTime():dddd, MMM d, yyyy h:mm:ss tt}  ({e.AtUtc:yyyy-MM-dd HH:mm:ss} UTC)\n" +
+                      $"Who:    {e.Actor}" + (string.IsNullOrWhiteSpace(e.Role) ? "" : $" ({e.Role})") + "\n" +
+                      $"Event:  {e.Action}\n" +
+                      $"Item:   {(string.IsNullOrWhiteSpace(e.Target) ? "-" : e.Target)}\n" +
+                      $"Detail: {(string.IsNullOrWhiteSpace(e.Detail) ? "-" : e.Detail)}";
+        MessageBox.Show(this, text, "Audit record", MessageBoxButtons.OK,
+            view.Severity is AuditSeverity.Attention or AuditSeverity.Security ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
 
     private void ExportAudit()
