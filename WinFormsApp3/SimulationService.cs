@@ -458,9 +458,11 @@ public sealed class SimulationService
     }
 
     /// <summary>
-    /// Frees seats in one cabin on demand by cancelling a demo booking with the normal cancellation rules, so the normal waitlist
-    /// logic offers them. The booking chosen is the first one large enough for the traveller first in line (or the largest there is).
-    /// Returns the cancelled reference and how many seats it freed, or null when the cabin has no demo booking to cancel.
+    /// Frees seats in one cabin on demand by cancelling demo bookings with the normal cancellation rules, so the normal waitlist
+    /// logic offers them. The first booking chosen is the first one large enough for the traveller first in line (or the largest there
+    /// is); when that is still too small for their party (every demo booking in the cabin is a single traveller, say), more demo
+    /// bookings are cancelled, largest first, until the party fits or there are none left.
+    /// Returns the first cancelled reference and how many seats were freed in all, or null when the cabin has no demo booking to cancel.
     /// Real bookings are never touched.
     /// </summary>
     public (string Reference, int Seats)? FreeSeatsInCabin(string flightNo, DateTime date, string cabin)
@@ -468,14 +470,25 @@ public sealed class SimulationService
         int needed = _store.LoadWaitlistDetails(flightNo, date)
             .Where(e => e.ClassName == cabin && e.Status == BookingStore.WaitlistWaiting)
             .Select(e => e.SeatsWanted).FirstOrDefault();
-        BookingRecord? pick = null;
+        var bookings = new List<BookingRecord>();
         foreach (string reference in _store.LoadSimulatedConfirmedReferences(flightNo, date, cabin).Take(60))
+            if (_store.FindByReference(reference) is { } booking) bookings.Add(booking);
+
+        BookingRecord? pick = null;
+        foreach (BookingRecord booking in bookings)
         {
-            if (_store.FindByReference(reference) is not { } booking) continue;
             if (pick is null || booking.Passengers.Count > pick.Passengers.Count) pick = booking;
             if (pick.Passengers.Count >= needed) break;
         }
-        return pick is not null && CancelSimulatedBooking(pick.Reference) ? (pick.Reference, pick.Passengers.Count) : null;
+        if (pick is null || !CancelSimulatedBooking(pick.Reference)) return null;
+
+        int freed = pick.Passengers.Count;
+        foreach (BookingRecord extra in bookings.Where(b => b.Reference != pick.Reference).OrderByDescending(b => b.Passengers.Count))
+        {
+            if (freed >= needed) break;
+            if (CancelSimulatedBooking(extra.Reference)) freed += extra.Passengers.Count;
+        }
+        return (pick.Reference, freed);
     }
 
     /// <summary>0–99, fixed for a waitlist code: below 60 the traveller books, 60–74 declines, 75 and above never answers.</summary>
