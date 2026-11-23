@@ -21,10 +21,17 @@ internal static class HelpContent
     public static IReadOnlyList<HelpTopic> Topics() => new HelpTopic[]
     {
         new("Book a flight",
-            "1. On the home screen, find the flight on the board: narrow it with the region chips, the day arrows and the search box, then select it. The details panel shows its status, timeline and cabins; choose a cabin and press the Book button. Or press \"Book a flight\" at the top to start from the first step.\n" +
+            "1. On the home screen, find the flight on the board: narrow it with the region chips, the day arrows and the search box, then select it. The details panel shows its status, timeline and cabins; choose a cabin and press the Book button. Or press \"Book a flight\" at the top to start from the first step. The clock in the middle of the header shows this computer's local time and date, the same time the board's statuses and countdowns use.\n" +
             "2. Work through the six steps shown as pills at the top: Flight, Passengers, Class & extras, Seats, Payment, Receipt. Steps you have already visited can be clicked to go back.\n" +
             "3. The Receipt shows the booking reference. Give it to the traveller; they need it to manage the booking and to check in.\n\n" +
             $"A booking can have up to {BookingRules.MaxPassengersPerBooking} travellers, and round trips are supported."),
+
+        new("Traveller details: phone and birthday",
+            "Contact number: enter a Philippine number, for example +63 917 123 4567 or 0917 123 4567. Spaces, dashes and brackets are fine. " +
+            "A mobile number starts with 9 after the country code; a landline looks like 02 8123 4567. Anything else is refused, and the number is saved as +63 followed by the digits.\n\n" +
+            "Birthday: type only the digits, for example 19900423, and the dashes are added for you (1990-04-23). Pasted dates are tidied the same way. " +
+            "Or press the arrow at the right of the box (F4 also works) to pick the day on a calendar: click the calendar's title to move by month, then by year. A birthday in the future is refused.\n\n" +
+            $"For the senior discount the traveller must be {AppData.SeniorMinimumAge} or older on the day you book."),
 
         new("Seat holds",
             $"A seat you pick in the seat map is held for {AppData.SeatHoldMinutes} minutes while the booking is completed. " +
@@ -41,7 +48,11 @@ internal static class HelpContent
             "SkyWings reads that mailbox about once a minute and adds the request to the Refunds tab (Refund requests view) with the customer's message; press Refresh there to check right away. " +
             "It warns you when the email came from an address that is not the one on the booking. You can also log a request by hand with \"Log refund request\" in Manage booking, or \"Log request\" in the Refunds tab. A request only writes the request down: the booking stays active, and the tab button shows how many requests are waiting. " +
             "Double-click a request (or press Details) to open it: you see the booking, the customer's note and the refund it would give, and answer it right there. " +
-            "Choose Approve refund to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left."),
+            "Choose Approve refund to cancel the booking and refund it to the original payment method (the customer is emailed that the refund is approved, with the amount and the RFD reference), or Decline to keep the booking and give a reason, which can be emailed to the customer. Cancelling the booking yourself also completes the request. A request cannot be logged after the flight has left.\n\n" +
+            "If a refund email arrives for a booking that is already cancelled, there is nothing to decide: no request is made, the booking's own address is told by email that it is already cancelled (at most once a day), " +
+            "and a \"Settled\" row appears in the Refund requests view with what was refunded. It stays in the list for a day, then only under \"Show closed\", and it never counts as a waiting request. " +
+            "A request or Settled row that came from an address that is not the one on the booking is shown in amber: someone else knows that booking reference. " +
+            "Check it before approving. The Approve question repeats the warning and \"No\" is the default button."),
 
         new("Waitlist for a sold-out flight",
             "When a cabin is sold out, select the flight on the home screen, choose that cabin in the details panel and press \"Join waitlist\". Enter the traveller's name, email and seats needed. " +
@@ -93,6 +104,20 @@ internal static class HelpContent
             "Agent: can view and cancel bookings and view reports.\n\n" +
             "Admin: everything an agent can do, plus managing flights and staff accounts, the audit log, and backup and restore.\n\n" +
             "Everything staff do is recorded in the audit log."),
+
+        new("Reports",
+            "The Reports tab shows six numbers: total bookings, confirmed, cancelled (with the share of all bookings), revenue, refunded, and the average booking. " +
+            "Revenue counts confirmed bookings; refunds come from cancelled ones, so the refunded figure is not taken off the revenue.\n\n" +
+            "Under the numbers, the top routes by confirmed bookings are listed and drawn as bars, with a second bar chart of bookings by cabin. " +
+            "\"Last refreshed\" shows when the figures were loaded; press Refresh to load them again. Export CSV saves the figures and the top routes."),
+
+        new("Audit log",
+            "The Audit tab (admins) is the record of what happened. The tiles count today's events, emails sent, refunds paid back, and items that need attention.\n\n" +
+            "The chips filter the list. \"Activity\" is the default and leaves out sign-ins and sign-outs; \"Sign-ins\" brings them back, and \"All\" shows everything. " +
+            "Each event is a sentence with a mark: a green tick for what went well, an amber warning for something to look at (for example a refund email that was ignored, or an email that was only saved to the outbox), " +
+            "a red warning for security (failed sign-ins, password or role changes), and grey for routine events.\n\n" +
+            "Double-click a row for the full record: the exact time, who did it, the item and the details. The search box finds words in the sentences as well as in the names, items and details. " +
+            "Export CSV saves the events with their original codes."),
 
         new("Backup and restore (admins)",
             "Open the Staff window, go to Flights, and use Backup or Restore.\n\n" +

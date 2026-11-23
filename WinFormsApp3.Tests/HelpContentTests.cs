@@ -88,6 +88,39 @@ public sealed class HelpContentTests
     }
 
     [TestMethod]
+    public void TheTravellerDetailsTopic_ExplainsThePhilippineNumberAndTheBirthdayBox()
+    {
+        string body = HelpContent.Topics().Single(t => t.Title.StartsWith("Traveller details", StringComparison.Ordinal)).Body;
+        StringAssert.Contains(body, "+63 917 123 4567");
+        StringAssert.Contains(body, "0917 123 4567");
+        StringAssert.Contains(body, "19900423", "the digits are typed, the dashes are added");
+        StringAssert.Contains(body, "calendar");
+        StringAssert.Contains(body, $"{AppData.SeniorMinimumAge}", "the senior age is read from the rules");
+    }
+
+    [TestMethod]
+    public void TheRefundTopic_ExplainsSettledRows_TheAmberFlag_AndTheApproveWarning()
+    {
+        string body = HelpContent.Topics().Single(t => t.Title == "Change a seat or cancel").Body;
+        StringAssert.Contains(body, "already cancelled");
+        StringAssert.Contains(body, "Settled");
+        StringAssert.Contains(body, "amber");
+        StringAssert.Contains(body, "\"No\" is the default");
+    }
+
+    [TestMethod]
+    public void ReportsAndAuditTopics_DescribeWhatTheTabsShow()
+    {
+        string reports = HelpContent.Topics().Single(t => t.Title == "Reports").Body;
+        foreach (string word in new[] { "total bookings", "average booking", "Last refreshed", "bar", "Export CSV" })
+            StringAssert.Contains(reports, word);
+
+        string audit = HelpContent.Topics().Single(t => t.Title == "Audit log").Body;
+        foreach (string word in new[] { "Activity", "Sign-ins", "All", "Double-click", "Export CSV" })
+            StringAssert.Contains(audit, word);
+    }
+
+    [TestMethod]
     public void TheHomeScreenTopics_DescribeTheFilterRowAndTheDetailsPanel_NotTheOldSearchCard()
     {
         string book = HelpContent.Topics().Single(t => t.Title == "Book a flight").Body;
