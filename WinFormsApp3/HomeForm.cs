@@ -31,6 +31,7 @@ public partial class HomeForm : GlassForm
     private readonly DataGridView _flights = new();
     private readonly Label _flightSummary = new();
     private readonly Label _clock = new();
+    private readonly Label _masterTime = new(), _masterDate = new();
     private readonly Label _live = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private List<FlightRow> _boardRows = new();
@@ -187,9 +188,38 @@ public partial class HomeForm : GlassForm
         // leftmost link. Make the menu exactly as wide as its buttons.
         links.Width = links.Padding.Horizontal + links.Controls.Cast<Control>().Sum(c => c.Width + c.Margin.Horizontal);
 
+        // Master clock in the empty middle of the header. It fills the space left of the menu; the left padding keeps it clear of the
+        // brand and tagline, which sit on top of this panel.
+        _masterTime.Font = Theme.Title;
+        _masterTime.ForeColor = Theme.Brand;
+        _masterDate.Font = Theme.Small;
+        _masterDate.ForeColor = Theme.TextSecondary;
+        foreach (var label in new[] { _masterTime, _masterDate })
+        {
+            label.AutoSize = false;
+            label.Dock = DockStyle.Top;
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            label.BackColor = Color.Transparent;
+        }
+        _masterTime.Height = D(34);
+        _masterDate.Height = D(20);
+        var masterClock = new Panel
+        {
+            Dock = DockStyle.Fill, Padding = new Padding(D(300), D(2), 0, 0), BackColor = Color.Transparent,
+            AccessibleName = "Master clock", AccessibleRole = AccessibleRole.Clock
+        };
+        masterClock.Controls.Add(_masterDate);   // docked in reverse order: the time goes on top
+        masterClock.Controls.Add(_masterTime);
+        UpdateMasterClock(DateTime.Now);
+
+        header.Controls.Add(masterClock);
         header.Controls.Add(links);
         header.Controls.Add(tag);
         header.Controls.Add(brand);
+        // The clock panel fills the header (docking needs it first), so it sits in front of these two: bring them back on top.
+        // They are not docked, so this does not change the layout.
+        tag.BringToFront();
+        brand.BringToFront();
         return header;
     }
 
@@ -581,6 +611,7 @@ public partial class HomeForm : GlassForm
     {
         DateTime now = DateTime.Now;
         _clock.Text = now.ToString("ddd, MMM d  ·  h:mm:ss tt");
+        UpdateMasterClock(now);
         if (_loadingDashboard) return;
 
         if (now - _lastReload >= TimeSpan.FromSeconds(60))
@@ -593,6 +624,13 @@ public partial class HomeForm : GlassForm
         if (_boardRows.Count == 0) return;
         List<FlightRow> restamped = HomeController.Restamp(_boardRows, _day.Value.Date, now);
         if (!SameBoardText(_boardRows, restamped)) BindBoard(restamped);   // rebuilding the grid is costly; skip when nothing visible changed
+    }
+
+    /// <summary>Shows the same clock the board counts down from (this computer's local time).</summary>
+    private void UpdateMasterClock(DateTime now)
+    {
+        _masterTime.Text = now.ToString("h:mm:ss tt");
+        _masterDate.Text = $"{now:dddd, MMMM d, yyyy}  ·  Local time";
     }
 
     /// <summary>True when both lists show exactly the same text on the board, in the same order.</summary>

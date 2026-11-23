@@ -72,9 +72,13 @@ public sealed class AdminForm : GlassForm
     private readonly DataGridView _routeGrid = new() { Dock = DockStyle.Fill, AutoGenerateColumns = true };
     private readonly StatTile _tileTotal = new() { Title = "Total bookings" };
     private readonly StatTile _tileConfirmed = new() { Title = "Confirmed" };
-    private readonly StatTile _tileCancelled = new() { Title = "Cancelled", Accent = Theme.DangerRed };
+    private readonly StatTile _tileCancelled = new() { Title = "Cancelled", Accent = Theme.Warning };
     private readonly StatTile _tileRevenue = new() { Title = "Revenue (PHP)" };
     private readonly StatTile _tileRefunded = new() { Title = "Refunded (PHP)", Accent = Theme.Warning };
+    private readonly StatTile _tileAverage = new() { Title = "Avg booking (PHP)" };
+    private readonly BarChart _routeChart = new() { Title = "Bookings by route" };
+    private readonly BarChart _classChart = new() { Title = "Bookings by cabin", BarColor = Theme.Info };
+    private readonly Label _lblRefreshed =new() { AutoSize = true, ForeColor = Theme.TextSecondary };
     private ReportStats? _lastReport;
 
     // staff
@@ -1128,11 +1132,11 @@ public sealed class AdminForm : GlassForm
 
     private Panel BuildReportsPage()
     {
-        var tiles = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(104), ColumnCount = 5, RowCount = 1 };
-        var all = new[] { _tileTotal, _tileConfirmed, _tileCancelled, _tileRevenue, _tileRefunded };
+        var all = new[] { _tileTotal, _tileConfirmed, _tileCancelled, _tileRevenue, _tileRefunded, _tileAverage };
+        var tiles = new TableLayoutPanel { Dock = DockStyle.Top, Height = D(104), ColumnCount = all.Length, RowCount = 1 };
         for (int i = 0; i < all.Length; i++)
         {
-            tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / all.Length));
             all[i].Dock = DockStyle.Fill;
             all[i].Margin = new Padding(0, 0, i < all.Length - 1 ? D(6) : 0, 0);
             tiles.Controls.Add(all[i], i, 0);
@@ -1142,6 +1146,8 @@ public sealed class AdminForm : GlassForm
         var toolbar = Toolbar();
         toolbar.Controls.Add(ToolButton("Refresh", (_, _) => LoadReport(), GlassButtonStyle.Ghost));
         toolbar.Controls.Add(ToolButton("Export CSV", (_, _) => ExportReport()));
+        _lblRefreshed.Margin = new Padding(D(12), D(10), 0, 0);
+        toolbar.Controls.Add(_lblRefreshed);
 
         var routesTitle = new Label
         {
@@ -1154,6 +1160,13 @@ public sealed class AdminForm : GlassForm
         var page = new Panel { Dock = DockStyle.Fill, Visible = false };
         var card = new GlassCard { Dock = DockStyle.Fill, ContentPadding = 12 };
         card.Controls.Add(_routeGrid);
+        var charts = new Panel { Dock = DockStyle.Right, Width = D(440), Padding = new Padding(D(12), 0, 0, 0) };
+        _routeChart.Dock = DockStyle.Fill;
+        _classChart.Dock = DockStyle.Bottom;
+        _classChart.Height = D(170);
+        charts.Controls.Add(_routeChart);
+        charts.Controls.Add(_classChart);
+        card.Controls.Add(charts);
         card.Controls.Add(routesTitle);
         card.Controls.Add(toolbar);
 
@@ -1171,16 +1184,30 @@ public sealed class AdminForm : GlassForm
         _lastReport = stats;
         if (stats is null)
         {
-            foreach (var tile in new[] { _tileTotal, _tileConfirmed, _tileCancelled, _tileRevenue, _tileRefunded }) tile.Value = "—";
+            foreach (var tile in new[] { _tileTotal, _tileConfirmed, _tileCancelled, _tileRevenue, _tileRefunded, _tileAverage }) tile.Value = "—";
             _routeGrid.DataSource = null;
+            _routeChart.SetItems([]);
+            _classChart.SetItems([]);
             return;
         }
         _tileTotal.Value = stats.TotalBookings.ToString("N0");
         _tileConfirmed.Value = stats.ConfirmedCount.ToString("N0");
-        _tileCancelled.Value = stats.CancelledCount.ToString("N0");
+        double cancelRate = stats.TotalBookings > 0 ? 100.0 * stats.CancelledCount / stats.TotalBookings : 0;
+        _tileCancelled.Value = $"{stats.CancelledCount:N0} ({cancelRate:0.0}%)";
         _tileRevenue.Value = stats.TotalRevenue.ToString("N2");
         _tileRefunded.Value = stats.TotalRefunded.ToString("N2");
+        _tileAverage.Value = (stats.ConfirmedCount > 0 ? stats.TotalRevenue / stats.ConfirmedCount : 0m).ToString("N2");
         _routeGrid.DataSource = stats.TopRoutes.ToList();
+        _routeChart.SetItems(stats.TopRoutes.Take(6).Select(r => ($"{r.FlightNo}  {AirportCode(r.Origin)}→{AirportCode(r.Destination)}", (double)r.Count, r.Count.ToString("N0"))));
+        _classChart.SetItems(stats.ByClass.OrderByDescending(c => c.Count).Select(c => (c.ClassName, (double)c.Count, c.Count.ToString("N0"))));
+        _lblRefreshed.Text =$"Last refreshed {DateTime.Now:h:mm tt}";
+    }
+
+    /// <summary>"Manila (MNL)" becomes "MNL"; anything without a bracketed code is left as it is.</summary>
+    private static string AirportCode(string place)
+    {
+        int open = place.LastIndexOf('('), close = place.LastIndexOf(')');
+        return open >= 0 && close > open + 1 ? place[(open + 1)..close] : place;
     }
 
     private void ExportReport()
