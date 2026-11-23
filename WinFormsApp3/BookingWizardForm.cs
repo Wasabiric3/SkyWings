@@ -61,9 +61,9 @@ public sealed class BookingWizardForm : GlassForm
     // step 2: passengers
     private readonly TextBox _name = new() { MaxLength = BookingRules.MaxNameLength };
     private readonly TextBox _address = new() { MaxLength = BookingRules.MaxAddressLength };
-    private readonly TextBox _contact = new() { MaxLength = BookingRules.MaxContactLength };
+    private readonly TextBox _contact = new() { MaxLength = BookingRules.MaxContactLength, PlaceholderText = "+63 9XX XXX XXXX" };
     private readonly TextBox _idNumber = new() { MaxLength = BookingRules.MaxIdNumberLength };
-    private readonly TextBox _birthday = new() { PlaceholderText = "yyyy-MM-dd" };
+    private readonly BirthdayBox _birthday = new();
     private readonly GlassCheckBox _senior = new() { Text = "Senior citizen (60+)", AutoSize = true };
     private readonly GlassCheckBox _pwd = new() { Text = "Person with disability (PWD)", AutoSize = true };
     private readonly ListBox _passengerList = new() { Dock = DockStyle.Top, BorderStyle = BorderStyle.None, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed };

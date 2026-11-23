@@ -126,8 +126,8 @@ public sealed class BookingWizardController
         if (input.IdNumber.Length == 0) id = "Enter an ID number.";
         if (input.Address.Length == 0) address = "Enter the home address.";
         if (input.Contact.Length == 0) contact = "Enter a contact number.";
-        else if (input.Contact.Any(c => !char.IsDigit(c) && c is not '+' and not '-' and not ' '))
-            contact = "Use digits, spaces, + or - only.";
+        else if (!BookingRules.TryNormalizePhContact(input.Contact, out _))
+            contact = "Use a Philippine number like +63 917 123 4567 or 0917 123 4567.";
         if (input.Email.Length > 0 && !BookingRules.IsValidEmail(input.Email))
             email = "Enter an address like name@example.com, or leave it empty.";
 
@@ -155,7 +155,9 @@ public sealed class BookingWizardController
         if (!result.IsValid) return result;
         Session.Passengers.Add(new PassengerDraft
         {
-            Name = input.Name, Address = input.Address, Contact = input.Contact, Birthday = input.Birthday,
+            Name = input.Name, Address = input.Address,
+            Contact = BookingRules.TryNormalizePhContact(input.Contact, out string phone) ? phone : input.Contact,   // stored as +63 9XX XXX XXXX
+            Birthday = input.Birthday,
             IdNumber = input.IdNumber, Senior = input.Senior, Pwd = input.Pwd, Age = result.Age
         });
         // One receipt address per booking: the latest entry wins.

@@ -30,6 +30,35 @@ public static class BookingRules
         return string.Equals(address.Address, value, StringComparison.Ordinal) && address.Host.Contains('.');
     }
 
+    /// <summary>
+    /// A Philippine phone number, typed the way people write it: <c>+63 917 123 4567</c>, <c>0917 123 4567</c> or <c>63917…</c>
+    /// (spaces, dashes and brackets are ignored). A mobile number has 10 digits after the country code and starts with 9;
+    /// a landline has an area code starting 2-8 and 8 or 9 digits in all. Returns the number as <c>+63 …</c>.
+    /// </summary>
+    public static bool TryNormalizePhContact(string? text, out string normalized)
+    {
+        normalized = "";
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        string value = new(text.Where(c => c is not ' ' and not '-' and not '(' and not ')').ToArray());
+        bool plus = value.StartsWith('+');
+        string digits = plus ? value[1..] : value;
+        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit)) return false;
+
+        string national;
+        if (digits.StartsWith("63")) national = digits[2..];
+        else if (!plus && digits.StartsWith('0')) national = digits[1..];
+        else return false;
+
+        bool mobile = national.Length == 10 && national[0] == '9';
+        bool landline = national.Length is >= 8 and <= 9 && national[0] is >= '2' and <= '8';
+        if (!mobile && !landline) return false;
+
+        normalized = mobile
+            ? $"+63 {national[..3]} {national[3..6]} {national[6..]}"
+            : $"+63 {national}";
+        return true;
+    }
+
     /// <summary>Throws <see cref="ArgumentException"/> with a readable message when a booking breaks a limit.</summary>
     public static void Validate(BookingRecord booking)
     {
