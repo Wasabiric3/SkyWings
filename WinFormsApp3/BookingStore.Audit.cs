@@ -94,6 +94,18 @@ public sealed partial class BookingStore
         }
     }
 
+    /// <summary>True when this action was already recorded for this target within the last <paramref name="within"/> (used to send an email only once in a while).</summary>
+    public bool HasRecentAudit(string action, string target, TimeSpan within)
+    {
+        lock (_lock)
+        {
+            using var con = OpenConnection();
+            using var cmd = Cmd(con, "SELECT 1 FROM audit_log WHERE action = @action AND target = @target AND at >= @since LIMIT 1",
+                null, ("@action", action), ("@target", target), ("@since", DateTime.UtcNow - within));
+            return cmd.ExecuteScalar() is not null;
+        }
+    }
+
     /// <summary>Newest entries first. <paramref name="search"/> matches actor, action, target or detail.</summary>
     public List<AuditEntry> LoadAudit(int limit = 500, string? search = null)
     {

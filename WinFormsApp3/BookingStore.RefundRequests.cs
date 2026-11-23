@@ -7,7 +7,8 @@ public sealed record RefundRequestRow(long Id, string Reference, string FlightNo
     decimal EstimatedRefund, string Status, string LoggedBy, DateTime LoggedAt, DateTime? ClosedAt, string ClosedBy, string Note,
     string CustomerMessage = "", string Source = "STAFF", bool SenderMatches = true);
 
-public sealed record RefundRequestResult(bool Ok, string Message);
+/// <param name="AlreadyCancelled">The request was refused because the booking is already cancelled (so the customer can be told).</param>
+public sealed record RefundRequestResult(bool Ok, string Message, bool AlreadyCancelled = false);
 
 /// <summary>The outcome of approving a refund request: the booking is cancelled and <see cref="Refund"/> was paid back under <see cref="RefundReference"/>.</summary>
 public sealed record RefundApprovalResult(bool Ok, string Message, decimal Refund = 0m, string RefundReference = "");
@@ -26,6 +27,9 @@ public sealed partial class BookingStore
 
     /// <summary>Raised, outside the lock, when a refund request arrived by email and was logged: the booking reference (used to acknowledge it).</summary>
     public event Action<string>? RefundRequestReceived;
+
+    /// <summary>Raised, outside the lock, when a refund request arrived by email for a booking that is already cancelled: the booking reference (used to tell its owner).</summary>
+    public event Action<string>? RefundRequestAlreadyCancelled;
 
     private static void EnsureRefundRequestSchema(SqliteConnection con)
     {
@@ -57,6 +61,11 @@ public sealed partial class BookingStore
             try { RefundRequestReceived?.Invoke(reference.Trim().ToUpperInvariant()); }
             catch (Exception ex) { LogError(ex); }
         }
+        else if (!result.Ok && result.AlreadyCancelled && source == "EMAIL")
+        {
+            try { RefundRequestAlreadyCancelled?.Invoke(reference.Trim().ToUpperInvariant()); }
+            catch (Exception ex) { LogError(ex); }
+        }
         return result;
     }
 
@@ -70,7 +79,8 @@ public sealed partial class BookingStore
                 BookingRecord? booking = FindByReference(reference.Trim().ToUpperInvariant());
                 if (booking is null) return new RefundRequestResult(false, "No booking has that reference.");
                 if (IsSimulatedBooking(booking.Reference)) return new RefundRequestResult(false, "Refund requests cannot be logged for this booking.");
-                if (booking.Status != AppData.StatusConfirmed) return new RefundRequestResult(false, "Only a confirmed booking can have a refund request.");
+                if (booking.Status != AppData.StatusConfirmed)
+                    return new RefundRequestResult(false, "Only a confirmed booking can have a refund request.", booking.Status == AppData.StatusCanceled);
                 if (AppData.DepartureOf(booking.FlightNo, booking.FlightDateValue) <= at)
                     return new RefundRequestResult(false, "This flight has already left, so the booking can no longer be cancelled or refunded.");
 

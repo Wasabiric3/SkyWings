@@ -86,6 +86,53 @@ public sealed class BookingEmailService
         _store.BookingCanceled += reference => _ = SendCancellationForAsync(reference);
         _store.RefundRequestDeclined += (reference, reason) => _ = SendDeclinedForAsync(reference, reason);
         _store.RefundRequestReceived += reference => _ = SendRequestReceivedForAsync(reference);
+        _store.RefundRequestAlreadyCancelled += reference => _ = SendAlreadyDoneForAsync(reference);
+    }
+
+    /// <summary>At most one "already cancelled" reply per booking in this time, so nobody can make SkyWings flood a customer by writing again and again.</summary>
+    private static readonly TimeSpan AlreadyDoneEvery = TimeSpan.FromHours(24);
+
+    private async Task SendAlreadyDoneForAsync(string reference)
+    {
+        try
+        {
+            BookingRecord? booking = _store.FindByReference(reference);
+            string? email = booking is null ? null : _store.LoadBookingContact(reference);
+            if (booking is null || string.IsNullOrEmpty(email)) return;
+            await SendRefundAlreadyDoneAsync(booking, email).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLogger.Error("Email", ex); }
+    }
+
+    /// <summary>
+    /// Tells the booking's own address that a refund was asked for a booking that is already cancelled (and what was refunded). It goes to the
+    /// address on the booking, never to the sender of the email. Same rules as the other emails, and only once a day per booking.
+    /// </summary>
+    public async Task<EmailSendResult> SendRefundAlreadyDoneAsync(BookingRecord booking, string toEmail)
+    {
+        try
+        {
+            if (!BookingRules.IsValidEmail(toEmail))
+                return new EmailSendResult(false, "Skipped", "The email address is not valid.");
+            if (!_store.IsEmailSubscribed(toEmail))
+                return new EmailSendResult(false, "Skipped", "This address has unsubscribed from SkyWings emails.");
+            if (_store.IsSimulatedBooking(booking.Reference))
+                return new EmailSendResult(false, "Skipped", "Demo bookings do not send email.");
+            if (booking.Status != AppData.StatusCanceled)
+                return new EmailSendResult(false, "Skipped", "The booking is not cancelled.");
+            if (_store.HasRecentAudit("EMAIL_REFUND_ALREADY", booking.Reference, AlreadyDoneEvery))
+                return new EmailSendResult(false, "Skipped", "This booking was already told about its cancellation today.");
+
+            EmailSendResult result = await _sender.SendAsync(
+                BookingEmailBuilder.BuildRefundAlreadyDone(booking, _store.LoadRefund(booking.Reference), toEmail.Trim(), _unsubscribeMailbox)).ConfigureAwait(false);
+            _store.WriteAudit("system", "SYSTEM", "EMAIL_REFUND_ALREADY", booking.Reference, result.Channel);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLogger.Error("Email", ex);
+            return new EmailSendResult(false, "Failed", "The email could not be sent or saved.");
+        }
     }
 
     private async Task SendRequestReceivedForAsync(string reference)

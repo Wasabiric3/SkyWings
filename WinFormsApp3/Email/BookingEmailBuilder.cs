@@ -160,6 +160,48 @@ public static class BookingEmailBuilder
         return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
     }
 
+    /// <summary>
+    /// The reply to a refund request for a booking that is already cancelled: nothing more is needed, and what was refunded (when it was).
+    /// It goes to the booking's own address. Like the acknowledgement, its subject must not contain "Refund request SKY-".
+    /// </summary>
+    public static EmailMessage BuildRefundAlreadyDone(BookingRecord booking, RefundRecord? refund, string toEmail, string? unsubscribeMailbox = null)
+    {
+        string subject = $"SkyWings: booking {booking.Reference} is already cancelled";
+        string trip = $"{booking.FlightNo} · {booking.Origin} → {booking.Destination} · {booking.FlightDateValue:dddd, d MMMM yyyy}";
+        string money = refund is not null
+            ? $"PHP {refund.Amount:N2} was refunded to {refund.Method} {refund.AccountMasked}. Refund reference: {refund.Reference}."
+            : booking.RefundAmount > 0
+                ? $"PHP {booking.RefundAmount:N2} is being refunded to {booking.PaymentMethod} {booking.MaskedAccount}."
+                : "No refund was due for this cancellation.";
+        const string closing = "There is nothing more to do. If you did not ask for this, or you have a question, please contact SkyWings staff.";
+
+        var html = new StringBuilder();
+        html.Append("<!DOCTYPE html><html><body style=\"margin:0;padding:24px;background:#f3f7f4;font-family:Segoe UI,Arial,sans-serif;color:#1e2726\">");
+        html.Append("<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e1eae4\">");
+        html.Append("<div style=\"font-size:22px;font-weight:700;color:#3f6556\">SkyWings</div>");
+        html.Append("<div style=\"color:#687e74;margin-bottom:18px\">About your refund request</div>");
+        html.Append($"<div style=\"font-size:13px;color:#687e74\">BOOKING REFERENCE</div><div style=\"font-size:24px;font-weight:700;letter-spacing:1px\">{Enc(booking.Reference)}</div>");
+        html.Append($"<p style=\"margin:14px 0\">{Enc(trip)}</p>");
+        html.Append("<p style=\"margin:14px 0\"><b>This booking is already cancelled.</b></p>");
+        html.Append($"<p style=\"margin:14px 0\">{Enc(money)}</p>");
+        html.Append($"<div style=\"font-size:12px;color:#687e74\">{Enc(closing)}</div>");
+        html.Append($"<hr style=\"border:none;border-top:1px solid #e1eae4;margin:20px 0\"/><div style=\"font-size:12px;color:#687e74\">{Enc(UnsubscribeText)}</div>");
+        html.Append(UnsubscribeButtonHtml(unsubscribeMailbox, booking.Reference));
+        html.Append("</div></body></html>");
+
+        var text = new StringBuilder();
+        text.AppendLine("SkyWings - about your refund request").AppendLine();
+        text.AppendLine("Booking reference: " + booking.Reference);
+        text.AppendLine(trip).AppendLine();
+        text.AppendLine("This booking is already cancelled.");
+        text.AppendLine(money).AppendLine();
+        text.AppendLine(closing);
+        text.AppendLine().AppendLine(UnsubscribeText);
+        text.Append(UnsubscribeTextLine(unsubscribeMailbox, booking.Reference));
+
+        return new EmailMessage(toEmail, subject, html.ToString(), text.ToString(), Array.Empty<InlineImage>(), unsubscribeMailbox);
+    }
+
     /// <summary>The email sent when staff decline a refund request: the booking stays active, and the reason is given.</summary>
     public static EmailMessage BuildRefundDeclined(BookingRecord booking, string reason, string toEmail, string? unsubscribeMailbox = null)
     {
