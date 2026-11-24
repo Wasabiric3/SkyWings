@@ -22,7 +22,6 @@ public sealed class ChangePasswordForm : GlassForm
         ShowInTaskbar = false;
         ControlBox = !forced;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
 
         _currentRow = new FieldRow(forced ? "CURRENT (TEMPORARY) PASSWORD" : "CURRENT PASSWORD", _current);
         _newRow = new FieldRow($"NEW PASSWORD  (AT LEAST {PasswordPolicy.MinLength} CHARACTERS)", _new);

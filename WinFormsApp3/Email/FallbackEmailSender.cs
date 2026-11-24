@@ -24,7 +24,7 @@ public sealed class FallbackEmailSender : IEmailSender
         {
             AppLogger.Error("Email", ex);   // the log never receives the address or the message body
             EmailSendResult saved = await _fallback.SendAsync(message, cancellationToken).ConfigureAwait(false);
-            return saved with { Detail = "Could not reach the mail server, so a copy was saved: " + saved.Detail };
+            return saved with { Detail = "Could not reach the mail server, so a copy was saved:\n" + saved.Detail };
         }
     }
 }

@@ -26,7 +26,7 @@ Before you say something works, run the build and the relevant tests and report 
 | Area | Files |
 |------|-------|
 | Database access | `BookingStore.cs` (schema, connection, helpers) and partial files `BookingStore.<Topic>.cs` (Admin, Aircraft, Audit, CheckIn, Confirm, Email, Features, Manage, Seats, Simulation, Staff, Waitlist, Seed) |
-| Screens | `*Form.cs` at the top of `WinFormsApp3/` (`HomeForm`, `BookingWizardForm`, `ManageBookingForm`, `CheckInForm`, `AdminForm`, `FlightEditorForm`, `StaffLoginForm`, ...) |
+| Screens | `Forms/*.cs` (`HomeForm`, `BookingWizardForm`, `ManageBookingForm`, `CheckInForm`, `AdminForm`, `FlightEditorForm`, `StaffLoginForm`, ...) |
 | Screen logic | `Controllers/*.cs` (`BookingWizardController`, `CheckInController`, `ManageBookingController`, `HomeController`, `FlightSearch`, `FlightLoad`, `CustomerLookup`, ...) |
 | Rules and security | `Security/` (`BookingRules`, `PasswordPolicy`, `AdminService`, `BackupCrypto`, `AppPaths`, `SecurityHelpers`, `StaffModels`) |
 | Email and QR | `Email/` (`BookingEmailBuilder`, `BookingEmailService`, `SmtpEmailSender`, `FileOutboxEmailSender`, `FallbackEmailSender`, `QrCodeRenderer`) |

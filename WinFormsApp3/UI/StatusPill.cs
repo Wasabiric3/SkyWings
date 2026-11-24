@@ -17,6 +17,7 @@ public sealed class StatusPill : Control, ISelfStyled
         TabStop = false;
     }
 
+    [System.Diagnostics.CodeAnalysis.AllowNull]
     public override string Text
     {
         get => base.Text;

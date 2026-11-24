@@ -22,7 +22,6 @@ public sealed class FirstRunAdminForm : GlassForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
 
         _nameRow = new FieldRow("YOUR NAME", _name);
         _usernameRow = new FieldRow("USERNAME", _username);

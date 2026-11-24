@@ -52,7 +52,7 @@ public sealed class FlightEditorForm : GlassForm
         foreach (Aircraft a in Aircraft.All) _aircraft.Items.Add(new AircraftChoice(a.Id, $"{a.Model} · {a.TotalSeats} seats", a.TotalSeats));
         _originalAircraftId = flight?.AircraftId;
         _aircraft.SelectedIndex = Math.Max(0, _aircraft.Items.Cast<AircraftChoice>().ToList().FindIndex(c => c.Id == _originalAircraftId));
-        _aircraft.SelectedIndexChanged += (_, _) => { _aircraftRow.ClearMessage(); ApplyAircraftChoice(); };
+        _aircraft.SelectedIndexChanged += (_, _) => { _aircraftRow?.ClearMessage(); ApplyAircraftChoice(); };
         ApplyAircraftChoice();
 
         _flightNoRow = new FieldRow("FLIGHT NUMBER", _flightNo);

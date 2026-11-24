@@ -111,16 +111,16 @@ public sealed class StepBar : Control, ISelfStyled
         return (plain.Pills, false, plain.MarkRight);
     }
 
-    private List<Rectangle> Layout() => Compute().Pills;
+    private List<Rectangle> PillRects() => Compute().Pills;
 
     internal bool WordmarkShown => Compute().Wordmark;
 
-    internal Rectangle PillBounds(int index) => Layout()[index];
+    internal Rectangle PillBounds(int index) => PillRects()[index];
 
     /// <summary>The index of the pill under <paramref name="p"/>, or -1 (gaps, the logo, empty space).</summary>
     internal int HitStep(Point p)
     {
-        List<Rectangle> pills = Layout();
+        List<Rectangle> pills = PillRects();
         for (int i = 0; i < pills.Count; i++)
             if (pills[i].Contains(p)) return i;
         return -1;

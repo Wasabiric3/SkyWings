@@ -36,7 +36,6 @@ public partial class HomeForm : GlassForm
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private List<FlightRow> _boardRows = new();
     private DateTime _lastReload = DateTime.Now, _lastRestamp = DateTime.Now;
-    private bool _loadingDashboard;
 
     private sealed record RouteSummary(string Title, string Subtitle, Color Accent, IReadOnlyList<Flight> Flights, string RouteType);
 
@@ -516,7 +515,6 @@ public partial class HomeForm : GlassForm
     /// <summary>Reloads the board from the database (seats included) for the chosen region, search text and day.</summary>
     private void RefreshFlights()
     {
-        if (_loadingDashboard) return;
         try
         {
             BindBoard(_controller.LoadBoard(_region, _boardSearch.Text, _day.Value.Date));
@@ -541,7 +539,7 @@ public partial class HomeForm : GlassForm
     /// </summary>
     private async void ReloadBoardInBackground()
     {
-        if (_reloading || _loadingDashboard) return;
+        if (_reloading) return;
         _reloading = true;
         string region = _region, text = _boardSearch.Text;
         DateTime date = _day.Value.Date;
@@ -612,7 +610,6 @@ public partial class HomeForm : GlassForm
         DateTime now = DateTime.Now;
         _clock.Text = now.ToString("ddd, MMM d  ·  h:mm:ss tt");
         UpdateMasterClock(now);
-        if (_loadingDashboard) return;
 
         if (now - _lastReload >= TimeSpan.FromSeconds(60))
         {

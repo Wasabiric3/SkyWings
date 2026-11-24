@@ -13,6 +13,7 @@ public sealed class InfoStrip : Control, ISelfStyled
         Height = Gfx.S(this, 48);
     }
 
+    [System.Diagnostics.CodeAnalysis.AllowNull]
     public override string Text
     {
         get => base.Text;

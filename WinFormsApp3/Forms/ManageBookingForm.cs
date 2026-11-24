@@ -245,7 +245,7 @@ public sealed class ManageBookingForm : GlassForm
         _sendEmail.Enabled = true;
         MessageBox.Show(this,
             result.Delivered
-                ? (result.Channel == "SMTP" ? "The receipt was sent to " + ManageBookingController.MaskEmail(_controller.ContactEmail!) + "." : "The receipt was saved as a file:\n" + result.Detail)
+                ? (result.Channel == "SMTP" ? "The receipt was sent to " + ManageBookingController.MaskEmail(_controller.ContactEmail!) + "." : result.Detail.StartsWith("Could not reach", StringComparison.Ordinal) ? result.Detail : "The receipt was saved as a file:\n" + result.Detail)
                 : "No email was sent. " + result.Detail,
             "Email receipt", MessageBoxButtons.OK, result.Delivered ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }

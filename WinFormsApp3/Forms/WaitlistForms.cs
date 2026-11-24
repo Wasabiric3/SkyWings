@@ -100,7 +100,6 @@ public sealed class JoinWaitlistForm : GlassForm
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
         _party.Items.AddRange(Enumerable.Range(1, 9).Select(n => (object)n.ToString()).ToArray());
         _party.SelectedIndex = 0;
 
@@ -177,7 +176,7 @@ public sealed class WaitlistStatusForm : GlassForm
         var find = new GlassButton { Text = "Look up" };
         find.Click += (_, _) => Lookup();
         _book.Click += (_, _) => { OfferToBook = _entry; DialogResult = DialogResult.OK; Close(); };
-        _leave.Click += (_, _) => Leave();
+        _leave.Click += (_, _) => LeaveWaitlist();
         var close = new GlassButton { Text = "Close", Style = GlassButtonStyle.Secondary };
         DialogFrame frame = DialogFrame.Create(this, 720, "Check your waitlist spot",
             "Enter the waitlist code you were given when you joined.", new Control[] { _codeRow, _result }, find, close);
@@ -219,7 +218,7 @@ public sealed class WaitlistStatusForm : GlassForm
         }
     }
 
-    private void Leave()
+    private void LeaveWaitlist()
     {
         if (_entry is null) return;
         if (MessageBox.Show(this, "Leave the waitlist? Your place in line is lost.", "Waitlist", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;

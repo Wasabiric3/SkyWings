@@ -22,7 +22,6 @@ public sealed class AddStaffForm : GlassForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
 
         _role.Items.Add("Agent  ·  view and cancel bookings, see reports");
         // Only a Super Admin may create administrators; the list position (1 = Admin) is read in Create().
@@ -94,7 +93,6 @@ public sealed class ResetPasswordForm : GlassForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
         _row = new FieldRow("TEMPORARY PASSWORD", _password);
         _password.TextChanged += (_, _) => _row.ClearMessage();
 
@@ -142,7 +140,6 @@ public sealed class BackupPasswordForm : GlassForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
         _passwordRow = new FieldRow($"BACKUP PASSWORD  (AT LEAST {PasswordPolicy.MinLength} CHARACTERS)", _password);
         _repeatRow = new FieldRow("REPEAT PASSWORD", _repeat);
         _password.TextChanged += (_, _) => _passwordRow.ClearMessage();
@@ -186,7 +183,6 @@ public sealed class RestoreCredentialsForm : GlassForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.None;
-        int D(int px) => Gfx.S(this, px);
         _backupRow = new FieldRow("BACKUP PASSWORD", _backupPassword);
         _staffRow = new FieldRow("YOUR OWN PASSWORD (TO CONFIRM IT'S YOU)", _staffPassword);
         _backupPassword.TextChanged += (_, _) => _backupRow.ClearMessage();
