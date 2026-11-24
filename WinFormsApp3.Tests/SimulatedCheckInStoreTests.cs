@@ -55,7 +55,7 @@ public sealed class SimulatedCheckInStoreTests
         Assert.AreEqual(1, _store.SaveSimulatedCheckIns(new[] { From(first, AppData.DepartureOf(first.FlightNo, first.FlightDate).AddHours(-2)) }));
 
         List<SimCheckInCandidate> after = _store.LoadSimulatedCheckInCandidates(Now.Date, date);
-        Assert.AreEqual(before.Count - 1, after.Count);
+        Assert.HasCount(before.Count - 1, after);
         Assert.IsFalse(after.Any(c => c.Reference == first.Reference && c.PassengerName == first.PassengerName));
     }
 

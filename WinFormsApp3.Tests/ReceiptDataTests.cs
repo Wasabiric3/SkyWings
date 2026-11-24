@@ -170,7 +170,7 @@ public class ReceiptDataTests
 
         ReceiptData stored = ReceiptData.FromStored(record, new[] { dearerNow, Back });
 
-        Assert.AreEqual(1, stored.FareLines.Count);
+        Assert.HasCount(1, stored.FareLines);
         Assert.AreEqual(record.TotalAmount, stored.FareLines[0].Amount);
     }
     [TestMethod]

@@ -167,7 +167,7 @@ public sealed class FlightDetailsPanelTests
     {
         using var harness = new FormHarness();
         var (details, _, _) = Sample(harness, AppData.EuropeFlights.First().FlightNo);
-        Assert.AreEqual(4, details.Cabins.Count, "a wide-body has all four cabins");
+        Assert.HasCount(4, details.Cabins, "a wide-body has all four cabins");
         using Form host = new() { Width = 420, Height = 700, StartPosition = FormStartPosition.Manual, Location = new Point(20, 20), BackColor = Theme.PageBg };
         var panel = new FlightDetailsPanel { Location = new Point(10, 10), Size = new Size(340, 100) };
         panel.Height = panel.RequiredHeight(4);

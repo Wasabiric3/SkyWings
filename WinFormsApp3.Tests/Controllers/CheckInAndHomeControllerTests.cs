@@ -246,7 +246,7 @@ public sealed class HomeControllerTests
 
         Assert.AreEqual("", dashboard.Destinations[0].Destination);
         Assert.AreEqual(dashboard.FlightCount, dashboard.Destinations[0].Flights);
-        Assert.AreEqual(dashboard.DestinationCount + 1, dashboard.Destinations.Count);
+        Assert.HasCount(dashboard.DestinationCount + 1, dashboard.Destinations);
     }
 
     [TestMethod]

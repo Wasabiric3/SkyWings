@@ -114,7 +114,7 @@ public sealed class FlightChangeTests
     public void Change_MovesTheBooking_ChargesIt_FreesTheOldSeats_AndRecordsThePayment()
     {
         BookingRecord booking = Save("SKY-CHG000010", Day1, travellers: 2);
-        Assert.IsTrue(_store.LoadTakenSeats("PR-101", Day1).Contains("ECO1A"));
+        Assert.Contains("ECO1A", _store.LoadTakenSeats("PR-101", Day1));
 
         FlightChangeResult result = _store.ChangeOutboundFlight(booking.Reference, "PR-190", Day2, "agent1");
 
@@ -126,8 +126,8 @@ public sealed class FlightChangeTests
         Assert.AreEqual(AppData.StatusConfirmed, after.Status);
         Assert.AreEqual(8_000m + 4_360m, after.Passengers.Sum(p => p.TotalAmount), "the travellers' shares still add up to the total");
         CollectionAssert.AreEqual(new[] { "ECO1A", "ECO1B" }, after.Passengers.Select(p => p.SeatCode).ToArray(), "first free seats of the cabin");
-        Assert.IsFalse(_store.LoadTakenSeats("PR-101", Day1).Contains("ECO1A"), "the old seats are free again");
-        Assert.IsTrue(_store.LoadTakenSeats("PR-190", Day2).Contains("ECO1A"));
+        Assert.DoesNotContain("ECO1A", _store.LoadTakenSeats("PR-101", Day1), "the old seats are free again");
+        Assert.Contains("ECO1A", _store.LoadTakenSeats("PR-190", Day2));
 
         using var con = new SqliteConnection(_connection);
         con.Open();

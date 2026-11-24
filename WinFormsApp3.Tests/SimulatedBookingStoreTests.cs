@@ -72,7 +72,7 @@ public sealed class SimulatedBookingStoreTests
 
         _store.SaveSimulatedBooking(Booking("SIM-000000000001", "ECO5A"));
 
-        Assert.IsTrue(_store.LoadTakenSeats("PR-101", _date).Contains("ECO5A"));
+        Assert.Contains("ECO5A", _store.LoadTakenSeats("PR-101", _date));
         Assert.AreEqual(before - 1, _store.CabinSeatsLeft("PR-101", _date, "Economy"));
     }
 
@@ -157,7 +157,7 @@ public sealed class SimulatedBookingStoreTests
 
         Assert.IsTrue(_store.CancelBooking("SIM-00000000000B", 0m));
 
-        Assert.IsFalse(_store.LoadTakenSeats("PR-101", _date).Contains("ECO7A"));
+        Assert.DoesNotContain("ECO7A", _store.LoadTakenSeats("PR-101", _date));
     }
 
     [TestMethod]

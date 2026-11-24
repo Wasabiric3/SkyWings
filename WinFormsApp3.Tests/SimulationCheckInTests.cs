@@ -132,7 +132,7 @@ public sealed class SimulationCheckInTests
 
         Assert.IsNotNull(tick);
         Assert.IsGreaterThan(0, tick.CheckInsAdded);
-        Assert.AreEqual(tick.CheckInsAdded, AllCheckIns().Count);
+        Assert.HasCount(tick.CheckInsAdded, AllCheckIns());
     }
 
     [TestMethod]

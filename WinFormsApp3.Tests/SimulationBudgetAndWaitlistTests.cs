@@ -208,7 +208,7 @@ public sealed class SimulationBudgetAndWaitlistTests
         var far = live.Where(e => e.FlightDate >= Now.Date.AddDays(4)).GroupBy(e => (e.FlightNo, e.FlightDate, e.ClassName)).ToList();
         Assert.IsNotEmpty(far, "a queue on a flight a few days away");
         Assert.IsTrue(far.Any(g => g.Max(e => e.AddedAt) - g.Min(e => e.AddedAt) > TimeSpan.FromHours(12)), "joins are spread over many hours");
-        Assert.IsTrue(live.Select(e => e.PassengerName).Distinct().Count() > live.Count * 0.8, "names rarely repeat");
+        Assert.IsGreaterThan(live.Count * 0.8, live.Select(e => e.PassengerName).Distinct().Count(), "names rarely repeat");
     }
 
     [TestMethod]

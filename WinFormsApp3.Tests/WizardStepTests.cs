@@ -141,7 +141,7 @@ public sealed class WizardStepTests
         wizard.AddTraveller();
         wizard.GoTo(2);
         var cards = wizard.Field<ChoiceCard[]>("_classCards");
-        Assert.AreEqual(4, cards.Length);
+        Assert.HasCount(4, cards);
         int index = Array.FindIndex(cards, c => c.Enabled && !c.Selected);
         Assert.IsGreaterThanOrEqualTo(0, index, "another cabin is offered");
         ClickCard(cards[index]);
@@ -206,7 +206,7 @@ public sealed class WizardStepTests
         {
             if (!cards[i].Enabled) continue;
             StringAssert.StartsWith(cards[i].Subtitle, "PHP ");
-            Assert.IsFalse(cards[i].Detail.EndsWith("…"), "the detail is short enough for the card");
+            Assert.DoesNotEndWith("…", cards[i].Detail, "the detail is short enough for the card");
             Assert.IsLessThanOrEqualTo(24, cards[i].Detail.Length, $"{AppData.ClassNames[i]}: \"{cards[i].Detail}\" would be cut off");
         }
         StringAssert.Contains(wizard.Field<Label>("_pageHint").Text, "per traveller");
@@ -365,8 +365,8 @@ public sealed class WizardStepTests
         Application.DoEvents();
 
         var list = wizard.Field<SummaryList>("_reviewList");
-        Assert.AreEqual(wizard.Controller.ReviewRows().Count, list.Rows.Count);
-        Assert.AreEqual(12, list.Rows.Count, "flight, departure, return, return departure, 3 travellers, cabin, baggage, meal, seats, return seats");
+        Assert.HasCount(wizard.Controller.ReviewRows().Count, list.Rows);
+        Assert.HasCount(12, list.Rows, "flight, departure, return, return departure, 3 travellers, cabin, baggage, meal, seats, return seats");
         Assert.AreEqual(list.Rows.Count * list.RowHeight, list.Height, "the list is as tall as all its rows");
         var host = (Panel)list.Parent!;
         Assert.IsTrue(host.AutoScroll, "what does not fit is reached by scrolling, not dropped");

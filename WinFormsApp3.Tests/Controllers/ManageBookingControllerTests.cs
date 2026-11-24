@@ -206,7 +206,7 @@ public sealed class ManageBookingControllerTests
         StringAssert.Matches(refund.Reference, new System.Text.RegularExpressions.Regex("^RFD-[0-9A-F]{12}$"));
         StringAssert.Contains(refund.Detail, "customer");
         StringAssert.Contains(ManageBookingController.DescribeBooking(fresh, null, refund).Text, refund.Reference);
-        Assert.AreEqual(1, _store.LoadRefunds(booking.Reference).Count);
+        Assert.HasCount(1, _store.LoadRefunds(booking.Reference));
     }
 
     [TestMethod]

@@ -49,7 +49,7 @@ public sealed class CustomerFormsLookTests
         Field<TextBox>(form, "_reference").Text = "SKY-DOESNOTEXIST";
         Field<GlassButton>(form, "_find").PerformClick();
         Application.DoEvents();
-        Assert.IsFalse(Field<FieldRow>(form, "_referenceRow").Height < 40);
+        Assert.IsGreaterThanOrEqualTo(40, Field<FieldRow>(form, "_referenceRow").Height);
         Assert.IsTrue(Field<Panel>(form, "_lookupPage").Visible, "a failed lookup stays on the lookup page");
     });
 }

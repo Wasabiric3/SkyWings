@@ -209,7 +209,7 @@ public sealed class RefundListTests
 
         var recent = _store.LoadRefundRequests(includeClosed: true, since: DateTime.Now.AddDays(-7));
         CollectionAssert.AreEqual(new[] { "SKY-RFL000140" }, recent.Select(r => r.Reference).ToArray(), "the open one stays, the old closed one is hidden");
-        Assert.AreEqual(2, _store.LoadRefundRequests(includeClosed: true).Count, "any time");
+        Assert.HasCount(2, _store.LoadRefundRequests(includeClosed: true), "any time");
     }
 
     [TestMethod]

@@ -173,7 +173,7 @@ public sealed class RefundSettledRowTests
         Assert.AreEqual(1, grid.Rows.Count);
         var item = grid.Rows[0].DataBoundItem!;
         Assert.AreEqual("Settled", item.GetType().GetProperty("Status", Any)!.GetValue(item));
-        Assert.AreEqual(true, item.GetType().GetProperty("SenderDiffers", Any)!.GetValue(item), "the row is amber: someone else asked");
+        Assert.IsTrue((bool?)item.GetType().GetProperty("SenderDiffers", Any)!.GetValue(item), "the row is amber: someone else asked");
         StringAssert.Contains((string)item.GetType().GetProperty("Note", Any)!.GetValue(item)!, "Sender differs");
         StringAssert.Contains(Field<Label>(form, "_refundCount").Text, "1 settled");
         FormHarness.SaveSnapshot(form, "refunds-tab-settled-row");

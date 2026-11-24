@@ -340,7 +340,7 @@ public sealed class RefundRequestTests
         Assert.IsTrue(_store.CancelBooking("SKY-REQ000211", 1_000m, "other"));
         RefundApprovalResult again = _store.ApproveRefundRequest(second, "a");
         Assert.IsFalse(again.Ok);
-        Assert.AreEqual(1, _store.LoadRefunds("SKY-REQ000211").Count);
+        Assert.HasCount(1, _store.LoadRefunds("SKY-REQ000211"));
         Assert.IsFalse(_store.ApproveRefundRequest(99999, "a").Ok, "no such request");
     }
 

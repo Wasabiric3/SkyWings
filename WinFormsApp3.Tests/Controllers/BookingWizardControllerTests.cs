@@ -46,7 +46,7 @@ public sealed class BookingWizardControllerTests
 
         Assert.IsNotEmpty(flights);
         string firstPlace = flights[0].Origin.StartsWith("Manila") ? flights[0].Destination : flights[0].Origin;
-        Assert.IsTrue(flights[0].Origin.StartsWith("Manila"), $"first flight for {firstPlace} should leave Manila");
+        Assert.StartsWith("Manila", flights[0].Origin, $"first flight for {firstPlace} should leave Manila");
     }
 
     [TestMethod]

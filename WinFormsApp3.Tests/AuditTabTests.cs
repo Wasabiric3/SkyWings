@@ -120,7 +120,7 @@ public sealed class AuditTabTests
         Application.DoEvents();
 
         string[] rows = Shown(form);
-        Assert.IsTrue(rows.Length >= 2, "both the ignored email and the reply mention it");
+        Assert.IsGreaterThanOrEqualTo(2, rows.Length, "both the ignored email and the reply mention it");
         Assert.IsTrue(rows.All(r => r.Contains("already cancelled", StringComparison.OrdinalIgnoreCase)));
     });
 

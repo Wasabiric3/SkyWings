@@ -96,7 +96,7 @@ public sealed class EmailFeatureTests
         byte[] png = new QrCodeRenderer().RenderPng(QrPayload.Build("SKY-AB12CD34EF56"));
 
         CollectionAssert.AreEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png.Take(8).ToArray());
-        Assert.IsTrue(png.Length > 200);
+        Assert.IsGreaterThan(200, png.Length);
     }
 
     [TestMethod]
@@ -153,11 +153,11 @@ public sealed class EmailFeatureTests
         Assert.IsTrue(result.Delivered);
         EmailMessage message = sender.Sent.Single();
         StringAssert.Contains(message.Subject, "boarding pass");
-        Assert.AreEqual(1, message.InlineImages.Count);
+        Assert.HasCount(1, message.InlineImages);
         EmailAttachment pdf = message.Attachments!.Single();
         Assert.AreEqual("application/pdf", pdf.MediaType);
-        Assert.IsTrue(pdf.Bytes.Length > 100);
-        Assert.IsFalse(message.HtmlBody.Contains("Maria <Santos>"));   // names are HTML-encoded, never raw
+        Assert.IsGreaterThan(100, pdf.Bytes.Length);
+        Assert.DoesNotContain("Maria <Santos>", message.HtmlBody);   // names are HTML-encoded, never raw
     }
 
     [TestMethod]
@@ -250,9 +250,9 @@ public sealed class EmailFeatureTests
         StringAssert.Contains(message.HtmlBody, "cid:" + BookingEmailBuilder.QrContentId);
         StringAssert.Contains(message.HtmlBody, "contact SkyWings staff");
         StringAssert.Contains(message.HtmlBody, "Maria &lt;Santos&gt;");   // names are escaped, not injected as markup
-        Assert.IsFalse(message.HtmlBody.Contains("Maria <Santos>"));
+        Assert.DoesNotContain("Maria <Santos>", message.HtmlBody);
         StringAssert.Contains(message.TextBody, "SKY-AB12CD34EF56");
-        Assert.AreEqual(1, message.InlineImages.Count);
+        Assert.HasCount(1, message.InlineImages);
         Assert.IsFalse(message.HtmlBody.Contains("PSP-0000001") || message.TextBody.Contains("PSP-0000001"), "ID numbers must not be emailed");
     }
 
@@ -275,7 +275,7 @@ public sealed class EmailFeatureTests
         }
 
         EmailMessage noMailbox = BookingEmailBuilder.Build(booking, "maria@example.com", new byte[] { 1 });
-        Assert.IsFalse(noMailbox.HtmlBody.Contains(">Unsubscribe</a>"));
+        Assert.DoesNotContain(">Unsubscribe</a>", noMailbox.HtmlBody);
     }
     [TestMethod]
     public async Task Service_SendsToSubscribedAddress_AndWritesAnAuditEntryWithoutTheAddress()
@@ -287,9 +287,9 @@ public sealed class EmailFeatureTests
         EmailSendResult result = await service.SendReceiptAsync(booking, "maria@example.com");
 
         Assert.IsTrue(result.Delivered);
-        Assert.AreEqual(1, sender.Sent.Count);
+        Assert.HasCount(1, sender.Sent);
         var audit = _store.LoadAudit(50, booking.Reference).Where(a => a.Action == "EMAIL_RECEIPT").ToList();
-        Assert.AreEqual(1, audit.Count);
+        Assert.HasCount(1, audit);
         Assert.IsFalse(audit[0].Detail.Contains('@') || audit[0].Target.Contains('@'));
     }
 
@@ -319,7 +319,7 @@ public sealed class EmailFeatureTests
         var service = new BookingEmailService(_store, sender, new FakeQr());
 
         await service.SendReceiptAsync(booking, "maria@example.com");   // nobody has checked in yet
-        Assert.AreEqual(1, sender.Sent[0].Attachments!.Count);
+        Assert.HasCount(1, sender.Sent[0].Attachments!);
 
         DateTime openNow = AppData.DepartureOf("PR-101", booking.FlightDateValue).AddHours(-2);
         Assert.AreEqual(CheckInOutcome.CheckedIn, _store.CheckIn(booking.Reference, "Maria <Santos>", false, openNow));
@@ -346,7 +346,7 @@ public sealed class EmailFeatureTests
             EmailSendResult result = await new FileOutboxEmailSender(folder).SendAsync(message);
 
             string[] pdfs = Directory.GetFiles(folder, "*-SkyWings-receipt-X.pdf");
-            Assert.AreEqual(1, pdfs.Length);
+            Assert.HasCount(1, pdfs);
             CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(pdfs[0]));
             Assert.AreEqual(Path.ChangeExtension(result.Detail, null), pdfs[0][..^"-SkyWings-receipt-X.pdf".Length]);
         }
@@ -368,7 +368,7 @@ public sealed class EmailFeatureTests
 
         Assert.IsFalse(result.Delivered);
         Assert.AreEqual("Skipped", result.Channel);
-        Assert.AreEqual(0, sender.Sent.Count);
+        Assert.IsEmpty(sender.Sent);
     }
 
     [TestMethod]
@@ -399,7 +399,7 @@ public sealed class EmailFeatureTests
             Assert.AreEqual("Outbox", result.Channel);
             string saved = await File.ReadAllTextAsync(result.Detail);
             StringAssert.Contains(saved, "data:image/png;base64,");
-            Assert.IsFalse(saved.Contains("cid:"));
+            Assert.DoesNotContain("cid:", saved);
             StringAssert.Contains(saved, "SKY-AB12CD34EF56");
         }
         finally

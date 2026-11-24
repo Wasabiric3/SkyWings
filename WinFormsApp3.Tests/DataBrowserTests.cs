@@ -45,15 +45,15 @@ public sealed class DataBrowserTests
 
         _store.InsertRow("promo_codes", Promo("TEST10", "10"));
         var rows = _store.QueryTable("promo_codes", "TEST10");
-        Assert.AreEqual(1, rows.Rows.Count);
+        Assert.HasCount(1, rows.Rows);
         Assert.AreEqual("TEST10", rows.Rows[0]["code"]);
-        Assert.AreEqual(baseline + 1, _store.QueryTable("promo_codes").Rows.Count);
+        Assert.HasCount(baseline + 1, _store.QueryTable("promo_codes").Rows);
 
         _store.UpdateRow("promo_codes", Row(("code", "TEST10")), Row(("discount_value", "25")));
         Assert.AreEqual("25", _store.QueryTable("promo_codes", "TEST10").Rows[0]["discount_value"]);
 
         _store.DeleteRow("promo_codes", Row(("code", "TEST10")));
-        Assert.AreEqual(baseline, _store.QueryTable("promo_codes").Rows.Count);
+        Assert.HasCount(baseline, _store.QueryTable("promo_codes").Rows);
     }
 
     [TestMethod]
@@ -61,8 +61,8 @@ public sealed class DataBrowserTests
     {
         _store.InsertRow("promo_codes", Promo("ALPHA", "5"));
         _store.InsertRow("promo_codes", Promo("BRAVO", "5"));
-        Assert.AreEqual(1, _store.QueryTable("promo_codes", "alph").Rows.Count);
-        Assert.AreEqual(_store.QueryTable("promo_codes").Rows.Count, _store.QueryTable("promo_codes", "").Rows.Count, "a blank search shows everything");
+        Assert.HasCount(1, _store.QueryTable("promo_codes", "alph").Rows);
+        Assert.HasCount(_store.QueryTable("promo_codes").Rows.Count, _store.QueryTable("promo_codes", "").Rows, "a blank search shows everything");
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public sealed class DataBrowserTests
         }
         var rows = _store.QueryTable("staff_users");
         Assert.AreEqual(BookingStore.MaskedValue, rows.Rows[0]["password_hash"]);
-        Assert.AreEqual(0, _store.QueryTable("staff_users", "SECRETHASH").Rows.Count, "a secret must not be searchable");
+        Assert.IsEmpty(_store.QueryTable("staff_users", "SECRETHASH").Rows, "a secret must not be searchable");
     }
 
     [TestMethod]

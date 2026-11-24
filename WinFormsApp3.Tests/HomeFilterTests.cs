@@ -75,7 +75,7 @@ public sealed class HomeFilterTests
         Assert.AreEqual(GlassButtonStyle.Outline, Chips(form)[""].Style);
         Chips(form)[""].PerformClick();
         Application.DoEvents();
-        Assert.AreEqual(all, Rows(form).Count);
+        Assert.HasCount(all, Rows(form));
     });
 
     [TestMethod]

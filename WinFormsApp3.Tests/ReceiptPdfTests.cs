@@ -21,13 +21,13 @@ public class ReceiptPdfTests
         byte[] pdf = ReceiptPdf.Create(Sample());
         string text = Encoding.Latin1.GetString(pdf);
 
-        Assert.IsTrue(text.StartsWith("%PDF-1.4"));
-        Assert.IsTrue(text.TrimEnd().EndsWith("%%EOF"));
+        Assert.StartsWith("%PDF-1.4", text);
+        Assert.EndsWith("%%EOF", text.TrimEnd());
         StringAssert.Contains(text, "/MediaBox [0 0 595.28 841.89]");
         StringAssert.Contains(text, "/Count 1");
         StringAssert.Contains(text, "/Filter /DCTDecode");
         StringAssert.Contains(text, "/Width 1588 /Height 2246");
-        Assert.IsTrue(pdf.Length > 20_000, "the page picture should be in the file");
+        Assert.IsGreaterThan(20_000, pdf.Length, "the page picture should be in the file");
     }
 
     [TestMethod]

@@ -60,7 +60,7 @@ public sealed class RecentBookingsServiceTests
         var bookings = _store.LoadRecentBookings(new DateTime(2029, 1, 1), 100);
         Dictionary<string, TripStatusInfo> trips = _service.LoadTripStatuses(bookings, now);
 
-        Assert.AreEqual(3, trips.Count);
+        Assert.HasCount(3, trips);
         Assert.AreEqual(TripPhase.CheckedIn, trips["SKY-SERVICE00011"].Phase);
         Assert.AreEqual(TripPhase.CheckInOpen, trips["SKY-SERVICE00012"].Phase);
         Assert.AreEqual(TripPhase.Upcoming, trips["SKY-SERVICE00013"].Phase, "a flight weeks away is only upcoming");

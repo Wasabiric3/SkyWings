@@ -22,7 +22,7 @@ public class PanelPaintTests
     {
         using var panel = new LoginBrandPanel();
         using Bitmap bmp = Render(panel, 360, 520);
-        Assert.IsTrue(Luminance(bmp.GetPixel(24, 24)) > 0.75, "top-left should be the light sage hero background");
+        Assert.IsGreaterThan(0.75, Luminance(bmp.GetPixel(24, 24)), "top-left should be the light sage hero background");
         Assert.AreEqual(255, bmp.GetPixel(0, 0).A);
     }
 

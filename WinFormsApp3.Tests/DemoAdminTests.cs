@@ -96,7 +96,7 @@ public sealed class DemoAdminTests
         Assert.IsNotNull(_store.FindByReference("SKY-REAL0000DEMO"));
         Assert.IsGreaterThan(0, _admin.LoadDemoStatus().DemoBookings);
         Assert.IsTrue(_store.LoadAudit().Any(e => e.Action == "DEMO_RESET"));
-        Assert.IsTrue(before > 0);
+        Assert.IsGreaterThan(0, before);
     }
 
 

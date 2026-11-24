@@ -106,7 +106,7 @@ public sealed class SimulationServiceTests
         int again = _sim.EnsureLoad(Now, horizonDays: 2);
 
         Assert.AreEqual(0, again);
-        Assert.AreEqual(taken, _store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)).Count);
+        Assert.HasCount(taken, _store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)));
     }
 
     [TestMethod]
@@ -193,7 +193,7 @@ public sealed class SimulationServiceTests
         (int confirmed, int cancelled) = CountSimulated();
 
         Assert.IsGreaterThan(0, cancelled);
-        Assert.IsTrue(cancelled < confirmed * 0.15, $"{cancelled} cancelled vs {confirmed} confirmed");
+        Assert.IsLessThan(confirmed * 0.15, cancelled, $"{cancelled} cancelled vs {confirmed} confirmed");
     }
 
     private (int Confirmed, int Cancelled) CountSimulated()
@@ -458,6 +458,6 @@ public sealed class SimulationServiceTests
 
         Assert.IsGreaterThan(0, regenerated);
         Assert.IsNotNull(_store.FindByReference("SKY-REAL0000SIM2"));
-        Assert.IsTrue(_store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)).Contains("ECO2A"));
+        Assert.Contains("ECO2A", _store.LoadTakenSeats("PR-101", Now.Date.AddDays(1)));
     }
 }

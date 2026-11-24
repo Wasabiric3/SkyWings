@@ -82,8 +82,8 @@ public class ReceiptPrinterTests
         (Bitmap page, ReceiptLayout layout) = Render(Sample(travellers: 3, name: "Maria Concepcion de la Santisima Trinidad"));
         using (page)
         {
-            Assert.IsTrue(layout.GridRowHeights[0] > layout.GridRowHeights[1],
-                $"row heights {string.Join(", ", layout.GridRowHeights)}: the wrapped passenger row must grow");
+            Assert.IsGreaterThan(layout.GridRowHeights[1],
+layout.GridRowHeights[0], $"row heights {string.Join(", ", layout.GridRowHeights)}: the wrapped passenger row must grow");
             AssertFits(layout);
         }
     }
@@ -126,8 +126,8 @@ public class ReceiptPrinterTests
 
     private static void AssertFits(ReceiptLayout layout)
     {
-        Assert.IsTrue(layout.InfoBox.Bottom <= layout.FooterTop - 4, $"content ends at {layout.InfoBox.Bottom}, footer starts at {layout.FooterTop}");
-        Assert.IsTrue(layout.FooterBottom <= ReceiptPrinter.PageHeight - 20, $"footer ends at {layout.FooterBottom} on a {ReceiptPrinter.PageHeight}px page");
+        Assert.IsLessThanOrEqualTo(layout.FooterTop - 4, layout.InfoBox.Bottom, $"content ends at {layout.InfoBox.Bottom}, footer starts at {layout.FooterTop}");
+        Assert.IsLessThanOrEqualTo(ReceiptPrinter.PageHeight - 20, layout.FooterBottom, $"footer ends at {layout.FooterBottom} on a {ReceiptPrinter.PageHeight}px page");
     }
 }
 
@@ -163,7 +163,7 @@ public class ReceiptPrintPageTests
     {
         RequirePrinterOrSkip();
         var pages = Print(new System.Drawing.Printing.PaperSize("A4", 827, 1169));
-        Assert.AreEqual(1, pages.Length);
+        Assert.HasCount(1, pages);
         Assert.IsNotNull(pages[0].Image);
     }
 
@@ -172,6 +172,6 @@ public class ReceiptPrintPageTests
     {
         RequirePrinterOrSkip();
         var pages = Print(new System.Drawing.Printing.PaperSize("Letter", 850, 1100));
-        Assert.AreEqual(1, pages.Length);
+        Assert.HasCount(1, pages);
     }
 }

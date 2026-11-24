@@ -44,7 +44,7 @@ public class SeatPaletteTests
             {
                 var p = SeatPalette.For(state, hover);
                 double ratio = Contrast.Ratio(p.Text, p.Fill);
-                Assert.IsTrue(ratio >= 3.0, $"{state} hover={hover}: label contrast {ratio:F2}");
+                Assert.IsGreaterThanOrEqualTo(3.0, ratio, $"{state} hover={hover}: label contrast {ratio:F2}");
             }
     }
 
@@ -53,7 +53,7 @@ public class SeatPaletteTests
     {
         using var font = new Font(Theme.Small, FontStyle.Bold);
         int width = TextRenderer.MeasureText("12A", font, Size.Empty, TextFormatFlags.NoPadding).Width;
-        Assert.IsTrue(width <= 38 - 4, $"'12A' is {width}px wide in a 38px seat at 96 dpi");
+        Assert.IsLessThanOrEqualTo(38 - 4, width, $"'12A' is {width}px wide in a 38px seat at 96 dpi");
     }
 
     [TestMethod]
@@ -75,7 +75,7 @@ public class SeatPaletteTests
         foreach (string s in new[] { "PAID", "CONFIRMED", "CANCELED", "REFUNDED", "DELAYED", "PENDING", "ACTIVE", "CLOSED" })
         {
             var style = GridStyle.StatusStyle(s)!.Value;
-            Assert.IsTrue(Contrast.Ratio(style.Fore, style.Back) >= 3.0, $"{s} pill contrast too low");
+            Assert.IsGreaterThanOrEqualTo(3.0, Contrast.Ratio(style.Fore, style.Back), $"{s} pill contrast too low");
         }
     }
 }
@@ -95,7 +95,7 @@ public class SeatLabelTests
     {
         using var font = new Font(Theme.Small, FontStyle.Bold);
         int width = TextRenderer.MeasureText(SeatMap.SeatLabel(98, 'K'), font, Size.Empty, TextFormatFlags.NoPadding).Width;
-        Assert.IsTrue(width <= 38 - 4, $"'99K' is {width}px in a 38px seat");
+        Assert.IsLessThanOrEqualTo(38 - 4, width, $"'99K' is {width}px in a 38px seat");
     }
 
     [TestMethod]
@@ -103,7 +103,7 @@ public class SeatLabelTests
     {
         using var font = new Font(Theme.Small, FontStyle.Bold);
         int width = TextRenderer.MeasureText(SeatMap.SeatLabel(98, 'K') + "✓", font, Size.Empty, TextFormatFlags.NoPadding).Width;
-        Assert.IsTrue(width <= 38 - 2, $"'99K✓' is {width}px in a 38px seat");
+        Assert.IsLessThanOrEqualTo(38 - 2, width, $"'99K✓' is {width}px in a 38px seat");
     }
 
     private static SeatMap BusinessMap(int maxSelection)

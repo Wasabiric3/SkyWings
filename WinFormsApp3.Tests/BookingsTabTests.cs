@@ -217,7 +217,7 @@ public sealed class BookingsTabTests
         ChooseView(form, "Booked in the last 24 hours");
         CollectionAssert.AreEqual(new[] { "SKY-TABTEST000051", "SKY-TABTEST000052" }, Refs(form));
         ChooseView(form, "Booked in the last 30 days");
-        Assert.AreEqual(4, Refs(form).Length);
+        Assert.HasCount(4, Refs(form));
 
         ChooseView(form, "By flight date");
         Assert.IsTrue(Field<DateField>(form, "_bookingDate").Enabled);
@@ -249,7 +249,7 @@ public sealed class BookingsTabTests
         Assert.AreEqual("30d", desk.Service.GetViewSetting("view_booking_view", ""));
         using AdminForm again = desk.OpenBookings();
         Assert.AreEqual("Booked in the last 30 days", Field<ComboBox>(again, "_bookingView").SelectedItem);
-        Assert.AreEqual(1, Refs(again).Length);
+        Assert.HasCount(1, Refs(again));
     });
 
     // ------------------------------------------------------------------ new bookings

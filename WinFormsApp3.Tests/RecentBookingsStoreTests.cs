@@ -91,7 +91,7 @@ public sealed class RecentBookingsStoreTests
 
         Dictionary<string, List<CheckInRecord>> only = _store.LoadCheckInsForRefs(new[] { "SKY-RECENT000011" });
         CollectionAssert.AreEqual(new[] { "SKY-RECENT000011" }, only.Keys.ToArray());
-        Assert.AreEqual(2, _store.LoadCheckInsForRefs(new[] { "SKY-RECENT000011", "SKY-RECENT000012" }).Count);
+        Assert.HasCount(2, _store.LoadCheckInsForRefs(new[] { "SKY-RECENT000011", "SKY-RECENT000012" }));
         Assert.IsEmpty(_store.LoadCheckInsForRefs(Array.Empty<string>()));
     }
 

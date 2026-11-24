@@ -12,12 +12,12 @@ public class GlassButtonTests
 
     [TestMethod]
     public void PrimaryButton_TextContrastAtLeast4_5()
-        => Assert.IsTrue(Contrast.Ratio(Color.White, Theme.Brand) >= 4.5, "white on Brand is too faint");
+        => Assert.IsGreaterThanOrEqualTo(4.5, Contrast.Ratio(Color.White, Theme.Brand), "white on Brand is too faint");
 
     [TestMethod]
     public void DisabledButton_TextContrastAtLeast3()
-        => Assert.IsTrue(Contrast.Ratio(Theme.DisabledText, Theme.DisabledBack) >= 3.0,
-            $"disabled text contrast {Contrast.Ratio(Theme.DisabledText, Theme.DisabledBack):F2}");
+        => Assert.IsGreaterThanOrEqualTo(3.0,
+Contrast.Ratio(Theme.DisabledText, Theme.DisabledBack), $"disabled text contrast {Contrast.Ratio(Theme.DisabledText, Theme.DisabledBack):F2}");
 
     private static Color FillOf(GlassButtonStyle style, bool enabled)
     {

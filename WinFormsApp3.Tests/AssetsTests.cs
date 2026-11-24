@@ -29,7 +29,7 @@ public class AssetsTests
 
     [TestMethod]
     public void Icon_HigherDpi_IsLargerBitmap()
-        => Assert.IsTrue(Assets.Icon("Flights", false, 192)!.Width > Assets.Icon("Flights", false, 96)!.Width);
+        => Assert.IsGreaterThan(Assets.Icon("Flights", false, 96)!.Width, Assets.Icon("Flights", false, 192)!.Width);
 
     [TestMethod]
     public void Icon_White_Loads() => Assert.IsNotNull(Assets.Icon("Home", white: true, 96));

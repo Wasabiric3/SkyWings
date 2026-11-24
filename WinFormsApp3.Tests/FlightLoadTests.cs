@@ -99,7 +99,7 @@ public sealed class FlightLoadTests
         StringAssert.Contains(text, "Airbus A320");
         StringAssert.Contains(text, "Economy");
         StringAssert.Contains(text, "Business");
-        Assert.IsFalse(text.Contains("First Class"), "an A320 has no First Class");
+        Assert.DoesNotContain("First Class", text, "an A320 has no First Class");
         StringAssert.Contains(text, "█");
         StringAssert.Contains(text, $"PHP {AppData.Round2(flight.BasePrice * AppData.ClassMultipliers[0]):N2}".Replace("PHP ", ""));
         Assert.IsLessThanOrEqualTo(10, lines.Count, "the details panel has room for about ten lines");

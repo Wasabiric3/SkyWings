@@ -233,7 +233,7 @@ public sealed class OtherTabsSortingTests
         Assert.IsTrue(desk.Store.CancelBooking("SKY-OTHER0000012", 600m, "agent1"));
         using AdminForm form = desk.Open("Refunds");
         Assert.AreEqual("just now", Prop<string>(Rows(form, "_refunds")[0], "Refunded"));
-        Assert.AreEqual(2, Rows(form, "_refunds").Count);
+        Assert.HasCount(2, Rows(form, "_refunds"));
 
         ClickHeader(form, "_refunds", "RefundAmount");
         CollectionAssert.AreEqual(new[] { 1800m, 600m }, Rows(form, "_refunds").Select(r => Prop<decimal>(r, "RefundAmount")).ToArray());
